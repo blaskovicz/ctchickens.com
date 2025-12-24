@@ -93,6 +93,12 @@ body {
     color: var(--accent-color);
 }
 
+.product-card .btn-sm {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
 /* Resources Section */
 #resources a:not(.btn) {
     color: var(--primary-color);
