@@ -18,8 +18,17 @@ This website serves as a companion to our [Facebook group](https://www.facebook.
 
 - `index.html` - Main website page
 - `styles.css` - Custom styling and theme
-- `logo.jpg` - Connecticut Backyard Chickens logo
+- `app.js` - Vue 3 application (featured breeder & table components)
+- `directory-info.json` - Breeder/supplier directory data (editable)
+- `ct_backyard_chickens_2025.jpg` - Connecticut Backyard Chickens logo
 - `README.md` - This file
+
+## Technology Stack
+
+- **Vue 3** - Progressive JavaScript framework
+- **Bootstrap 5** - CSS framework
+- **Bootstrap-Vue-Next** - Vue 3 compatible Bootstrap components
+- Vanilla HTML/CSS for static sections
 
 ## Customization
 
@@ -68,6 +77,101 @@ The color scheme can be adjusted in `styles.css` by modifying the CSS variables 
 - Member directory
 - Event calendar
 - Photo gallery
+
+### Managing the Breeder Directory
+
+The breeder/supplier directory is managed through the `directory-info.json` file. 
+
+#### Featured Breeder (Paid Listing)
+
+Edit the `featured` section for the paid featured breeder:
+
+```json
+{
+  "featured": {
+    "name": "Farm Name",
+    "location": "Town, CT",
+    "selling": "Breeds or products",
+    "verified": true,
+    "contact_link": "mailto:farm@example.com",
+    "info_link": "https://example.com/farm",
+    "reviews": [
+      {
+        "type": "positive",
+        "from": "Customer Name",
+        "comment": "Review comment here",
+        "date": "2024-12-23"
+      }
+    ]
+  }
+}
+```
+
+**Featured Breeder Fields:**
+- `contact_link`: Email (mailto:) or phone link for contacting the breeder
+- `info_link`: URL to farm website or Facebook page for more information
+
+#### Directory Listings
+
+Add, edit, or remove breeders in the `directory_info` array:
+
+```json
+{
+  "directory_info": [
+    {
+      "name": "Your Farm Name",
+      "location": "Your Town, CT",
+      "selling": "Silkies, Orpingtons, Hatching Eggs",
+      "verified": true,
+      "contact_link": "mailto:farm@example.com",
+      "info_link": "https://example.com",
+      "updated": "2024-12-23",
+      "reviews": [
+        {
+          "type": "positive",
+          "from": "Customer Name",
+          "comment": "Review comment",
+          "date": "2024-12-23"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Standard Fields (All Breeders):**
+- `name`: Farm/breeder name
+- `location`: Town, CT format
+- `selling`: Breeds or products offered
+- `verified`: true/false - shows verified badge
+- `contact_link`: Email (mailto:) or phone (tel:) link
+- `info_link`: Website, Facebook, or "#" if none
+- `updated`: Last updated date (YYYY-MM-DD)
+- `reviews`: Array of review objects
+
+**Review Fields:**
+- `type`: "positive" or "negative"
+- `from`: Customer name/initials
+- `comment`: Brief review text
+- `date`: YYYY-MM-DD format
+
+**Important Notes:**
+- The table is automatically sortable and filterable
+- Date format must be YYYY-MM-DD (e.g., 2024-12-23)
+- Don't forget commas between entries
+- The last entry in the list should NOT have a comma after it
+- You can validate your JSON at https://jsonlint.com/ before saving
+
+## Local Development
+
+To test the site locally (required for JSON loading):
+
+```bash
+cd /path/to/ctchickens.com
+python3 -m http.server 8000
+```
+
+Then open http://localhost:8000 in your browser.
 
 ## Deployment
 

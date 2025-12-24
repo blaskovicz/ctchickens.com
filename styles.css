@@ -202,3 +202,56 @@ footer a.text-light:hover {
     animation: fadeInUp 0.6s ease-out;
 }
 
+/* Vue Breeder Table Styles */
+.table thead th {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.table thead th:hover {
+    background-color: rgba(30, 58, 138, 0.1);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(251, 191, 36, 0.1);
+}
+
+#breeder-search {
+    border-left: none;
+}
+
+#breeder-search:focus {
+    box-shadow: 0 0 0 0.25rem rgba(30, 58, 138, 0.25);
+    border-color: var(--primary-color);
+}
+
+/* Reviews Styles */
+.reviews-container {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.5rem;
+}
+
+.review-item {
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    max-width: 100%;
+}
+
+.review-item:hover {
+    border-color: currentColor;
+    transform: translateX(2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.bg-success-subtle {
+    background-color: rgba(25, 135, 84, 0.1) !important;
+}
+
+.bg-danger-subtle {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
