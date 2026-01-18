@@ -1,5 +1,11 @@
 const { createApp } = Vue;
 
+const verifiedSort = (a, b) => {
+  if (a.verified && !b.verified) return -1;
+  if (!a.verified && b.verified) return 1;
+  return 0;
+};
+
 // Featured Breeder Component
 const FeaturedBreeder = {
   template: `
@@ -14,6 +20,9 @@ const FeaturedBreeder = {
                     <i class="bi bi-star-fill text-warning me-1"></i>
                     Featured: {{ featured.name }}
                     <span v-if="featured.verified" class="badge bg-success ms-2">Verified</span>
+                    <span v-if="featured.founding_breeder" class="badge bg-primary ms-2">
+                      <i class="bi bi-star-fill text-warning me-1"></i>Founding Breeder
+                    </span>
                   </h5>
                   <p class="text-muted mb-0">{{ featured.location }} | {{ featured.selling }}</p>
                 </div>
@@ -193,50 +202,70 @@ const BreederTable = {
           <table class="table table-striped table-hover mb-0">
             <thead class="table-light">
               <tr>
-                <th v-for="field in fields" 
-                    :key="field.key"
-                    @click="field.sortable ? sortTable(field.key) : null"
-                    :style="field.sortable ? 'cursor: pointer;' : ''">
-                  {{ field.label }}
-                  <i v-if="field.sortable && sortBy === field.key" 
-                     :class="sortDesc ? 'bi bi-chevron-down' : 'bi bi-chevron-up'"
-                     class="ms-1"></i>
-                  <i v-else-if="field.sortable" class="bi bi-chevron-expand ms-1 text-muted" style="font-size: 0.75rem;"></i>
-                </th>
+                <template v-for="field in fields" :key="field.key">
+                  <th v-if="field.key !== 'selling'"
+                      @click="field.sortable ? sortTable(field.key) : null"
+                      :style="field.sortable ? 'cursor: pointer;' : ''"
+                      :class="{
+                        'd-none d-md-table-cell': field.key === 'updated'
+                      }">
+                    {{ field.label }}
+                    <i v-if="field.sortable && sortBy === field.key" 
+                       :class="sortDesc ? 'bi bi-chevron-down' : 'bi bi-chevron-up'"
+                       class="ms-1"></i>
+                    <i v-else-if="field.sortable" class="bi bi-chevron-expand ms-1 text-muted" style="font-size: 0.75rem;"></i>
+                  </th>
+                </template>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="breeder in sortedAndFilteredItems" :key="breeder.name">
-                <td>
-                  <div class="d-flex align-items-center gap-2">
-                    <strong v-if="breeder.verified && breeder.info_link">
-                      <a :href="breeder.info_link" target="_blank" class="">
-                      {{ breeder.name }}
-                      </a>
-                    </strong>
-                    <strong v-else>
-                      {{ breeder.name }}
-                    </strong>
-                    <span v-if="breeder.verified" class="badge bg-success" style="font-size: 0.65rem;">Verified</span>
-                    <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
-                      <span class="badge bg-success-subtle text-success border border-success" style="font-size: 0.7rem;">
-                        <i class="bi bi-hand-thumbs-up-fill"></i> {{ getPositiveCount(breeder) }}
+              <template v-for="breeder in sortedAndFilteredItems" :key="breeder.name">
+                <tr>
+                  <td>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <div>
+                      <strong v-if="breeder.verified && breeder.info_link">
+                        <a :href="breeder.info_link" target="_blank" class="">
+                        {{ breeder.name }}
+                        </a>
+                      </strong>
+                      <strong v-else>
+                        {{ breeder.name }}
+                      </strong>
+                      </div>
+                      <div>
+                      <span v-if="breeder.verified" class="badge bg-success me-1">Verified</span>
+                      <span v-if="breeder.founding_breeder" class="badge bg-primary me-1">
+                        <i class="bi bi-star-fill text-warning me-1"></i>Founding Breeder
                       </span>
-                      <span class="badge bg-danger-subtle text-danger border border-danger ms-1" style="font-size: 0.7rem;">
-                        <i class="bi bi-hand-thumbs-down-fill"></i> {{ getNegativeCount(breeder) }}
+                      <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
+                        <span class="badge bg-success-subtle text-success border border-success" style="font-size: 0.7rem;">
+                          <i class="bi bi-hand-thumbs-up-fill"></i> {{ getPositiveCount(breeder) }}
+                        </span>
+                        <span class="badge bg-danger-subtle text-danger border border-danger ms-1" style="font-size: 0.7rem;">
+                          <i class="bi bi-hand-thumbs-down-fill"></i> {{ getNegativeCount(breeder) }}
+                        </span>
                       </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ breeder.location }}</td>
+                  <td class="d-none d-md-table-cell"><small class="text-muted">{{ formatDate(breeder.updated) }}</small></td>
+                  <td class="text-end">
+                    <a v-if="breeder.contact_link" :href="breeder.contact_link" class="btn btn-sm btn-primary">
+                      <i class="bi bi-envelope-fill"></i> <span class="d-none d-sm-inline">Contact</span>
+                    </a>
+                  </td>
+                </tr>
+                <tr class="breeds-row">
+                  <td colspan="100" class="py-2 bg-light">
+                    <span class="text-muted">
+                      <i class="bi bi-tag-fill me-1"></i>
+                      <strong>Breeds/Products:</strong> {{ breeder.selling }}
                     </span>
-                  </div>
-                </td>
-                <td>{{ breeder.location }}</td>
-                <td>{{ breeder.selling }}</td>
-                <td><small class="text-muted">{{ formatDate(breeder.updated) }}</small></td>
-                <td class="text-end">
-                  <a v-if="breeder.contact_link" :href="breeder.contact_link" class="btn btn-sm btn-primary">
-                    <i class="bi bi-envelope-fill"></i> Contact
-                  </a>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
           
@@ -293,9 +322,11 @@ const BreederTable = {
     },
     
     sortedAndFilteredItems() {
+      if (!this.sortBy) {
+        return this.filteredItems.sort(verifiedSort);
+      }
+
       const items = [...this.filteredItems];
-      
-      if (!this.sortBy) return items;
       
       return items.sort((a, b) => {
         let aVal = this.sortBy === 'updated' ? new Date(a[this.sortBy]) : a[this.sortBy];
@@ -307,7 +338,7 @@ const BreederTable = {
         if (aVal < bVal) return this.sortDesc ? 1 : -1;
         if (aVal > bVal) return this.sortDesc ? -1 : 1;
         return 0;
-      });
+      }).sort(verifiedSort);
     }
   },
   

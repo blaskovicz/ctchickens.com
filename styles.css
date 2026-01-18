@@ -175,6 +175,34 @@ footer a.text-light:hover {
     .display-5 {
         font-size: 1.75rem;
     }
+    
+    /* Mobile-friendly table */
+    .table {
+        font-size: 0.85rem;
+    }
+    
+    .table td {
+        padding: 0.5rem 0.25rem;
+    }
+    
+    .table th {
+        padding: 0.75rem 0.25rem;
+        font-size: 0.8rem;
+    }
+    
+    .badge {
+        font-size: 0.6rem !important;
+    }
+    
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .breeds-row td {
+        padding: 0.5rem !important;
+        font-size: 0.8rem !important;
+    }
 }
 
 /* Utility Classes */
@@ -215,6 +243,20 @@ footer a.text-light:hover {
 
 .table-hover tbody tr:hover {
     background-color: rgba(251, 191, 36, 0.1);
+}
+
+.table-hover tbody tr.breeds-row {
+    border-top: none;
+}
+
+.table-hover tbody tr.breeds-row:hover {
+    background-color: inherit;
+}
+
+.table-hover tbody tr.breeds-row td {
+    border-top: 1px solid #e9ecef;
+    font-size: 0.9rem;
+    padding: 2em;
 }
 
 #breeder-search {
