@@ -19,10 +19,10 @@ const FeaturedBreeder = {
                 </div>
               </div>
               <div class="d-flex gap-2">
-                <a :href="featured.contact_link" class="btn btn-sm btn-primary">
+                <a v-if="featured.contact_link" :href="featured.contact_link" class="btn btn-sm btn-primary">
                   <i class="bi bi-envelope-fill"></i> Contact
                 </a>
-                <a :href="featured.info_link" target="_blank" class="btn btn-sm btn-outline-primary">
+                <a v-if="featured.info_link" :href="featured.info_link" target="_blank" class="btn btn-sm btn-outline-primary">
                   <i class="bi bi-info-circle-fill"></i> More Info
                 </a>
               </div>
@@ -209,7 +209,14 @@ const BreederTable = {
               <tr v-for="breeder in sortedAndFilteredItems" :key="breeder.name">
                 <td>
                   <div class="d-flex align-items-center gap-2">
-                    <strong>{{ breeder.name }}</strong>
+                    <strong v-if="breeder.verified && breeder.info_link">
+                      <a :href="breeder.info_link" target="_blank" class="">
+                      {{ breeder.name }}
+                      </a>
+                    </strong>
+                    <strong v-else>
+                      {{ breeder.name }}
+                    </strong>
                     <span v-if="breeder.verified" class="badge bg-success" style="font-size: 0.65rem;">Verified</span>
                     <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
                       <span class="badge bg-success-subtle text-success border border-success" style="font-size: 0.7rem;">
@@ -225,7 +232,7 @@ const BreederTable = {
                 <td>{{ breeder.selling }}</td>
                 <td><small class="text-muted">{{ formatDate(breeder.updated) }}</small></td>
                 <td class="text-end">
-                  <a :href="breeder.contact_link" class="btn btn-sm btn-primary">
+                  <a v-if="breeder.contact_link" :href="breeder.contact_link" class="btn btn-sm btn-primary">
                     <i class="bi bi-envelope-fill"></i> Contact
                   </a>
                 </td>
