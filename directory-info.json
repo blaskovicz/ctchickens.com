@@ -106,19 +106,20 @@
       "reviews": []
     },
     {
-      "name": "Rare Feathered Friends (Ruth)",
+      "name": "Rare Feathered Friends (Ruth Foster)",
       "location": "Fairfield County, CT",
       "selling": "Calico Cochin bantams, Birchin Cochin bantams, Frizzle Cochin Bantams, Barred rocks, Silver laced Wyandotte, Gold/blue laced gold/blue laced red x white Wyandottes, Ermine Ameraucanas, Silkies, Belfideres",
-      "verified": false,
+      "verified": true,
+      "founding_breeder": 1,
       "contact_link": "mailto:rwf1740@aol.com",
-      "info_link": null,
+      "info_link": "https://rarefeatheredfriends.com/",
       "updated": "2026-01-17",
       "reviews": []
     },
     {
       "name": "Chicken Noodle Coop LLC (Jerilyn Parzuchowski)",
-      "location": "CT - Contact for details",
-      "selling": "Chickens - contact for available breeds",
+      "location": "Bethany, CT",
+      "selling": "Black Copper Marans and Silkies (Eggs and Chicks)",
       "verified": false,
       "contact_link": "mailto:chickennoodlecoop24@gmail.com",
       "info_link": null,
