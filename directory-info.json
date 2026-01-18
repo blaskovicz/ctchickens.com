@@ -36,71 +36,94 @@
   },
   "directory_info": [
     {
-      "name": "Sample: Sunset Valley Farm",
+      "name": "Blondies Barnyard (Kara Grabber)",
+      "location": "Columbia, CT",
+      "selling": "Standard Size Chickens (Opal/cream legbars, BBS Ameraucanas, Olive eggers, Crele Penedesencas, Easter eggers)",
+      "verified": false,
+      "contact_link": "mailto:blondiesbarnyard@gmail.com",
+      "info_link": null,
+      "updated": "2026-01-17",
+      "reviews": []
+    },
+    {
+      "name": "The Rose Feather Coop (Dave & Amanda Soto)",
+      "location": "Hampden, MA (close to Enfield, CT)",
+      "selling": "Icelandics, Appenzellar Spitzhaubens, Designer Easter/Olive Eggers - Hatching eggs, chicks & started pullets",
+      "verified": false,
+      "contact_link": "https://www.facebook.com/share/1KWYu8DGjW/?mibextid=wwXIfr",
+      "info_link": "https://therosefeathercoop.wixsite.com/therosefeathercoop-1",
+      "updated": "2026-01-17",
+      "reviews": []
+    },
+    {
+      "name": "Rainbow Chicken Farm (Tanya)",
+      "location": "South Windsor, CT",
+      "selling": "Marans, Silverudd blues, Olive Eggers, Whiting true blues, Welbars - bred for colored eggs",
+      "verified": false,
+      "contact_link": "mailto:rainbowchickenfarmct@gmail.com",
+      "info_link": null,
+      "updated": "2026-01-17",
+      "reviews": []
+    },
+    {
+      "name": "ANB Homestead (Irmgard Aidoo)",
+      "location": "Foster, RI",
+      "selling": "Sebastopol goslings, Coturnix Quails, Silver Deathlayers, 55 Flower Hen, American Bresse, Silverrudd Blue, Ice Cream Bar, Frizzled Large Fowl Cochin",
+      "verified": false,
+      "contact_link": "mailto:anbhomestead@gmail.com",
+      "info_link": "https://anbhomestead.com",
+      "updated": "2026-01-17",
+      "reviews": []
+    },
+    {
+      "name": "Painted Wings Farm (Rebecca & Ian)",
+      "location": "Vernon, CT",
+      "selling": "Chicks and hatching eggs",
+      "verified": false,
+      "contact_link": "mailto:Paintedwingsfarm@hotmail.com",
+      "info_link": "https://paintedwingsfarm.wixsite.com/paintedwingsfarm",
+      "updated": "2026-01-17",
+      "reviews": []
+    },
+    {
+      "name": "Hearth and Herd (Meghan Cassavaw)",
+      "location": "MA - Contact for details",
+      "selling": "Chickens - contact for available breeds",
+      "verified": false,
+      "contact_link": "mailto:hearthandherd@gmail.com",
+      "info_link": null,
+      "updated": "2026-01-17",
+      "reviews": []
+    },
+    {
+      "name": "JD Farm LLC (Danielle Yesulaites)",
       "location": "Woodbury, CT",
-      "selling": "Rhode Island Reds, Barred Rocks, Easter Eggers",
+      "selling": "Silkies, Satins & Naked Necks with chance of frizzled feathers - Phone: 203-228-0222",
       "verified": false,
-      "contact_link": "mailto:sunsetvalley@example.com",
-      "info_link": "https://facebook.com/sunsetvalleyfarm",
-      "updated": "2024-12-15",
-      "reviews": [
-        { "type": "positive", "from": "Amy L.", "comment": "Great birds!", "date": "2024-12-01" },
-        { "type": "positive", "from": "Tom R.", "comment": "Very responsive seller.", "date": "2024-11-25" },
-        { "type": "positive", "from": "Lisa K.", "comment": "Healthy chicks, well packaged.", "date": "2024-11-20" }
-      ]
+      "contact_link": "mailto:yesulaites001@gmail.com",
+      "info_link": "https://www.facebook.com/profile.php?id=100079154313154",
+      "updated": "2026-01-17",
+      "reviews": []
     },
     {
-      "name": "Sample: Cluckingham Palace",
-      "location": "Bethel, CT",
-      "selling": "Silkies, Polish, Bantams",
-      "verified": true,
-      "contact_link": "mailto:cluckinghampalace@example.com",
-      "info_link": "https://cluckinghampalace.com",
-      "updated": "2024-12-10",
-      "reviews": [
-        { "type": "positive", "from": "Rachel P.", "comment": "Beautiful silkies!", "date": "2024-12-08" },
-        { "type": "positive", "from": "David S.", "comment": "Fair prices, quality birds.", "date": "2024-11-15" }
-      ]
-    },
-    {
-      "name": "Sample: Heritage Hens CT",
-      "location": "Litchfield, CT",
-      "selling": "Orpingtons, Wyandottes, Hatching Eggs",
-      "verified": true,
-      "contact_link": "tel:+1-860-555-0123",
-      "info_link": "https://facebook.com/heritagehensct",
-      "updated": "2024-12-20",
-      "reviews": [
-        { "type": "positive", "from": "Karen W.", "comment": "Excellent hatching rate!", "date": "2024-12-18" },
-        { "type": "positive", "from": "Steve B.", "comment": "Very knowledgeable breeder.", "date": "2024-12-12" },
-        { "type": "positive", "from": "Mary J.", "comment": "Friendly and helpful.", "date": "2024-11-30" },
-        { "type": "negative", "from": "Bob M.", "comment": "Slow to respond to messages.", "date": "2024-11-22" }
-      ]
-    },
-    {
-      "name": "Sample: Green Acre Poultry",
-      "location": "Madison, CT",
-      "selling": "Leghorns, Australorps, Chicks & Pullets",
+      "name": "Rare Feathered Friends (Ruth)",
+      "location": "Fairfield County, CT",
+      "selling": "Calico Cochin bantams, Birchin Cochin bantams, Frizzle Cochin Bantams, Barred rocks, Silver laced Wyandotte, Gold/blue laced gold/blue laced red x white Wyandottes, Ermine Ameraucanas, Silkies, Belfideres",
       "verified": false,
-      "contact_link": "mailto:greenacre@example.com",
-      "info_link": "#",
-      "updated": "2024-11-28",
-      "reviews": [
-        { "type": "positive", "from": "Jennifer H.", "comment": "Good experience overall.", "date": "2024-11-18" }
-      ]
+      "contact_link": "mailto:rwf1740@aol.com",
+      "info_link": null,
+      "updated": "2026-01-17",
+      "reviews": []
     },
     {
-      "name": "Sample: Farmstead Feathers",
-      "location": "Kent, CT",
-      "selling": "Marans, Ameraucanas, Hatching Eggs",
+      "name": "Chicken Noodle Coop LLC (Jerilyn Parzuchowski)",
+      "location": "CT - Contact for details",
+      "selling": "Chickens - contact for available breeds",
       "verified": false,
-      "contact_link": "mailto:farmsteadfeathers@example.com",
-      "info_link": "https://farmsteadfeathers.com",
-      "updated": "2024-12-18",
-      "reviews": [
-        { "type": "positive", "from": "Chris D.", "comment": "Beautiful dark eggs!", "date": "2024-12-14" },
-        { "type": "positive", "from": "Patricia N.", "comment": "Highly recommend!", "date": "2024-12-02" }
-      ]
+      "contact_link": "mailto:chickennoodlecoop24@gmail.com",
+      "info_link": null,
+      "updated": "2026-01-17",
+      "reviews": []
     }
   ]
 }

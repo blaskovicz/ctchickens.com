@@ -1,0 +1,107 @@
+{
+  "featured": {
+    "name": "Sample Farm Name",
+    "location": "Wilton, CT",
+    "selling": "Silkies, Marans, & Orpingtons",
+    "verified": true,
+    "contact_link": "mailto:sample@example.com",
+    "info_link": "https://example.com/farm",
+    "updated": "2024-12-23",
+    "reviews": [
+      {
+        "type": "positive",
+        "from": "George B.",
+        "comment": "Good experience, bought 10 chickens.",
+        "date": "2024-12-15"
+      },
+      {
+        "type": "positive",
+        "from": "Sarah M.",
+        "comment": "Healthy birds, great communication!",
+        "date": "2024-12-10"
+      },
+      {
+        "type": "positive",
+        "from": "Mike T.",
+        "comment": "Very professional. Chickens arrived in perfect condition.",
+        "date": "2024-12-05"
+      },
+      {
+        "type": "negative",
+        "from": "Jane D.",
+        "comment": "One bird was sick, but they made it right.",
+        "date": "2024-11-28"
+      }
+    ]
+  },
+  "directory_info": [
+    {
+      "name": "Sample: Sunset Valley Farm",
+      "location": "Woodbury, CT",
+      "selling": "Rhode Island Reds, Barred Rocks, Easter Eggers",
+      "verified": false,
+      "contact_link": "mailto:sunsetvalley@example.com",
+      "info_link": "https://facebook.com/sunsetvalleyfarm",
+      "updated": "2024-12-15",
+      "reviews": [
+        { "type": "positive", "from": "Amy L.", "comment": "Great birds!", "date": "2024-12-01" },
+        { "type": "positive", "from": "Tom R.", "comment": "Very responsive seller.", "date": "2024-11-25" },
+        { "type": "positive", "from": "Lisa K.", "comment": "Healthy chicks, well packaged.", "date": "2024-11-20" }
+      ]
+    },
+    {
+      "name": "Sample: Cluckingham Palace",
+      "location": "Bethel, CT",
+      "selling": "Silkies, Polish, Bantams",
+      "verified": true,
+      "contact_link": "mailto:cluckinghampalace@example.com",
+      "info_link": "https://cluckinghampalace.com",
+      "updated": "2024-12-10",
+      "reviews": [
+        { "type": "positive", "from": "Rachel P.", "comment": "Beautiful silkies!", "date": "2024-12-08" },
+        { "type": "positive", "from": "David S.", "comment": "Fair prices, quality birds.", "date": "2024-11-15" }
+      ]
+    },
+    {
+      "name": "Sample: Heritage Hens CT",
+      "location": "Litchfield, CT",
+      "selling": "Orpingtons, Wyandottes, Hatching Eggs",
+      "verified": true,
+      "contact_link": "tel:+1-860-555-0123",
+      "info_link": "https://facebook.com/heritagehensct",
+      "updated": "2024-12-20",
+      "reviews": [
+        { "type": "positive", "from": "Karen W.", "comment": "Excellent hatching rate!", "date": "2024-12-18" },
+        { "type": "positive", "from": "Steve B.", "comment": "Very knowledgeable breeder.", "date": "2024-12-12" },
+        { "type": "positive", "from": "Mary J.", "comment": "Friendly and helpful.", "date": "2024-11-30" },
+        { "type": "negative", "from": "Bob M.", "comment": "Slow to respond to messages.", "date": "2024-11-22" }
+      ]
+    },
+    {
+      "name": "Sample: Green Acre Poultry",
+      "location": "Madison, CT",
+      "selling": "Leghorns, Australorps, Chicks & Pullets",
+      "verified": false,
+      "contact_link": "mailto:greenacre@example.com",
+      "info_link": "#",
+      "updated": "2024-11-28",
+      "reviews": [
+        { "type": "positive", "from": "Jennifer H.", "comment": "Good experience overall.", "date": "2024-11-18" }
+      ]
+    },
+    {
+      "name": "Sample: Farmstead Feathers",
+      "location": "Kent, CT",
+      "selling": "Marans, Ameraucanas, Hatching Eggs",
+      "verified": false,
+      "contact_link": "mailto:farmsteadfeathers@example.com",
+      "info_link": "https://farmsteadfeathers.com",
+      "updated": "2024-12-18",
+      "reviews": [
+        { "type": "positive", "from": "Chris D.", "comment": "Beautiful dark eggs!", "date": "2024-12-14" },
+        { "type": "positive", "from": "Patricia N.", "comment": "Highly recommend!", "date": "2024-12-02" }
+      ]
+    }
+  ]
+}
+
