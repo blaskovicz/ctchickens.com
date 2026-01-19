@@ -145,6 +145,16 @@
       "info_link": "https://spectrumpoultry.com",
       "updated": "2026-01-19",
       "reviews": []
+    },
+    {
+      "name": "Raptor Ridge Farm",
+      "location": "Lebanon, CT",
+      "selling": "Easter Eggers, Olive Eggers, Layer Breeds",
+      "verified": false,
+      "contact_link": "mailto:bridgette@raptorridge.farm",
+      "info_link": "https://raptorridge.farm",
+      "updated": "2026-01-19",
+      "reviews": []
     }
   ]
 }
