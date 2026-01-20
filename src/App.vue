@@ -13,7 +13,8 @@
       <div class="container">
         <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
           <img src="/hen.png" alt="Logo" width="32" height="32" class="me-2">
-          Connecticut Backyard Chickens
+          <span class="d-inline d-sm-none">CT Backyard Chickens</span>
+          <span class="d-none d-sm-inline">Connecticut Backyard Chickens</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
           <span class="navbar-toggler-icon"></span>

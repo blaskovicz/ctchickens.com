@@ -205,10 +205,10 @@
                     </td>
                   </tr>
                   <tr class="breeds-row">
-                    <td colspan="100" class="bg-light">
+                    <td colspan="100" class="bg-light p-0 p-md-3">
                       <span class="text-muted">
                         <i class="bi bi-tag-fill me-1"></i>
-                        <strong>Breeds/Products:</strong> {{ breeder.selling }}
+                        <strong>Selling:</strong> {{ breeder.selling }}
                       </span>
                     </td>
                   </tr>
@@ -235,8 +235,6 @@
 
 <style scoped>
     .breeds-row td {
-      padding-left: 2em !important;
-      padding-right: 2em !important;
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
     }
