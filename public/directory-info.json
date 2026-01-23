@@ -130,10 +130,11 @@
       "name": "Acorn Springs Farm LLC (Kelly Boyle)",
       "location": "Willington, CT",
       "selling": "Icelandic Chickens (rare landrace breed) - Hatching eggs, day old chicks, 3 month old pullets",
-      "verified": false,
+      "verified": true,
+      "founding_breeder": 2,
       "contact_link": "mailto:acornspringsfarm@gmail.com",
       "info_link": "https://acornspringsfarmct.com",
-      "updated": "2026-01-17",
+      "updated": "2026-01-22",
       "reviews": []
     },
     {
