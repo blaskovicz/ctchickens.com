@@ -140,9 +140,10 @@
     {
       "name": "Spectrum Poultry (Tommy and Jackie Zarr)",
       "location": "Glocester, RI (5 minutes from CT border)",
-      "selling": "Langshans, Black Copper Marans, Ameraucanas, Olive Eggers",
-      "verified": false,
-      "contact_link": "mailto:jzarr206@gmail.com",
+      "selling": "BBS Langshans, Black Copper Marans, BBS Ameraucanas, Olive Eggers. We offer chicks and hatching eggs.",
+      "verified": true,
+      "founding_breeder": 3,
+      "contact_link": "mailto:spectrumpoultryri@gmail.com",
       "info_link": "https://spectrumpoultry.com",
       "updated": "2026-01-19",
       "reviews": []
