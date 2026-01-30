@@ -16,10 +16,10 @@ export interface Review {
     contact_link: string | null;
     info_link: string | null;
     updated: string;
+    featured: boolean;
     reviews: Review[];
   }
   
   export interface DirectoryData {
-    featured: Breeder | null;
     directory_info: Breeder[];
   }

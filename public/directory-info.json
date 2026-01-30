@@ -1,45 +1,11 @@
 {
-  "featured": {
-    "name": "Sample Farm Name",
-    "location": "Wilton, CT",
-    "selling": "Silkies, Marans, & Orpingtons",
-    "verified": true,
-    "contact_link": "mailto:sample@example.com",
-    "info_link": "https://example.com/farm",
-    "updated": "2024-12-23",
-    "reviews": [
-      {
-        "type": "positive",
-        "from": "George B.",
-        "comment": "Good experience, bought 10 chickens.",
-        "date": "2024-12-15"
-      },
-      {
-        "type": "positive",
-        "from": "Sarah M.",
-        "comment": "Healthy birds, great communication!",
-        "date": "2024-12-10"
-      },
-      {
-        "type": "positive",
-        "from": "Mike T.",
-        "comment": "Very professional. Chickens arrived in perfect condition.",
-        "date": "2024-12-05"
-      },
-      {
-        "type": "negative",
-        "from": "Jane D.",
-        "comment": "One bird was sick, but they made it right.",
-        "date": "2024-11-28"
-      }
-    ]
-  },
   "directory_info": [
     {
       "name": "Blondies Barnyard (Kara Grabber)",
       "location": "Columbia, CT",
       "selling": "Standard Size Chickens (Opal/cream legbars, BBS Ameraucanas, Olive eggers, Crele Penedesencas, Easter eggers)",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:blondiesbarnyard@gmail.com",
       "info_link": null,
       "updated": "2026-01-17",
@@ -50,6 +16,7 @@
       "location": "Hampden, MA (close to Enfield, CT)",
       "selling": "Icelandics, Appenzellar Spitzhaubens, Designer Easter/Olive Eggers - Hatching eggs, chicks & started pullets",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:therosefeathercoop@gmail.com",
       "info_link": "https://therosefeathercoop.wixsite.com/therosefeathercoop-1",
       "updated": "2026-01-17",
@@ -60,6 +27,7 @@
       "location": "South Windsor, CT",
       "selling": "Marans, Silverudd blues, Olive Eggers, Whiting true blues, Welbars - bred for colored eggs",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:rainbowchickenfarmct@gmail.com",
       "info_link": null,
       "updated": "2026-01-17",
@@ -70,6 +38,7 @@
       "location": "Foster, RI",
       "selling": "Sebastopol goslings, Coturnix Quails, Silver Deathlayers, 55 Flower Hen, American Bresse, Silverrudd Blue, Ice Cream Bar, Frizzled Large Fowl Cochin",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:anbhomestead@gmail.com",
       "info_link": "https://anbhomestead.com",
       "updated": "2026-01-17",
@@ -80,6 +49,7 @@
       "location": "Vernon, CT",
       "selling": "Shetland Hens (Rare Landrace - Blue/Green Egg Layer), Olive Eggers, Russian Pavlovskaya (Coming Soon). We offer hatching eggs, chicks, and occasionally pullets.",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:Paintedwingsfarm@hotmail.com",
       "info_link": "https://paintedwingsfarm.wixsite.com/paintedwingsfarm",
       "updated": "2026-01-17",
@@ -90,6 +60,7 @@
       "location": "MA - Contact for details",
       "selling": "Chickens - contact for available breeds",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:hearthandherd@gmail.com",
       "info_link": null,
       "updated": "2026-01-17",
@@ -100,6 +71,7 @@
       "location": "Woodbury, CT",
       "selling": "Silkies, Satins & Naked Necks with chance of frizzled feathers.",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:yesulaites001@gmail.com",
       "info_link": "https://www.facebook.com/profile.php?id=100079154313154",
       "updated": "2026-01-17",
@@ -111,6 +83,7 @@
       "selling": "Calico Cochin bantams, Birchin Cochin bantams, Frizzle Cochin Bantams, Barred rocks, Silver laced Wyandotte, Gold/blue laced gold/blue laced red x white Wyandottes, Ermine Ameraucanas, Silkies, Belfideres",
       "verified": true,
       "founding_breeder": 1,
+      "featured": false,
       "contact_link": "mailto:rwf1740@aol.com",
       "info_link": "https://rarefeatheredfriends.com/",
       "updated": "2026-01-17",
@@ -121,6 +94,7 @@
       "location": "Bethany, CT",
       "selling": "Black Copper Marans and Silkies (Eggs and Chicks)",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:chickennoodlecoop24@gmail.com",
       "info_link": null,
       "updated": "2026-01-17",
@@ -132,6 +106,7 @@
       "selling": "Icelandic Chickens (rare landrace breed) - Hatching eggs, day old chicks, 3 month old pullets",
       "verified": true,
       "founding_breeder": 2,
+      "featured": false,
       "contact_link": "mailto:acornspringsfarm@gmail.com",
       "info_link": "https://acornspringsfarmct.com",
       "updated": "2026-01-22",
@@ -143,6 +118,7 @@
       "selling": "BBS Langshans, Black Copper Marans, BBS Ameraucanas, Olive Eggers. We offer chicks and hatching eggs.",
       "verified": true,
       "founding_breeder": 3,
+      "featured": false,
       "contact_link": "mailto:spectrumpoultryri@gmail.com",
       "info_link": "https://spectrumpoultry.com",
       "updated": "2026-01-29",
@@ -153,6 +129,7 @@
       "location": "Lebanon, CT",
       "selling": "Easter Eggers, Olive Eggers, Layer Breeds",
       "verified": false,
+      "featured": false,
       "contact_link": "mailto:bridgette@raptorridge.farm",
       "info_link": "https://raptorridge.farm",
       "updated": "2026-01-19",
@@ -164,6 +141,7 @@
       "selling": "Ameraucanas (Black, White, Chocolate, Ermine), Orpingtons (Black, Chocolate, Ermine, Calico, Mauve), Crevecoeur, 55 Flowery Hens, Silver Welsummers, Barred Plymouth Rocks, Gold Erminettes, Ayam Cemani, Mint Chocolate Chicks (Speckled Olives), Silkies (Black, Splash, Blue, Chocolate, Paint, Mauve), Ameraucanas Bantam (Black, Ermine), Narragansette Turkeys.",
       "verified": true,
       "founding_breeder": 4,
+      "featured": false,
       "contact_link": "mailto:oleyankeefarmer@gmail.com",
       "info_link": "https://www.oleyankeefarm.com/",
       "updated": "2026-01-29",
