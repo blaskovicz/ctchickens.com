@@ -1,6 +1,11 @@
 import { createStore } from 'vuex';
 import type { DirectoryData, Breeder } from '../types';
 
+interface State {
+  breeders: Breeder[];
+  lastFetch: number;
+}
+
 // Helper: Calculate Week Number (moved from component to here)
 const getWeekNumber = () => {
   const d = new Date();
@@ -11,19 +16,19 @@ const getWeekNumber = () => {
 
 export default createStore({
   state: {
-    breeders: [] as Breeder[],
-    lastFetch: 0 as number, // To track cache freshness
-  },
+    breeders: [],
+    lastFetch: 0 , // To track cache freshness
+  } as State,
   mutations: {
-    SET_BREEDERS(state, payload: Breeder[]) {
+    SET_BREEDERS(state: State, payload: Breeder[]) {
       state.breeders = payload;
     },
-    SET_LAST_FETCH(state, time: number) {
+    SET_LAST_FETCH(state: State, time: number) {
       state.lastFetch = time;
     }
   },
   actions: {
-    async fetchDirectory({ commit, state }) {
+    async fetchDirectory({ commit, state }: { commit: any, state: State }) {
       // 1. CACHE CHECK: If we fetched less than 1 minute ago, don't fetch again.
       // This prevents spamming the server if you navigate between pages.
       const now = new Date().getTime();
@@ -44,12 +49,12 @@ export default createStore({
     }
   },
   getters: {
-    allBreeders: (state) => state.breeders as Breeder[],
+    allBreeders: (state: State) => state.breeders,
     
     // 3. CENTRALIZED FEATURED LOGIC
     // We calculate the "Featured Breeder" here so all components see the same one.
-    featuredBreeder: (state) => {
-      const all = state.breeders as Breeder[];
+    featuredBreeder: (state: State) => {
+      const all = state.breeders;
       if (all.length === 0) return null;
 
       // Tier 1: Paid/Featured

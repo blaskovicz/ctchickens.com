@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
+import type { Breeder } from '../types';
 
 const store = useStore();
-const featured = computed(() => store.getters.featuredBreeder);
+const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
 const showReviews = ref(false);
 
 const positiveCount = computed(() => 

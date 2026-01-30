@@ -1,11 +1,11 @@
 <script setup lang="ts">
-    import { ref, computed, onMounted } from 'vue';
+    import { ref, computed } from 'vue';
     import { useStore } from 'vuex';
     import type { Breeder } from '../types';
     
     const store = useStore();
     const filter = ref('');
-    const breeders = computed(() => store.getters.allBreeders);
+    const breeders = computed(() => store.getters.allBreeders as Breeder[]);
     const loading = computed(() => breeders.value.length === 0);    
     const sortBy = ref<keyof Breeder>('updated');
     const sortDesc = ref(true);
