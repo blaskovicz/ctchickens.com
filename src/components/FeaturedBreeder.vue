@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import type { Breeder, DirectoryData } from '../types';
+import { useStore } from 'vuex';
 
-const featured = ref<Breeder | null>(null);
+const store = useStore();
+const featured = computed(() => store.getters.featuredBreeder);
 const showReviews = ref(false);
-
-// --- HELPER: Get Week Number (1-52) ---
-const getWeekNumber = (d: Date) => {
-  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-};
 
 const positiveCount = computed(() => 
   featured.value?.reviews?.filter(r => r.type === 'positive').length ?? 0
@@ -27,31 +20,6 @@ const formatDate = (dateString: string) => {
   });
 };
 
-onMounted(async () => {
-  try {
-    const response = await fetch('/directory-info.json');
-    const data: DirectoryData = await response.json();
-    const allBreeders = data.directory_info || [];
-
-    // TIER 1: Explicitly marked as "Featured" (Future Paid Slots)
-    const paidTier = allBreeders.filter(b => b.featured === true);
-
-    // TIER 2: Trusted Community Members (Verified / Founding)
-    const trustedTier = allBreeders.filter(b => b.verified || b.founding_breeder);
-
-    // LOGIC: Use Paid Tier if it exists; otherwise fallback to Trusted Tier
-    const pool = paidTier.length > 0 ? paidTier : trustedTier;
-
-    if (pool.length > 0) {
-      const currentWeek = getWeekNumber(new Date());
-      const index = currentWeek % pool.length;
-      featured.value = pool[index];
-    } 
-
-  } catch (err) {
-    console.error('Error loading featured breeder:', err);
-  }
-});
 </script>
 
 <template>
@@ -101,10 +69,19 @@ onMounted(async () => {
               <i class="bi bi-info-circle me-2"></i>More Info
             </a>
             
-            <div v-if="featured.reviews && featured.reviews.length > 0" class="ms-auto d-flex align-items-center">
-               <span class="badge bg-light text-dark border me-1">
-                 <i class="bi bi-hand-thumbs-up-fill text-success"></i> {{ positiveCount }}
-               </span>
+            <div v-if="featured.reviews && featured.reviews.length > 0" class="ms-auto d-flex align-items-center gap-1">
+                <span 
+                  v-if="positiveCount > 0" 
+                  title="positive reviews"
+                  class="badge bg-light text-secondary border">
+                  <i class="bi bi-hand-thumbs-up-fill"></i> {{ positiveCount }}
+                </span>
+                <span 
+                  v-if="negativeCount > 0" 
+                  title="negative reviews"
+                  class="badge bg-light text-secondary border">
+                  <i class="bi bi-hand-thumbs-down-fill"></i> {{ negativeCount }}
+                </span>
             </div>
           </div>
 
@@ -115,17 +92,24 @@ onMounted(async () => {
                <span v-else>Hide Reviews</span>
             </button>
             
-             <div v-if="showReviews" class="mt-2 reviews-container">
+            <div v-if="showReviews" class="mt-2 reviews-container">
               <div 
                 v-for="(review, index) in featured.reviews" 
                 :key="index"
                 class="review-item p-2 mb-2 rounded bg-light border"
               >
-                <div class="d-flex justify-content-between">
-                   <strong class="small">{{ review.from }}</strong>
-                   <small class="text-muted">{{ formatDate(review.date) }}</small>
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="d-flex align-items-center">
+                      <i 
+                        :class="review.type === 'positive' ? 'bi-hand-thumbs-up-fill' : 'bi-hand-thumbs-down-fill'"
+                        class="bi me-2 fs-6 text-secondary"
+                        :title="review.type"
+                      ></i>
+                      <strong class="small">{{ review.from }}</strong>
+                    </div>
+                    <small class="text-muted">{{ formatDate(review.date) }}</small>
                 </div>
-                <p class="mb-0 small text-muted mt-1">{{ review.comment }}</p>
+                <p class="mb-0 small text-muted mt-1 ms-4">{{ review.comment }}</p>
               </div>
             </div>
           </div>

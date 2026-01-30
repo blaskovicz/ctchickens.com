@@ -1,11 +1,12 @@
 <script setup lang="ts">
     import { ref, computed, onMounted } from 'vue';
-    import type { Breeder, DirectoryData } from '../types';
+    import { useStore } from 'vuex';
+    import type { Breeder } from '../types';
     
-    const breeders = ref<Breeder[]>([]);
+    const store = useStore();
     const filter = ref('');
-    const loading = ref(true);
-    const error = ref<string | null>(null);
+    const breeders = computed(() => store.getters.allBreeders);
+    const loading = computed(() => breeders.value.length === 0);    
     const sortBy = ref<keyof Breeder>('updated');
     const sortDesc = ref(true);
     
@@ -40,7 +41,7 @@
       if (!filter.value) return breeders.value;
       
       const searchTerm = filter.value.toLowerCase();
-      return breeders.value.filter(breeder => {
+      return breeders.value.filter((breeder: Breeder) => {
         return (
           breeder.name.toLowerCase().includes(searchTerm) ||
           breeder.location.toLowerCase().includes(searchTerm) ||
@@ -88,20 +89,7 @@
     const clearFilter = () => {
       filter.value = '';
     };
-    
-    onMounted(async () => {
-      try {
-        const response = await fetch('/directory-info.json');
-        if (!response.ok) throw new Error('Failed to load breeders');
-        const data: DirectoryData = await response.json();
-        breeders.value = data.directory_info || [];
-      } catch (err) {
-        console.error('Error loading breeders:', err);
-        error.value = 'Error loading breeders list. Please refresh the page.';
-      } finally {
-        loading.value = false;
-      }
-    });
+
     </script>
     
     <template>
@@ -136,11 +124,6 @@
               <span class="visually-hidden">Loading...</span>
             </div>
             <p class="text-muted mt-2">Loading breeders...</p>
-          </div>
-          
-          <div v-else-if="error" class="alert alert-danger" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            {{ error }}
           </div>
           
           <div v-else class="table-responsive">
@@ -184,10 +167,18 @@
                             <i class="bi bi-star-fill text-warning me-1"></i>Founding Breeder
                           </span>
                           <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
-                            <span class="badge bg-success-subtle text-success border border-success" style="font-size: 0.7rem;">
+                            <span 
+                              v-if="getPositiveCount(breeder) > 0"
+                              title="positive reviews"
+                              class="badge bg-light text-secondary border me-1" 
+                              style="font-size: 0.7rem;">
                               <i class="bi bi-hand-thumbs-up-fill"></i> {{ getPositiveCount(breeder) }}
                             </span>
-                            <span class="badge bg-danger-subtle text-danger border border-danger ms-1" style="font-size: 0.7rem;">
+                            <span 
+                              v-if="getNegativeCount(breeder) > 0" 
+                              title="negative reviews"
+                              class="badge bg-light text-secondary border" 
+                              style="font-size: 0.7rem;">
                               <i class="bi bi-hand-thumbs-down-fill"></i> {{ getNegativeCount(breeder) }}
                             </span>
                           </span>

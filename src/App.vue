@@ -6,7 +6,13 @@
   import 'bootstrap/dist/css/bootstrap.min.css';
   import 'bootstrap-icons/font/bootstrap-icons.css';
   import 'bootstrap/dist/js/bootstrap.bundle.min.js'; // Needed for mobile navbar toggle
-  </script>
+  import { useStore } from 'vuex';
+  import { onMounted } from 'vue';
+  const store = useStore();
+  onMounted(() => {
+    store.dispatch('fetchDirectory');
+  });
+</script>
   
   <template>
     <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">

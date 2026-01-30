@@ -44,7 +44,7 @@ const currentIndex = ref(0);
 const timer = ref<number | undefined>(undefined);
 const isPaused = ref(false);
 
-const currentMessage = computed(() => messages.value[currentIndex.value]);
+const currentMessage = computed(() => messages.value[currentIndex.value]!);
 
 // --- ROTATION LOGIC ---
 
