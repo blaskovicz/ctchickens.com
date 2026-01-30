@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import FeaturedBreeder from './components/FeaturedBreeder.vue';
   import BreederTable from './components/BreederTable.vue';
-  
+  import FeaturedPartnerBanner from './components/FeaturedPartnerBanner.vue';
   // Import global styles
   import 'bootstrap/dist/css/bootstrap.min.css';
   import 'bootstrap-icons/font/bootstrap-icons.css';
@@ -44,16 +44,7 @@
     </nav>
   
     <section class="featured-partner-section">
-      <div class="bg-warning py-2 text-center">
-        <div class="container">
-          <small class="fw-bold text-dark">
-            <i class="bi bi-star-fill me-1"></i>
-            Featured Partner: Sample Store Name - It could be you! Email us at
-            <a href="mailto:marketing@ctchickens.com" class="text-dark fw-bold">marketing@ctchickens.com</a>
-            to get your store featured here.
-          </small>
-        </div>
-      </div>
+      <FeaturedPartnerBanner />
     </section>
   
     <section class="hero-section">
