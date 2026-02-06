@@ -22,7 +22,7 @@ INSTRUCTIONS
    - MyFarm-Logo.jpg
    - logo_final.jpeg
 
-   (Note: If you have multiple files with "logo" in the name, the system might pick one at random, so please only keep one logo file in here at a time.)
+   (Note: If you have multiple files with "logo" in the name, the system will keep the newest one and delete the old ones.)
 
 
 2. ADDING GALLERY PHOTOS
@@ -32,11 +32,14 @@ INSTRUCTIONS
 
 IMPORTANT RULES
 ---------------
+* QUANTITY LIMIT: The gallery can hold a maximum of 10 photos.
+    If you upload more than 10, the system will keep the 10 NEWEST photos and automatically delete the oldest ones to make room.
+
 * SIZE LIMIT: Please keep individual photos under 10MB. 
-    The system will automatically delete files larger than 10MB to prevent storage issues.
+    The system will automatically delete files larger than 10MB.
 
 * FILE TYPES: Only image files (JPG, PNG, JPEG) are supported. 
-    Word docs, PDFs, or videos will be ignored.
+    Word docs, PDFs, or videos will be deleted.
 
 * PRIVACY: Do not change the "Share" settings of this folder. 
     Our system automatically handles the permissions to make the images viewable on the web.

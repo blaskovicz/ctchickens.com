@@ -61,16 +61,29 @@ function runJanitor() {
           sub.setTrashed(true);
         }
 
-        var files = folder.getFiles();
+        // --- MODIFIED: COLLECT & SORT FILES (Newest First) ---
+        // We must sort before processing to know which ones are "excess"
+        var fileIterator = folder.getFiles();
+        var allFiles = [];
+        while (fileIterator.hasNext()) {
+            allFiles.push(fileIterator.next());
+        }
+
+        // Sort Descending (Newest date = index 0)
+        allFiles.sort(function(a, b) {
+            return b.getLastUpdated().getTime() - a.getLastUpdated().getTime();
+        });
+
         var MAX_SIZE = 10 * 1024 * 1024; // 10MB Limit
+        var MAX_GALLERY_IMAGES = 10; // Limit per breeder
         
         var imageList = [];
         var logo = null;
-        var fileCount = 0;
+        var galleryCount = 0;
         
-        while (files.hasNext()) {
-          var file = files.next();
-          fileCount++;
+        // Iterate through sorted files
+        for (var k = 0; k < allFiles.length; k++) {
+          var file = allFiles[k];
           
           var fileName = file.getName();
           var fileSize = file.getSize();
@@ -108,8 +121,16 @@ function runJanitor() {
                console.log("      🏷️ Found Logo: " + fileName);
                logo = encoded; // Assuming logic: one logo per folder
              } else {
-               console.log("      🖼️ Found Image: " + fileName);
-               imageList.push(encoded);
+               // --- NEW: CHECK LIMIT ---
+               if (galleryCount < MAX_GALLERY_IMAGES) {
+                   console.log("      🖼️ Found Image (" + (galleryCount + 1) + "/" + MAX_GALLERY_IMAGES + "): " + fileName);
+                   imageList.push(encoded);
+                   galleryCount++;
+               } else {
+                   // This file is older than the top 10, so we delete it
+                   console.warn("      🗑️ DELETING EXCESS IMAGE (>10): " + fileName);
+                   file.setTrashed(true);
+               }
              }
           } 
           // D. KEEP README
