@@ -52,6 +52,15 @@ function runJanitor() {
         console.log("🔍 Scanning: [" + farmName + "] (Folder: " + folderId + ")");
         
         var folder = DriveApp.getFolderById(folderId);
+
+        // --- NEW: DELETE SUBFOLDERS (Enforce flat structure) ---
+        var subfolders = folder.getFolders();
+        while (subfolders.hasNext()) {
+          var sub = subfolders.next();
+          console.warn("      🗑️ DELETING UNAUTHORIZED FOLDER: " + sub.getName());
+          sub.setTrashed(true);
+        }
+
         var files = folder.getFiles();
         var MAX_SIZE = 10 * 1024 * 1024; // 10MB Limit
         
@@ -66,9 +75,12 @@ function runJanitor() {
           var fileName = file.getName();
           var fileSize = file.getSize();
           var fileType = file.getMimeType();
-  
-          // B. DELETE OVERSIZE FILES
-          if (fileSize > MAX_SIZE) {
+          
+          // --- NEW: Identify Readme ---
+          var isReadme = fileName === "PHOTO_README.txt";
+
+          // B. DELETE OVERSIZE FILES (Skip Readme)
+          if (!isReadme && fileSize > MAX_SIZE) {
             console.warn("      🗑️ DELETING OVERSIZE: " + fileName + " (" + (fileSize/1024/1024).toFixed(2) + "MB)");
             file.setTrashed(true);
             continue;
@@ -99,8 +111,15 @@ function runJanitor() {
                console.log("      🖼️ Found Image: " + fileName);
                imageList.push(encoded);
              }
-          } else {
-             console.log("      ⚠️ Skipping non-image: " + fileName + " (" + fileType + ")");
+          } 
+          // D. KEEP README
+          else if (isReadme) {
+             console.log("      📄 Found Readme: " + fileName);
+          }
+          // E. DELETE ANYTHING ELSE
+          else {
+             console.log("      🗑️ DELETING JUNK: " + fileName + " (" + fileType + ")");
+             file.setTrashed(true);
           }
         }
         
@@ -131,4 +150,4 @@ function runJanitor() {
     console.log("🏁 JANITOR RUN COMPLETE.");
     console.log("   - Rows Updated: " + updatedCount);
     console.log("   - Errors: " + errorCount);
-  }
+}
