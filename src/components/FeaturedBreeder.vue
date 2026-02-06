@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
 import type { Breeder } from '../types';
+import BreederGallery from './BreederGallery.vue';
 
 const store = useStore();
 const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
@@ -60,6 +61,13 @@ const formatDate = (dateString: string) => {
               <i class="bi bi-tag-fill me-2 text-warning"></i>
               <span class="fw-medium text-dark">Selling:</span> {{ featured.selling }}
             </p>
+          </div>
+
+          <div class="mb-4">
+            <BreederGallery 
+              :logo="featured.logo" 
+              :images="featured.images" 
+            />
           </div>
 
           <div class="d-flex gap-2 mt-auto">
@@ -142,7 +150,8 @@ const formatDate = (dateString: string) => {
           </div>
           <h5 class="fw-bold">Are you a local breeder?</h5>
           <p class="small text-muted px-4">
-            Get listed to show up in our directory of thousands of local keepers. Verification is free for community members.
+            Get listed to show up in our directory of thousands of local keepers.
+            Get verified to build trust with our community and increase your visibility.
           </p>
           <a href="mailto:marketing@ctchickens.com?subject=Breeder%20Directory%20Listing%20Application" class="btn btn-primary mt-2">
             Apply to Get Listed

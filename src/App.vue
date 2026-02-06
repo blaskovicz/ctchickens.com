@@ -156,10 +156,10 @@
           <div class="col-lg-8 mx-auto text-center">
             <h2 class="display-5 fw-bold text-dark">Local Breeder & Supplier Directory</h2>
             <p class="lead">
-              Find local CT breeders for chicks, pullets, and hatching eggs. <br>
+              Find local Connecticut suppliers, breeders, and service suppliers for your backyard farm.<br>
               <span class="badge bg-danger">Notice</span> Facebook prohibits live animal sales; all listings are moved here for community safety.
-              <span><span class="badge bg-success ms-2">Verified</span> listings confirm the breeder is a known member of our community in good standing.</span>
-              <span><span class="badge bg-primary ms-2"><i class="bi bi-star-fill text-warning me-1"></i>Founding Breeder</span> is reserved for verified breeders who were the first 10 on our platform.</span>
+              <span><span class="badge bg-success ms-2"><i class="bi bi-check-circle-fill me-1"></i>Verified</span> listings confirm the breeder is a known member of our community in good standing.</span>
+              <span><span class="badge bg-primary ms-2"><i class="bi bi-award-fill me-1"></i>Founding Breeder</span> is reserved for verified breeders who were the first 10 on our platform.</span>
             </p>
           </div>
         </div>

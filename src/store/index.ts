@@ -1,6 +1,6 @@
 import { createStore } from 'vuex';
-import type { Breeder } from '../types';
-
+import type { Breeder, DirectoryData, ResponseError } from '../types';
+import { loadFromCache, saveToCache, isCacheValid } from './cache';
 interface State {
   breeders: Breeder[];
   lastFetch: number;
@@ -76,60 +76,71 @@ export default createStore({
   },
   actions: {
     async fetchDirectory({ commit, state }: { commit: any, state: State }) {
-      const CACHE_KEY = 'ctchickens_directory_v1';
-      const now = new Date().getTime();
-
-      // 1. INSTANT LOAD: Check LocalStorage first
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          // If our memory is empty, fill it immediately with disk cache
-          if (state.breeders.length === 0) {
-            console.log('Using cached breeder data');
-            commit('SET_BREEDERS', parsed);
-          }
-        } catch (e) {
-          console.error('Cache parse error for breeder data', e);
+      
+      // 1. ATTEMPT RESTORE (If state is empty)
+      if (state.breeders.length === 0) {
+        const cached = loadFromCache();
+        if (cached) {
+          commit('SET_BREEDERS', cached.data);
+          commit('SET_LAST_FETCH', cached.timestamp);
+          console.log("Restored directory from local storage.");
         }
       }
 
-      // 2. THROTTLE: If we fetched from network < 1 min ago, stop here.
-      if (state.breeders.length > 0 && (now - state.lastFetch) < 60000) {
-        return; 
+      // 2. THROTTLE CHECK (Using the restored timestamp)
+      if (state.breeders.length > 0 && isCacheValid(state.lastFetch)) {
+        console.log("Cache is fresh. Skipping network fetch.");
+        return;
       }
 
-      console.log('Fetching fresh breeder data');
-
-      // 3. BACKGROUND FETCH: Get fresh data
-      try {        
-        // Note: The 'await' here will take 2-3 seconds, but the user 
-        // already sees the cached data, so they don't notice!
-        const response = await fetch(buildDataURL());
-        const data = await response.json();
-
-        if (data.error) {
-          console.error('Store fetch error:', data.error);
-          return;
-        }
-
-        const freshList = (data.directory_info || []).map((breeder: any) => ({
-          ...breeder,
-          contact_link: decodeValue(breeder.contact_link),
-          info_link: decodeValue(breeder.info_link)
-        }));
+      // 3. FETCH NETWORK DATA
+      try {
+        console.log("Fetching fresh directory data...");
+        const url = buildDataURL();
+        const response = await fetch(url);
+        const data: DirectoryData | ResponseError = await response.json();
         
-        // Update Store
+        if ((data as ResponseError).error) { 
+          console.error((data as ResponseError).error);
+          return; 
+        }
+        
+        let rawList: Breeder[] = (data as DirectoryData).directory_info || [];
+
+        // 4. PROCESS & DECODE
+        const freshList: Breeder[] = rawList.map((breeder: any) => {
+          // ... (Your existing decode logic for images/logos/links) ...
+          // (Copy the mapping logic from previous step here)
+           let images = [];
+           let logo = null;
+
+           if (breeder.image_cache_json) {
+              try {
+                 const cacheObj = JSON.parse(breeder.image_cache_json);
+                 logo = cacheObj.logo;
+                 images = cacheObj.images || [];
+              } catch(e) {}
+           }
+           
+           return {
+             ...breeder,
+             contact_link: decodeValue(breeder.contact_link),
+             info_link: decodeValue(breeder.info_link),
+             logo: logo ? decodeValue(logo) : (breeder.logo ? decodeValue(breeder.logo) : null),
+             images: images.length > 0 ? images.map(decodeValue) : (Array.isArray(breeder.images) ? breeder.images.map(decodeValue) : [])
+           } as Breeder;
+        });
+        
+        // 5. COMMIT & SAVE
         commit('SET_BREEDERS', freshList);
-        commit('SET_LAST_FETCH', now);
+        commit('SET_LAST_FETCH', new Date().getTime());
         
-        // Update LocalStorage for next time
-        localStorage.setItem(CACHE_KEY, JSON.stringify(freshList));
-        
+        saveToCache(freshList);
+        console.log("Saved directory to cache.");
       } catch (err) {
         console.error('Store fetch error:', err);
       }
-    },
+    }
   },
   getters: {
     allBreeders: (state: State) => state.breeders,

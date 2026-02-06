@@ -2,7 +2,8 @@
     import { ref, computed } from 'vue';
     import { useStore } from 'vuex';
     import type { Breeder } from '../types';
-    
+    import BreederGallery from './BreederGallery.vue';
+
     const store = useStore();
     const filter = ref('');
     const breeders = computed(() => store.getters.allBreeders as Breeder[]);
@@ -162,9 +163,11 @@
                           </strong>
                         </div>
                         <div>
-                          <span v-if="breeder.verified" class="badge bg-success me-1">Verified</span>
+                          <span v-if="breeder.verified" class="badge bg-success me-1">
+                            <i class="bi bi-check-circle-fill me-1"></i>Verified
+                          </span>
                           <span v-if="breeder.founding_breeder" class="badge bg-primary me-1">
-                            <i class="bi bi-star-fill text-warning me-1"></i>Founding Breeder
+                            <i class="bi bi-award-fill me-1"></i>Founding Breeder
                           </span>
                           <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
                             <span 
@@ -196,11 +199,27 @@
                     </td>
                   </tr>
                   <tr class="breeds-row">
-                    <td colspan="100" class="bg-light p-0 p-md-3">
-                      <span class="text-muted">
-                        <i class="bi bi-tag-fill me-1"></i>
-                        <strong>Selling:</strong> {{ breeder.selling }}
-                      </span>
+                    <td colspan="100" class="bg-light p-0">
+                      <div class="p-3 border-bottom">
+                        
+                        <div class="mb-2 text-muted">
+                          <i class="bi bi-tag-fill me-1 text-secondary"></i>
+                          <strong>Selling:</strong> {{ breeder.selling }}
+                        </div>
+
+                        <div 
+                          v-if="breeder.verified && ((breeder.images && breeder.images.length > 0) || breeder.logo)"
+                          style="max-width: 80vw;"
+                          class="mt-3">
+                          <p class="text-xs fw-bold text-muted text-uppercase mb-2 small">Gallery</p>
+                          
+                          <BreederGallery 
+                            :logo="breeder.logo" 
+                            :images="breeder.images" 
+                          />
+                        </div>
+
+                      </div>
                     </td>
                   </tr>
                 </template>
