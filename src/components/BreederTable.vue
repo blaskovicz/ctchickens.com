@@ -210,12 +210,7 @@
                     <td>
                       <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div>
-                          <strong v-if="breeder.verified && breeder.info_link">
-                            <a :href="breeder.info_link" target="_blank" class="">
-                              {{ breeder.name }}
-                            </a>
-                          </strong>
-                          <strong v-else>
+                          <strong>
                             {{ breeder.name }}
                           </strong>
                         </div>
@@ -260,7 +255,7 @@
                         </a>
 
                         <a 
-                          v-if="breeder.info_link" 
+                          v-if="breeder.verified && breeder.info_link" 
                           :href="breeder.info_link" 
                           target="_blank"
                           class="btn btn-sm btn-outline-dark text-nowrap"
