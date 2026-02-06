@@ -151,7 +151,7 @@ const formatDate = (dateString: string) => {
           <h5 class="fw-bold">Are you a local breeder?</h5>
           <p class="small text-muted px-4">
             Get listed to show up in our directory of thousands of local keepers.
-            Get verified to build trust with our community and increase your visibility.
+            Get verified to build trust with our community.
           </p>
           <a href="mailto:marketing@ctchickens.com?subject=Breeder%20Directory%20Listing%20Application" class="btn btn-primary mt-2">
             Apply to Get Listed

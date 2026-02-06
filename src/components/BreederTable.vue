@@ -6,6 +6,8 @@
 
     const store = useStore();
     const filter = ref('');
+    const selectedCategory = ref('');
+    const showVerifiedOnly = ref(false);
     const breeders = computed(() => store.getters.allBreeders as Breeder[]);
     const loading = computed(() => breeders.value.length === 0);    
     const sortBy = ref<keyof Breeder>('updated');
@@ -37,18 +39,39 @@
         year: 'numeric', month: 'short', day: 'numeric' 
       });
     };
+
+    // Automatically finds all unique categories from the loaded data
+    const uniqueCategories = computed(() => {
+      const cats = new Set(breeders.value.map(b => b.category || 'Breeder'));
+      // Capitalize first letter for display if needed, or keep raw
+      return Array.from(cats).sort(); 
+    });
     
     const filteredItems = computed(() => {
-      if (!filter.value) return breeders.value;
-      
-      const searchTerm = filter.value.toLowerCase();
-      return breeders.value.filter((breeder: Breeder) => {
-        return (
+      // Start with all breeders
+      let items = breeders.value;
+
+      // 1. Filter by Category
+      if (selectedCategory.value && selectedCategory.value !== '') {
+        items = items.filter(b => (b.category || 'Breeder') === selectedCategory.value);
+      }
+
+      // 2. Filter by Verified Status
+      if (showVerifiedOnly.value) {
+        items = items.filter(b => b.verified);
+      }
+
+      // 3. Filter by Text Search (Existing Logic)
+      if (filter.value) {
+        const searchTerm = filter.value.toLowerCase();
+        items = items.filter(breeder => 
           breeder.name.toLowerCase().includes(searchTerm) ||
           breeder.location.toLowerCase().includes(searchTerm) ||
           breeder.selling.toLowerCase().includes(searchTerm)
         );
-      });
+      }
+
+      return items;
     });
     
     const sortedAndFilteredItems = computed(() => {
@@ -99,24 +122,58 @@
           <h3 class="mb-3 text-center">All Listed Breeders & Suppliers</h3>
           
           <div class="row mb-3">
-            <div class="col-md-6 mx-auto">
-              <div class="input-group">
-                <span class="input-group-text bg-light">
-                  <i class="bi bi-search"></i>
-                </span>
-                <input 
-                  v-model="filter"
-                  type="text" 
-                  class="form-control" 
-                  placeholder="Search by name, location, or breeds..."
-                  aria-label="Search breeders">
-                <button class="btn btn-outline-secondary" type="button" @click="clearFilter">
-                  <i class="bi bi-x-lg"></i>
-                </button>
+            <div class="col-12 col-md-10 mx-auto">
+              
+              <div class="row g-2 align-items-center">
+                
+                <div class="col-12 col-md">
+                  <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                    <input 
+                      v-model="filter"
+                      type="text" 
+                      class="form-control" 
+                      placeholder="Search..." 
+                      aria-label="Search breeders">
+                    <button v-if="filter" class="btn btn-outline-secondary" type="button" @click="clearFilter">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="col-6 col-md-auto">
+                  <select v-model="selectedCategory" class="form-select w-100">
+                    <option value="">All Categories</option>
+                    <option v-for="cat in uniqueCategories" :key="cat" :value="cat">
+                      {{ cat.charAt(0).toUpperCase() + cat.slice(1) }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="col-6 col-md-auto">
+                  <div class="form-check form-switch border rounded bg-white d-flex align-items-center justify-content-center px-2" style="height: 38px;">
+                    <input 
+                      v-model="showVerifiedOnly" 
+                      class="form-check-input my-0 ms-1" 
+                      type="checkbox" 
+                      id="verifiedSwitch"
+                      style="cursor: pointer;"
+                    >
+                    <label class="form-check-label small ms-2 text-nowrap" for="verifiedSwitch" style="cursor: pointer;">
+                      Verified Only
+                    </label>
+                  </div>
+                </div>
+
               </div>
-              <small v-if="filter" class="text-muted ms-2">
-                Showing {{ filteredItems.length }} of {{ breeders.length }} breeders
-              </small>
+
+              <div class="text-center mt-2 small text-muted">
+                <span v-if="loading">Loading...</span>
+                <span v-else>
+                  Showing {{ filteredItems.length }} result{{ filteredItems.length !== 1 ? 's' : '' }}
+                </span>
+              </div>
+
             </div>
           </div>
           
@@ -124,7 +181,7 @@
             <div class="spinner-border text-primary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="text-muted mt-2">Loading breeders...</p>
+            <p class="text-muted mt-2">Loading...</p>
           </div>
           
           <div v-else class="table-responsive">
@@ -193,9 +250,24 @@
                       <small class="text-muted">{{ formatDate(breeder.updated) }}</small>
                     </td>
                     <td class="text-end">
-                      <a v-if="breeder.contact_link" :href="breeder.contact_link" class="btn btn-sm btn-primary">
-                        <i class="bi bi-envelope-fill"></i> <span class="d-none d-sm-inline">Contact</span>
-                      </a>
+                      <div class="d-flex flex-column flex-md-row justify-content-end gap-2 align-items-end">
+                        <a 
+                          v-if="breeder.contact_link" 
+                          :href="breeder.contact_link" 
+                          class="btn btn-sm btn-primary text-nowrap"
+                        >
+                          <i class="bi bi-envelope-fill"></i> <span class="d-none d-lg-inline">Contact</span>
+                        </a>
+
+                        <a 
+                          v-if="breeder.info_link" 
+                          :href="breeder.info_link" 
+                          target="_blank"
+                          class="btn btn-sm btn-outline-dark text-nowrap"
+                        >
+                          <i class="bi bi-info-circle"></i> <span class="d-none d-lg-inline">More Info</span>
+                        </a>
+                      </div>
                     </td>
                   </tr>
                   <tr class="breeds-row">
@@ -209,14 +281,16 @@
 
                         <div 
                           v-if="breeder.verified && ((breeder.images && breeder.images.length > 0) || breeder.logo)"
-                          style="max-width: 80vw;"
+                          style="max-width: 85vw;"
                           class="mt-3">
-                          <p class="text-xs fw-bold text-muted text-uppercase mb-2 small">Gallery</p>
-                          
-                          <BreederGallery 
-                            :logo="breeder.logo" 
-                            :images="breeder.images" 
-                          />
+                          <div class="mt-3" style="display: grid; grid-template-columns: minmax(0, 1fr);">
+                            <p class="text-xs fw-bold text-muted text-uppercase mb-2 small">Gallery</p>
+                            
+                            <BreederGallery 
+                              :logo="breeder.logo" 
+                              :images="breeder.images" 
+                            />
+                          </div>
                         </div>
 
                       </div>
@@ -247,5 +321,9 @@
     .breeds-row td {
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
+
+      border-bottom: 16px solid transparent; /* Adds the "empty space" */
+      background-clip: padding-box;          /* Stops hover colors from painting the space */
+      position: relative;                    /* Keeps z-index stacking clean */
     }
 </style>

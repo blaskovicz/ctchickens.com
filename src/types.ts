@@ -11,6 +11,7 @@ export interface Review {
     name: string;
     location: string;
     selling: string;
+    category: string | null;
     verified: boolean;
     founding_breeder?: number; // Optional since not everyone has it
     contact_link: string | null;
