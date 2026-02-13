@@ -13,7 +13,7 @@ The application's main functionality is a searchable and filterable directory of
 *   **Frontend Framework:** Vue.js 3
 *   **Build Tool:** Vite
 *   **Language:** TypeScript
-*   **Styling:** Bootstrap 5 and Bootstrap Icons
+*   **Styling:** Bootstrap 5, Bootstrap Icons, and Bootstrap-Vue-Next
 *   **State Management:** Vuex
 *   **API:** Google Apps Script
 
@@ -54,7 +54,7 @@ npm run preview
 
 *   **Component-Based Architecture:** The application is structured around Vue.js single-file components, located in `src/components`.
 *   **State Management:** Vuex is used for centralized state management. The store is defined in `src/store/index.ts` and handles fetching and caching the breeder directory data.
-*   **Styling:** Global styles are defined in `src/style.css`, with component-specific styles scoped within the `.vue` files. The project heavily utilizes Bootstrap 5 for its responsive grid system and UI components.
+*   **Styling:** Global styles are defined in `src/style.css`, with component-specific styles scoped within the `.vue` files. The project heavily utilizes Bootstrap 5 for its responsive grid system and UI components. **Bootstrap-Vue-Next** provides Vue-integrated Bootstrap components (like modals) to enhance functionality while maintaining a consistent design.
 *   **Data Fetching:** The breeder directory data is fetched from a Google Apps Script URL. The URL is obfuscated within the `src/store/index.ts` file to deter simple scraping.
 *   **Caching:** The fetched data is cached in the browser's local storage to improve performance and reduce API calls. The caching logic is implemented in `src/store/cache.ts`.
 *   **Types:** TypeScript types are defined in `src/types.ts`.

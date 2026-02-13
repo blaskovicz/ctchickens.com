@@ -3,6 +3,8 @@
     import { useStore } from 'vuex';
     import type { Breeder } from '../types';
     import BreederGallery from './BreederGallery.vue';
+    import { BModal } from 'bootstrap-vue-next';
+    import 'bootstrap-vue-next/dist/bootstrap-vue-next.css';
 
     const store = useStore();
     const filter = ref('');
@@ -112,6 +114,27 @@
     
     const clearFilter = () => {
       filter.value = '';
+    };
+
+    const showWarningModal = ref(false);
+    const pendingLink = ref('');
+    const pendingFarmName = ref('');
+
+    const handleInfoClick = (breeder: Breeder) => {
+      if (breeder.verified) {
+        window.open(breeder.info_link!, '_blank');
+      } else {
+        pendingLink.value = breeder.info_link || '';
+        pendingFarmName.value = breeder.name;
+        showWarningModal.value = true;
+      }
+    };
+
+    const confirmProceed = () => {
+      if (pendingLink.value) {
+        window.open(pendingLink.value, '_blank');
+      }
+      showWarningModal.value = false;
     };
 
     </script>
@@ -255,9 +278,9 @@
                         </a>
 
                         <a 
-                          v-if="breeder.verified && breeder.info_link" 
-                          :href="breeder.info_link" 
-                          target="_blank"
+                          v-if="breeder.info_link" 
+                          href="#"
+                          @click.prevent="handleInfoClick(breeder)"
                           class="btn btn-sm btn-outline-dark text-nowrap"
                         >
                           <i class="bi bi-info-circle"></i> <span class="d-none d-lg-inline">More Info</span>
@@ -310,10 +333,23 @@
           </p>
         </div>
       </div>
-    </template>
 
-<style scoped>
-    .breeds-row td {
+      <!-- Warning Modal -->
+      <BModal 
+        v-model="showWarningModal" 
+        title="External Link Warning"
+        @ok="confirmProceed"
+        ok-title="Proceed"
+        cancel-title="Cancel"
+        centered
+      >
+        <p>You are about to visit <span class="fw-bold text-break">{{ pendingLink }}</span></p>
+        <p><span class="fw-bold text-break">{{ pendingFarmName }}</span> is community supplied and has not completed the verification procedure for ctchickens.com.</p>
+      </BModal>
+    </template>
+      
+  <style scoped>
+      .breeds-row td {
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
 
