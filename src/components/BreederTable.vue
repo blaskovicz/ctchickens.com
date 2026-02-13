@@ -5,8 +5,10 @@
     import BreederGallery from './BreederGallery.vue';
     import { BModal } from 'bootstrap-vue-next';
     import 'bootstrap-vue-next/dist/bootstrap-vue-next.css';
+    import { useBreederUtils } from '../composables/useBreederUtils';
 
     const store = useStore();
+    const { formatContactLink } = useBreederUtils();
     const filter = ref('');
     const selectedCategory = ref('');
     const showVerifiedOnly = ref(false);
@@ -17,9 +19,10 @@
     
     const fields = [
       { key: 'name', label: 'Name', sortable: true },
+      { key: 'category', label: 'Category', sortable: false },
       { key: 'location', label: 'Location', sortable: true },
       { key: 'selling', label: 'Breeds/Products', sortable: true },
-      { key: 'updated', label: 'Last Updated', sortable: true },
+      { key: 'updated', label: 'Updated', sortable: true },
       { key: 'actions', label: '', sortable: false }
     ] as const;
     
@@ -263,6 +266,11 @@
                         </div>
                       </div>
                     </td>
+                    <td>
+                      <span class="badge bg-light text-secondary border uc-first">
+                        {{ breeder.category }}
+                      </span>
+                    </td>
                     <td>{{ breeder.location }}</td>
                     <td class="d-none d-md-table-cell">
                       <small class="text-muted">{{ formatDate(breeder.updated) }}</small>
@@ -270,8 +278,9 @@
                     <td class="text-end">
                       <div class="d-flex flex-column flex-md-row justify-content-end gap-2 align-items-end">
                         <a 
-                          v-if="breeder.contact_link" 
-                          :href="breeder.contact_link" 
+                          v-if="breeder.contact_link"
+                          target="_blank"
+                          :href="formatContactLink(breeder.contact_link)" 
                           class="btn btn-sm btn-primary text-nowrap"
                         >
                           <i class="bi bi-envelope-fill"></i> <span class="d-none d-lg-inline">Contact</span>

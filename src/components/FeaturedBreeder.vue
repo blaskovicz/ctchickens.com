@@ -3,8 +3,10 @@ import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
 import type { Breeder } from '../types';
 import BreederGallery from './BreederGallery.vue';
+import { useBreederUtils } from '../composables/useBreederUtils';
 
 const store = useStore();
+const { formatContactLink } = useBreederUtils();
 const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
 const showReviews = ref(false);
 
@@ -71,7 +73,11 @@ const formatDate = (dateString: string) => {
           </div>
 
           <div class="d-flex gap-2 mt-auto">
-            <a v-if="featured.contact_link" :href="featured.contact_link" class="btn btn-sm btn-primary">
+            <a
+              v-if="featured.contact_link"
+              target="_blank"
+              :href="formatContactLink(featured.contact_link)"
+              class="btn btn-sm btn-primary">
               <i class="bi bi-envelope-fill me-2"></i>Contact
             </a>
             <a v-if="featured.info_link" :href="featured.info_link" target="_blank" class="btn btn-sm btn-outline-dark">
@@ -135,7 +141,7 @@ const formatDate = (dateString: string) => {
           <p class="small text-muted mb-3">
             Want to feature your farm or coop services here?
           </p>
-          <a href="mailto:marketing@ctchickens.com" class="btn btn-sm btn-dark">
+          <a target="_blank" :href="formatContactLink('mailto:marketing@ctchickens.com')" class="btn btn-sm btn-dark">
             Become a Partner
           </a>
         </div>
