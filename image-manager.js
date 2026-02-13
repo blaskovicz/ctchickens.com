@@ -53,16 +53,19 @@ function runJanitor() {
         
         var folder = DriveApp.getFolderById(folderId);
 
-        // --- NEW: DELETE SUBFOLDERS (Enforce flat structure) ---
+        // --- ENFORCE FLAT STRUCTURE ---
         var subfolders = folder.getFolders();
         while (subfolders.hasNext()) {
           var sub = subfolders.next();
-          console.warn("      🗑️ DELETING UNAUTHORIZED FOLDER: " + sub.getName());
-          sub.setTrashed(true);
+          console.warn("      🗑️ REMOVING UNAUTHORIZED FOLDER: " + sub.getName());
+          try {
+            folder.removeFolder(sub); // Use remove instead of setTrashed
+          } catch(e) {
+            console.error("      ❌ Failed to remove subfolder: " + e.message);
+          }
         }
 
-        // --- MODIFIED: COLLECT & SORT FILES (Newest First) ---
-        // We must sort before processing to know which ones are "excess"
+        // --- COLLECT & SORT FILES (Newest First) ---
         var fileIterator = folder.getFiles();
         var allFiles = [];
         while (fileIterator.hasNext()) {
@@ -89,47 +92,57 @@ function runJanitor() {
           var fileSize = file.getSize();
           var fileType = file.getMimeType();
           
-          // --- NEW: Identify Readme ---
+          // --- Identify Readme ---
           var isReadme = fileName === "PHOTO_README.txt";
 
-          // B. DELETE OVERSIZE FILES (Skip Readme)
+          // B. REMOVE OVERSIZE FILES (Skip Readme)
           if (!isReadme && fileSize > MAX_SIZE) {
-            console.warn("      🗑️ DELETING OVERSIZE: " + fileName + " (" + (fileSize/1024/1024).toFixed(2) + "MB)");
-            file.setTrashed(true);
+            console.warn("      🗑️ REMOVING OVERSIZE: " + fileName + " (" + (fileSize/1024/1024).toFixed(2) + "MB)");
+            try {
+              folder.removeFile(file);
+            } catch(e) {
+              console.error("      ❌ Failed to remove oversize file: " + e.message);
+            }
             continue;
           }
           
           // C. PROCESS IMAGES
           if (fileType.indexOf('image') > -1) {
              
-             // Ensure Public Permission
-             if (file.getSharingAccess() !== DriveApp.Access.ANYONE_WITH_LINK) {
-               file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-               console.log("      🔓 Permissions updated for: " + fileName);
+             // Try to update permissions, but don't crash if breeder restricted it
+             try {
+               if (file.getSharingAccess() !== DriveApp.Access.ANYONE_WITH_LINK) {
+                 file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+                 console.log("      🔓 Permissions updated for: " + fileName);
+               }
+             } catch(e) {
+               console.warn("      ⚠️ Warning: Could not set permissions for " + fileName + ". The owner may have restricted sharing.");
              }
              
-             // Generate Fast Link (using webContentLink or thumbnail hack)
-             // NOTE: The URL pattern in your original script is specific. Keeping it as is.
+             // Generate Fast Link
              var rawUrl = "https://lh3.googleusercontent.com/d/" + file.getId() + "=w800";
              
              // Simple Base64 Encode
-             // (Note: Base64 encoding a URL usually isn't necessary for JSON, but keeping your logic)
              var encoded = Utilities.base64Encode(rawUrl);
              
              // Sort: Logo vs Gallery
              if (fileName.toLowerCase().indexOf('logo') > -1) {
                console.log("      🏷️ Found Logo: " + fileName);
-               logo = encoded; // Assuming logic: one logo per folder
+               logo = encoded; 
              } else {
-               // --- NEW: CHECK LIMIT ---
+               // --- CHECK LIMIT ---
                if (galleryCount < MAX_GALLERY_IMAGES) {
                    console.log("      🖼️ Found Image (" + (galleryCount + 1) + "/" + MAX_GALLERY_IMAGES + "): " + fileName);
                    imageList.push(encoded);
                    galleryCount++;
                } else {
-                   // This file is older than the top 10, so we delete it
-                   console.warn("      🗑️ DELETING EXCESS IMAGE (>10): " + fileName);
-                   file.setTrashed(true);
+                   // This file is older than the top 10, so we remove it from the folder
+                   console.warn("      🗑️ REMOVING EXCESS IMAGE (>10): " + fileName);
+                   try {
+                     folder.removeFile(file);
+                   } catch(e) {
+                     console.error("      ❌ Failed to remove excess file: " + e.message);
+                   }
                }
              }
           } 
@@ -137,15 +150,18 @@ function runJanitor() {
           else if (isReadme) {
              console.log("      📄 Found Readme: " + fileName);
           }
-          // E. DELETE ANYTHING ELSE
+          // E. REMOVE ANYTHING ELSE
           else {
-             console.log("      🗑️ DELETING JUNK: " + fileName + " (" + fileType + ")");
-             file.setTrashed(true);
+             console.log("      🗑️ REMOVING JUNK: " + fileName + " (" + fileType + ")");
+             try {
+               folder.removeFile(file);
+             } catch(e) {
+               console.error("      ❌ Failed to remove junk file: " + e.message);
+             }
           }
         }
         
         // D. WRITE TO SPREADSHEET
-        // Only write if we found something or if we need to clear an old cache
         var cacheObj = {
           logo: logo,
           images: imageList
