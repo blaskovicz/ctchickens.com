@@ -44,7 +44,7 @@
 
     // Automatically finds all unique categories from the loaded data
     const uniqueCategories = computed(() => {
-      const cats = new Set(breeders.value.map(b => b.category || 'Breeder'));
+      const cats = new Set(breeders.value.map(b => b.category));
       // Capitalize first letter for display if needed, or keep raw
       return Array.from(cats).sort(); 
     });
@@ -55,7 +55,7 @@
 
       // 1. Filter by Category
       if (selectedCategory.value && selectedCategory.value !== '') {
-        items = items.filter(b => (b.category || 'Breeder') === selectedCategory.value);
+        items = items.filter(b => b.category === selectedCategory.value);
       }
 
       // 2. Filter by Verified Status
@@ -165,10 +165,10 @@
                 </div>
 
                 <div class="col-6 col-md-auto">
-                  <select v-model="selectedCategory" class="form-select w-100">
+                  <select v-model="selectedCategory" class="form-select w-100 uc-first">
                     <option value="">All Categories</option>
-                    <option v-for="cat in uniqueCategories" :key="cat" :value="cat">
-                      {{ cat.charAt(0).toUpperCase() + cat.slice(1) }}
+                    <option class="uc-first" v-for="cat in uniqueCategories" :key="cat" :value="cat">
+                      {{ cat }}
                     </option>
                   </select>
                 </div>
@@ -349,7 +349,10 @@
     </template>
       
   <style scoped>
-      .breeds-row td {
+    .uc-first {
+      text-transform: capitalize;
+    }
+    .breeds-row td {
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
 

@@ -108,7 +108,10 @@ export default createStore({
         let rawList: Breeder[] = (data as DirectoryData).directory_info || [];
 
         // 4. PROCESS & DECODE
-        const freshList: Breeder[] = rawList.map((breeder: any) => {
+        const freshList: Breeder[] = rawList.map((breeder: Breeder) => {
+          // default category if unset
+          breeder.category ||= 'breeder';
+
           // ... (Your existing decode logic for images/logos/links) ...
           // (Copy the mapping logic from previous step here)
            let images = [];
