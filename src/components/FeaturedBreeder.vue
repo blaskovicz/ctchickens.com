@@ -3,10 +3,12 @@ import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
 import type { Breeder } from '../types';
 import BreederGallery from './BreederGallery.vue';
-import { useBreederUtils } from '../composables/useBreederUtils';
+import VerifiedBadge from './VerifiedBadge.vue';
+import FoundingBreederBadge from './FoundingBreederBadge.vue';
+import ContactButton from './ContactButton.vue';
+import MoreInfoButton from './MoreInfoButton.vue';
 
 const store = useStore();
-const { formatContactLink } = useBreederUtils();
 const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
 const showReviews = ref(false);
 
@@ -48,12 +50,8 @@ const formatDate = (dateString: string) => {
           </h5>
 
           <div class="d-flex flex-wrap gap-2 mb-3">
-            <span v-if="featured.verified" class="badge bg-success d-flex align-items-center">
-              <i class="bi bi-check-circle-fill me-1"></i> Verified
-            </span>
-            <span v-if="featured.founding_breeder" class="badge bg-primary d-flex align-items-center">
-              <i class="bi bi-award-fill me-1"></i> Founding Breeder
-            </span>
+            <VerifiedBadge :verified="featured.verified" />
+            <FoundingBreederBadge :count="featured.founding_breeder" />
           </div>
 
           <hr class="text-muted opacity-25 my-2">
@@ -72,17 +70,14 @@ const formatDate = (dateString: string) => {
             />
           </div>
 
-          <div class="d-flex gap-2 mt-auto">
-            <a
-              v-if="featured.contact_link"
-              target="_blank"
-              :href="formatContactLink(featured.contact_link)"
-              class="btn btn-sm btn-primary">
-              <i class="bi bi-envelope-fill me-2"></i>Contact
-            </a>
-            <a v-if="featured.info_link" :href="featured.info_link" target="_blank" class="btn btn-sm btn-outline-dark">
-              <i class="bi bi-info-circle me-2"></i>More Info
-            </a>
+          <div class="d-flex gap-2 mt-auto align-items-center">
+            <ContactButton :link="featured.contact_link" :show-label-on-mobile="true" />
+            <MoreInfoButton 
+              :link="featured.info_link" 
+              :name="featured.name" 
+              :verified="featured.verified" 
+              :show-label-on-mobile="true"
+            />
             
             <div v-if="featured.reviews && featured.reviews.length > 0" class="ms-auto d-flex align-items-center gap-1">
                 <span 
@@ -141,7 +136,7 @@ const formatDate = (dateString: string) => {
           <p class="small text-muted mb-3">
             Want to feature your farm or coop services here?
           </p>
-          <a target="_blank" :href="formatContactLink('mailto:marketing@ctchickens.com')" class="btn btn-sm btn-dark">
+          <a target="_blank" href="mailto:marketing@ctchickens.com?subject=Inquiry%20from%20ctchickens.com" class="btn btn-sm btn-dark">
             Become a Partner
           </a>
         </div>

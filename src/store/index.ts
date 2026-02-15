@@ -83,7 +83,7 @@ export default createStore({
         if (cached) {
           commit('SET_BREEDERS', cached.data);
           commit('SET_LAST_FETCH', cached.timestamp);
-          console.log("Restored directory from local storage.");
+          console.log("Restored directory from local storage.", cached.data);
         }
       }
 
