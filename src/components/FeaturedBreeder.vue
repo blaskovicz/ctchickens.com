@@ -8,8 +8,10 @@ import FoundingBreederBadge from './FoundingBreederBadge.vue';
 import ContactButton from './ContactButton.vue';
 import MoreInfoButton from './MoreInfoButton.vue';
 import VerifiedMemberLink from './VerifiedMemberLink.vue';
+import { useBreederUtils } from '../composables/useBreederUtils';
 
 const store = useStore();
+const { splitBreederName } = useBreederUtils();
 const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
 const showReviews = ref(false);
 
@@ -46,13 +48,18 @@ const formatDate = (dateString: string) => {
             </span>
           </div>
 
-          <h5 class="card-title fw-bold text-dark mb-2">
+          <h5 class="card-title fw-bold text-dark mb-1">
             <VerifiedMemberLink 
               :name="featured.name" 
+              :display-name="splitBreederName(featured.name).main"
               :verified="featured.verified" 
               icon-style="font-size: 1.5rem; line-height: 1;"
             />
           </h5>
+          <div v-if="splitBreederName(featured.name).person" class="text-muted fst-italic font-serif mb-2" style="font-size: 0.95rem; font-weight: normal;">
+            by {{ splitBreederName(featured.name).person }}
+          </div>
+          <div v-else class="mb-2"></div>
 
           <div class="d-flex flex-wrap gap-1 mb-3">
             <VerifiedBadge :verified="featured.verified" />

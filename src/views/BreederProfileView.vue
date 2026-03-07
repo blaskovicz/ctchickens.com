@@ -14,22 +14,12 @@ import { useBreederUtils } from '../composables/useBreederUtils';
 const route = useRoute();
 const router = useRouter();
 const store = useStore();
-const { generateSlug } = useBreederUtils();
+const { generateSlug, splitBreederName } = useBreederUtils();
 
 const breeder = computed(() => {
   const slug = route.params.slug as string;
   const allBreeders = store.getters.allBreeders as Breeder[];
   return allBreeders.find(b => b.verified && generateSlug(b.name) === slug);
-});
-
-const formattedName = computed(() => {
-  if (!breeder.value) return { main: '', person: null };
-  const name = breeder.value.name;
-  const match = name.match(/^(.*?)\s*\((.*?)\)\s*$/);
-  if (match) {
-    return { main: match[1], person: match[2] };
-  }
-  return { main: name, person: null };
 });
 
 // Since the store fetches asynchronously, we need to ensure it's fetched.
@@ -78,14 +68,15 @@ const goBack = () => {
               </span>
             </div>
             
-            <h2 class="display-5 fw-bold text-dark mb-1">
+            <h1 class="display-5 fw-bold text-dark mb-1">
               <VerifiedMemberLink 
-                :name="formattedName.main" 
+                :name="breeder.name"
+                :display-name="splitBreederName(breeder.name).main" 
                 :verified="breeder.verified" 
                 icon-style="font-size: 2rem; line-height: 1;"
               />
-            </h2>
-            <h4 v-if="formattedName.person" class="text-muted fst-italic mb-3 font-serif">by {{ formattedName.person }}</h4>
+            </h1>
+            <h4 v-if="splitBreederName(breeder.name).person" class="text-muted fst-italic mb-3 font-serif">by {{ splitBreederName(breeder.name).person }}</h4>
             <div v-else class="mb-3"></div>
             
             <div class="d-flex flex-wrap gap-1 mb-4">

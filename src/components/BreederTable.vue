@@ -8,8 +8,10 @@
     import ContactButton from './ContactButton.vue';
     import MoreInfoButton from './MoreInfoButton.vue';
     import VerifiedMemberLink from './VerifiedMemberLink.vue';
+    import { useBreederUtils } from '../composables/useBreederUtils';
 
     const store = useStore();
+    const { splitBreederName } = useBreederUtils();
     const filter = ref('');
     const selectedCategory = ref('');
     const showVerifiedOnly = ref(false);
@@ -207,15 +209,19 @@
                   <tr>
                     <td>
                       <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <div>
+                        <div class="mb-1 mb-md-0">
                           <strong>
                             <VerifiedMemberLink 
                               :name="breeder.name" 
+                              :display-name="splitBreederName(breeder.name).main"
                               :verified="breeder.verified" 
                             />
                           </strong>
+                          <div v-if="splitBreederName(breeder.name).person" class="text-muted fst-italic font-serif" style="font-size: 0.85rem; font-weight: normal; margin-top: 0.15rem;">
+                            by {{ splitBreederName(breeder.name).person }}
+                          </div>
                         </div>
-                        <div class="d-flex gap-1 align-items-center">
+                        <div class="d-flex align-items-center">
                           <VerifiedBadge :verified="breeder.verified" />
                           <FoundingBreederBadge :count="breeder.founding_breeder" />
                           <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
