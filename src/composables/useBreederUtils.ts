@@ -12,7 +12,10 @@ export function useBreederUtils() {
   };
 
   const generateSlug = (name: string): string => {
-    return name
+    // First, split the name to remove the person's name in parentheses
+    const { main } = splitBreederName(name);
+    
+    return (main || '')
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, '')
