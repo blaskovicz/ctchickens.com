@@ -187,14 +187,15 @@
             <p class="text-muted mt-2">Loading...</p>
           </div>
           
-          <div v-else class="table-responsive">
+          <div v-else>
             <table class="table table-striped table-hover mb-0">
               <thead class="table-light">
                 <tr>
                   <template v-for="field in fields" :key="field.key">
                     <th v-if="field.key !== 'selling'"
                         @click="field.sortable ? sortTable(field.key) : null"
-                        :style="field.sortable ? 'cursor: pointer;' : ''">
+                        :style="field.sortable ? 'cursor: pointer;' : ''"
+                        :class="['category', 'location'].includes(field.key) ? 'd-none d-md-table-cell' : ''">
                       {{ field.label }}
                       <i v-if="field.sortable && sortBy === field.key" 
                          :class="sortDesc ? 'bi bi-chevron-down' : 'bi bi-chevron-up'"
@@ -243,14 +244,14 @@
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td class="d-none d-md-table-cell">
                       <span class="badge bg-light text-secondary border uc-first">
                         {{ breeder.category }}
                       </span>
                     </td>
-                    <td>{{ breeder.location }}</td>
-                    <td class="text-end">
-                      <div class="d-flex flex-column flex-md-row justify-content-end gap-2 align-items-end">
+                    <td class="d-none d-md-table-cell">{{ breeder.location }}</td>
+                    <td class="text-md-end align-middle">
+                      <div class="d-flex flex-row justify-content-end gap-2">
                         <ContactButton :link="breeder.contact_link" />
                         <MoreInfoButton 
                           :link="breeder.info_link" 
@@ -283,8 +284,18 @@
                           </div>
                         </div>
 
-                        <div class="text-end mt-3 border-top pt-2">
-                          <small class="text-muted">Last updated: {{ formatDate(breeder.updated) }}</small>
+                        <div class="d-flex justify-content-between align-items-end mt-3 border-top pt-2">
+                          <div class="d-md-none d-flex flex-wrap gap-2 align-items-center">
+                            <span class="badge bg-light text-secondary border uc-first">
+                              {{ breeder.category }}
+                            </span>
+                            <span class="text-muted small">
+                              <i class="bi bi-geo-alt-fill me-1"></i>{{ breeder.location }}
+                            </span>
+                          </div>
+                          <div class="text-end flex-grow-1">
+                            <small class="text-muted">Last updated: {{ formatDate(breeder.updated) }}</small>
+                          </div>
                         </div>
                       </div>
                     </td>

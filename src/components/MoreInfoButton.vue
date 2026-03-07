@@ -38,23 +38,23 @@ const confirmProceed = () => {
 
 <template>
   <div v-if="link" class="d-inline-block">
-    <a 
+    <a
       href="#"
       @click.prevent="handleClick"
-      class="btn btn-sm btn-outline-dark text-nowrap"
+      class="btn btn-sm btn-outline-dark text-nowrap d-inline-flex align-items-center justify-content-center"
+      style="min-width: 36px;"
     >
-      <i class="bi bi-info-circle" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
+      <i class="bi bi-info-circle text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
       <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">More Info</span>
     </a>
 
     <!-- Warning Modal -->
-    <BModal 
-      v-model="showWarningModal" 
+    <BModal
+      v-model="showWarningModal"
       title="External Link Warning"
       @ok="confirmProceed"
-      ok-title="Proceed"
+      ok-title="Continue to Site"
       cancel-title="Cancel"
-      centered
     >
       <p>You are about to visit <span class="fw-bold text-break">{{ link }}</span></p>
       <p><span class="fw-bold text-break">{{ name }}</span> is community supplied and has not completed the verification procedure for ctchickens.com.</p>

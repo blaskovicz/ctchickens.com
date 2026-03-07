@@ -10,13 +10,14 @@ const { formatContactLink } = useBreederUtils();
 </script>
 
 <template>
-  <a 
+  <a
     v-if="link"
     target="_blank"
-    :href="formatContactLink(link)!" 
-    class="btn btn-sm btn-primary text-nowrap"
+    :href="formatContactLink(link)!"
+    class="btn btn-sm btn-primary text-nowrap d-inline-flex align-items-center justify-content-center"
+    style="min-width: 36px;"
   >
-    <i class="bi bi-envelope-fill" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
+    <i class="bi bi-envelope-fill text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
     <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">Contact</span>
   </a>
 </template>
