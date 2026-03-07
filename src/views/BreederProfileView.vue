@@ -85,7 +85,7 @@ const goBack = () => {
             </div>
 
             <div class="mb-4">
-              <h5 class="fw-bold mb-3"><i class="bi bi-tag-fill me-2 text-primary"></i>Selling</h5>
+              <h5 class="fw-bold mb-3"><i class="bi bi-tag-fill me-2 text-muted"></i>Selling</h5>
               <p class="fs-5">{{ breeder.selling }}</p>
             </div>
 
