@@ -7,6 +7,7 @@ import VerifiedBadge from './VerifiedBadge.vue';
 import FoundingBreederBadge from './FoundingBreederBadge.vue';
 import ContactButton from './ContactButton.vue';
 import MoreInfoButton from './MoreInfoButton.vue';
+import VerifiedMemberLink from './VerifiedMemberLink.vue';
 
 const store = useStore();
 const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
@@ -46,10 +47,14 @@ const formatDate = (dateString: string) => {
           </div>
 
           <h5 class="card-title fw-bold text-dark mb-2">
-            {{ featured.name }}
+            <VerifiedMemberLink 
+              :name="featured.name" 
+              :verified="featured.verified" 
+              icon-style="font-size: 1.5rem; line-height: 1;"
+            />
           </h5>
 
-          <div class="d-flex flex-wrap gap-2 mb-3">
+          <div class="d-flex flex-wrap gap-1 mb-3">
             <VerifiedBadge :verified="featured.verified" />
             <FoundingBreederBadge :count="featured.founding_breeder" />
           </div>
@@ -70,7 +75,7 @@ const formatDate = (dateString: string) => {
             />
           </div>
 
-          <div class="d-flex gap-2 mt-auto align-items-center">
+          <div class="d-flex gap-2 mt-auto align-items-center flex-wrap">
             <ContactButton :link="featured.contact_link" :show-label-on-mobile="true" />
             <MoreInfoButton 
               :link="featured.info_link" 

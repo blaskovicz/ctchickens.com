@@ -11,7 +11,17 @@ export function useBreederUtils() {
     return link;
   };
 
+  const generateSlug = (name: string): string => {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
+
   return {
-    formatContactLink
+    formatContactLink,
+    generateSlug
   };
 }

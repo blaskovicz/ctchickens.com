@@ -7,6 +7,7 @@
     import FoundingBreederBadge from './FoundingBreederBadge.vue';
     import ContactButton from './ContactButton.vue';
     import MoreInfoButton from './MoreInfoButton.vue';
+    import VerifiedMemberLink from './VerifiedMemberLink.vue';
 
     const store = useStore();
     const filter = ref('');
@@ -14,15 +15,14 @@
     const showVerifiedOnly = ref(false);
     const breeders = computed(() => store.getters.allBreeders as Breeder[]);
     const loading = computed(() => breeders.value.length === 0);    
-    const sortBy = ref<keyof Breeder>('updated');
-    const sortDesc = ref(true);
+    const sortBy = ref<keyof Breeder>('name');
+    const sortDesc = ref(false);
     
     const fields = [
       { key: 'name', label: 'Name', sortable: true },
       { key: 'category', label: 'Category', sortable: false },
       { key: 'location', label: 'Location', sortable: true },
       { key: 'selling', label: 'Breeds/Products', sortable: true },
-      { key: 'updated', label: 'Updated', sortable: true },
       { key: 'actions', label: '', sortable: false }
     ] as const;
     
@@ -87,11 +87,7 @@
         let aVal = a[sortBy.value as keyof Breeder];
         let bVal = b[sortBy.value as keyof Breeder];
         
-        // Handle date sorting specifically
-        if (sortBy.value === 'updated') {
-            aVal = new Date(aVal as string).getTime();
-            bVal = new Date(bVal as string).getTime();
-        } else if (typeof aVal === 'string' && typeof bVal === 'string') {
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
             aVal = aVal.toLowerCase();
             bVal = bVal.toLowerCase();
         }
@@ -196,10 +192,7 @@
                   <template v-for="field in fields" :key="field.key">
                     <th v-if="field.key !== 'selling'"
                         @click="field.sortable ? sortTable(field.key) : null"
-                        :style="field.sortable ? 'cursor: pointer;' : ''"
-                        :class="{
-                          'd-none d-md-table-cell': field.key === 'updated'
-                        }">
+                        :style="field.sortable ? 'cursor: pointer;' : ''">
                       {{ field.label }}
                       <i v-if="field.sortable && sortBy === field.key" 
                          :class="sortDesc ? 'bi bi-chevron-down' : 'bi bi-chevron-up'"
@@ -216,7 +209,10 @@
                       <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div>
                           <strong>
-                            {{ breeder.name }}
+                            <VerifiedMemberLink 
+                              :name="breeder.name" 
+                              :verified="breeder.verified" 
+                            />
                           </strong>
                         </div>
                         <div class="d-flex gap-1 align-items-center">
@@ -247,9 +243,6 @@
                       </span>
                     </td>
                     <td>{{ breeder.location }}</td>
-                    <td class="d-none d-md-table-cell">
-                      <small class="text-muted">{{ formatDate(breeder.updated) }}</small>
-                    </td>
                     <td class="text-end">
                       <div class="d-flex flex-column flex-md-row justify-content-end gap-2 align-items-end">
                         <ContactButton :link="breeder.contact_link" />
@@ -263,9 +256,9 @@
                   </tr>
                   <tr class="breeds-row">
                     <td colspan="100" class="bg-light p-0">
-                      <div class="p-3 border-bottom">
+                      <div class="p-3 border-bottom d-flex flex-column h-100">
                         
-                        <div class="mb-2 text-muted">
+                        <div class="mb-2 text-muted flex-grow-1">
                           <i class="bi bi-tag-fill me-1 text-secondary"></i>
                           <strong>Selling:</strong> {{ breeder.selling }}
                         </div>
@@ -274,7 +267,7 @@
                           v-if="breeder.verified && ((breeder.images && breeder.images.length > 0) || breeder.logo)"
                           style="max-width: 85vw;"
                           class="mt-3">
-                          <div class="mt-3" style="display: grid; grid-template-columns: minmax(0, 1fr);">
+                          <div style="display: grid; grid-template-columns: minmax(0, 1fr);">
                             <p class="text-xs fw-bold text-muted text-uppercase mb-2 small">Gallery</p>
                             
                             <BreederGallery 
@@ -284,6 +277,9 @@
                           </div>
                         </div>
 
+                        <div class="text-end mt-3 border-top pt-2">
+                          <small class="text-muted">Last updated: {{ formatDate(breeder.updated) }}</small>
+                        </div>
                       </div>
                     </td>
                   </tr>

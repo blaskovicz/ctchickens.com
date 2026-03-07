@@ -8,7 +8,7 @@ describe('FoundingBreederBadge', () => {
       props: { count: 1 }
     });
     expect(wrapper.find('.badge').exists()).toBe(true);
-    expect(wrapper.text()).toContain('Founding Breeder');
+    expect(wrapper.text()).toContain('Founding Member');
   });
 
   it('does not render when count is 0', () => {
@@ -46,11 +46,9 @@ describe('FoundingBreederBadge', () => {
     expect(wrapper.find('.badge').exists()).toBe(false);
   });
 
-  it('renders when count is boolean true', () => {
-    // Note: We removed boolean from types to fix empty string casting, 
-    // but the component logic still handles truthy values.
+  it('renders when count is truthy string "true"', () => {
     const wrapper = mount(FoundingBreederBadge, {
-      props: { count: true as any }
+      props: { count: "true" }
     });
     expect(wrapper.find('.badge').exists()).toBe(true);
   });
