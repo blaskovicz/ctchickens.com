@@ -59,29 +59,35 @@ const goBack = () => {
         <div class="row g-4">
           <!-- Main Info -->
           <div :class="(breeder.reviews && breeder.reviews.length > 0) ? 'col-lg-8' : 'col-12'">
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-              <span class="badge bg-light text-secondary border uc-first">
-                {{ breeder.category }}
-              </span>
-              <span class="text-muted small">
-                <i class="bi bi-geo-alt-fill me-1"></i>{{ breeder.location }}
-              </span>
-            </div>
-            
-            <h1 class="display-5 fw-bold text-dark mb-1">
-              <VerifiedMemberLink 
-                :name="breeder.name"
-                :display-name="splitBreederName(breeder.name).main" 
-                :verified="breeder.verified" 
-                icon-style="font-size: 2rem; line-height: 1;"
-              />
-            </h1>
-            <h4 v-if="splitBreederName(breeder.name).person" class="text-muted fst-italic mb-3 font-serif">by {{ splitBreederName(breeder.name).person }}</h4>
-            <div v-else class="mb-3"></div>
-            
-            <div class="d-flex flex-wrap gap-1 mb-4">
-              <VerifiedBadge :verified="breeder.verified" />
-              <FoundingBreederBadge :count="breeder.founding_breeder" />
+            <div class="d-flex flex-column flex-md-row align-items-center align-items-md-start gap-4 mb-4">
+              <img v-if="breeder.logo" :src="breeder.logo" class="rounded border shadow-sm profile-logo mb-3 mb-md-0" :alt="breeder.name + ' Logo'" referrerpolicy="no-referrer" />
+              <div class="flex-grow-1 text-center text-md-start">
+                <div class="d-flex flex-wrap justify-content-center justify-content-md-start align-items-center gap-2 mb-3">
+                  <span class="badge bg-light text-secondary border uc-first">
+                    {{ breeder.category }}
+                  </span>
+                  <span class="text-muted small">
+                    <i class="bi bi-geo-alt-fill me-1"></i>{{ breeder.location }}
+                  </span>
+                </div>
+                
+                <h1 class="display-5 fw-bold text-dark mb-1">
+                  <VerifiedMemberLink 
+                    :name="breeder.name"
+                    :display-name="splitBreederName(breeder.name).main" 
+                    :verified="breeder.verified" 
+                    icon-style="font-size: 2rem; line-height: 1;"
+                    link-class="text-decoration-none text-dark d-flex align-items-start justify-content-center justify-content-md-start"
+                  />
+                </h1>
+                <h4 v-if="splitBreederName(breeder.name).person" class="text-muted fst-italic mb-3 font-serif">by {{ splitBreederName(breeder.name).person }}</h4>
+                <div v-else class="mb-3"></div>
+                
+                <div class="d-flex flex-wrap justify-content-center justify-content-md-start gap-1">
+                  <VerifiedBadge :verified="breeder.verified" />
+                  <FoundingBreederBadge :count="breeder.founding_breeder" />
+                </div>
+              </div>
             </div>
 
             <div class="mb-4">
@@ -161,4 +167,19 @@ const goBack = () => {
 .reviews-list::-webkit-scrollbar-track { background: #f1f1f1; }
 .reviews-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 .font-serif { font-family: Georgia, 'Times New Roman', Times, serif; }
+
+.profile-logo {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  background-color: white;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .profile-logo {
+    width: 150px;
+    height: 150px;
+  }
+}
 </style>
