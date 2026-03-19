@@ -7,27 +7,49 @@ export interface Review {
     date: string;
   }
   
+  // LEGACY Interface (Used by UI Components)
   export interface Breeder {
     name: string;
     location: string;
     selling: string;
-    category: string; // Eg: breeder, supplier
+    category: string; 
     verified: boolean;
-    founding_breeder?: number; // Optional since not everyone has it
+    founding_breeder?: number | null; 
     contact_link: string | null;
     info_link: string | null;
     updated: string;
     featured: boolean;
     reviews: Review[];
-    // 1. Identification for the backend janitor script
-    gallery_folder_id?: string;
-    
-    // 2. The raw JSON string from the spreadsheet (Store parses this)
-    image_cache_json?: string;
-    
-    // 3. The final processed data for components
     logo?: string | null;
     images?: string[];
+  }
+
+  // V2 Schema (Firestore directory_members)
+  export interface FirestoreMember {
+    id: string; // The Slug (Doc ID)
+    profile: {
+      businessName: string;
+      memberType: string;
+      town: string;
+      contactEmail: string;
+      website: string;
+    };
+    offerings: {
+      description: string;
+      searchTags: string[];
+    };
+    media: {
+      logoUrl: string | null;
+      galleryUrls: string[];
+    };
+    account: {
+      ownerUid: string | null;
+      status: 'published' | 'draft';
+      isVerified: boolean;
+      isFoundingMember: boolean;
+      foundingMember: number | null;
+      updatedAt: any; // Firestore Timestamp
+    };
   }
   
   export interface DirectoryData {
