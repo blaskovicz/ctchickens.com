@@ -19,7 +19,7 @@ export function useBreederUtils() {
   };
 
   const generateSlug = (name: string): string => {
-    // First, split the name to remove the person's name in parentheses
+    // RESTORED: Removes the person's name in parentheses for cleaner URLs
     const { main } = splitBreederName(name);
     
     return (main || '')

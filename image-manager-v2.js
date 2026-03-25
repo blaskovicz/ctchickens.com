@@ -4,11 +4,8 @@
  * This script handles:
  * 1. Scanning Google Drive folders for logos and gallery images.
  * 2. Updating the 'Members' spreadsheet with image metadata.
- * 3. Syncing the spreadsheet data to Firestore via REST API.
- * 
- * SETUP:
- * - Add the OAuth2 Library (ID: 1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF)
- * - Set Script Properties: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+ * 3. Syncing data to Firestore with "Owner-Aware" logic.
+ * 4. Syncing status BACK to the spreadsheet (sigils).
  */
 
 // --- CONFIGURATION ---
@@ -33,6 +30,23 @@ function getFirestoreService() {
     .setIssuer(FIREBASE_CLIENT_EMAIL)
     .setPropertyStore(PropertiesService.getScriptProperties())
     .setScope('https://www.googleapis.com/auth/datastore');
+}
+
+/**
+ * Fetches a document from Firestore.
+ */
+function getFirestoreDoc(slug, token) {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/directory_members/${slug}`;
+  const options = {
+    method: 'get',
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true
+  };
+  const response = UrlFetchApp.fetch(url, options);
+  if (response.getResponseCode() === 200) {
+    return JSON.parse(response.getContentText());
+  }
+  return null;
 }
 
 /**
@@ -62,25 +76,31 @@ function toFirestoreValue(val) {
 }
 
 /**
- * Slugifies a string for use as a Document ID.
+ * SMART SLUG LOGIC
+ * Removes content in parentheses and sanitizes.
+ * Matches the app's generateSlug exactly.
  */
-function slugify(text) {
-  if (!text) return 'untitled';
-  return text.toString().toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')           
-    .replace(/[^\w\-]+/g, '')       
-    .replace(/\-\-+/g, '-')         
-    .replace(/^-+/, '')             
-    .replace(/-+$/, '');            
+function slugify(name) {
+  if (!name) return 'untitled';
+  
+  // 1. Remove content in parentheses
+  var main = name.toString().split('(')[0].trim();
+  
+  // 2. Sanitize
+  return main.toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-/**
- * Pushes a single member record to Firestore using PATCH (upsert).
- */
-function pushToFirestore(data, slug, token) {
-  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/directory_members/${slug}`;
+function pushToFirestore(data, slug, token, updateMask) {
+  let url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/directory_members/${slug}`;
   
+  if (updateMask && updateMask.length > 0) {
+    const maskParams = updateMask.map(path => `updateMask.fieldPaths=${path}`).join('&');
+    url += `?${maskParams}`;
+  }
+
   const payload = {
     fields: toFirestoreValue(data).mapValue.fields
   };
@@ -88,9 +108,7 @@ function pushToFirestore(data, slug, token) {
   const options = {
     method: 'PATCH',
     contentType: 'application/json',
-    headers: {
-      Authorization: 'Bearer ' + token
-    },
+    headers: { Authorization: 'Bearer ' + token },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   };
@@ -125,23 +143,21 @@ function runJanitor() {
       return -1;
     };
     
-    // Define column indices (Updated to match actual sheet headers)
     var folderIdIndex = getColIndex("gallery_folder_id");
     var cacheIndex = getColIndex("image_cache_json");
-    var nameIndex = getColIndex("name"); // Sheet uses 'name'
-    var typeIndex = getColIndex("category"); // Sheet uses 'category', not 'member_type'
-    var townIndex = getColIndex("location"); // Sheet uses 'location', not 'town'
-    var emailIndex = getColIndex("contact_link"); // Sheet uses 'contact_link'
-    var websiteIndex = getColIndex("info_link"); // Sheet uses 'info_link'
-    var descIndex = getColIndex("selling"); // Sheet uses 'selling'
-    var tagsIndex = getColIndex("search_tags"); // If you don't have this column yet, it will safely default to empty
+    var nameIndex = getColIndex("name"); 
+    var typeIndex = getColIndex("category"); 
+    var townIndex = getColIndex("location"); 
+    var emailIndex = getColIndex("contact_link"); 
+    var websiteIndex = getColIndex("info_link"); 
+    var descIndex = getColIndex("selling"); 
+    var tagsIndex = getColIndex("search_tags"); 
     var uidIndex = getColIndex("owner_uid");
     var statusIndex = getColIndex("status");
-    var verifiedIndex = getColIndex("verified"); // Sheet uses 'verified', not 'is_verified'
-    var foundingIndex = getColIndex("founding_breeder"); // Sheet uses 'founding_breeder'
-    var dateIndex = getColIndex("updated"); // Sheet uses 'updated', not 'date_added'
+    var verifiedIndex = getColIndex("verified"); 
+    var foundingIndex = getColIndex("founding_breeder"); 
+    var managedIndex = getColIndex("firestore_managed"); 
     
-    // 1. Authenticate with Firestore
     var service = getFirestoreService();
     var token = service.hasAccess() ? service.getAccessToken() : null;
     if (!token) {
@@ -157,20 +173,18 @@ function runJanitor() {
       var farmName = (nameIndex > -1) ? row[nameIndex] : ("Row " + (i + 1));
       var folderId = (folderIdIndex > -1) ? row[folderIdIndex] : null;
       var currentCache = (cacheIndex > -1) ? row[cacheIndex] : "";
+      var slug = slugify(farmName);
       
       try {
         var logoUrl = "";
         var galleryUrls = [];
 
-        // A. SCAN GOOGLE DRIVE FOR IMAGES
+        // 1. DRIVE SCAN
         if (folderId && folderId !== "") {
-          console.log("🔍 Scanning Drive: [" + farmName + "] (" + folderId + ")");
           var folder = DriveApp.getFolderById(folderId);
-          
           var fileIterator = folder.getFiles();
           var allFiles = [];
           while (fileIterator.hasNext()) allFiles.push(fileIterator.next());
-
           allFiles.sort((a, b) => b.getLastUpdated().getTime() - a.getLastUpdated().getTime());
 
           var imageList = [];
@@ -180,36 +194,39 @@ function runJanitor() {
           for (var k = 0; k < allFiles.length; k++) {
             var file = allFiles[k];
             var fileName = file.getName();
-            var fileType = file.getMimeType();
-
-            if (fileType.indexOf('image') > -1) {
-               try {
-                 if (file.getSharingAccess() !== DriveApp.Access.ANYONE_WITH_LINK) {
-                   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-                 }
-               } catch(e) { /* ignore sharing errors */ }
-               
+            if (file.getMimeType().indexOf('image') > -1) {
+               try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
                var rawUrl = "https://lh3.googleusercontent.com/d/" + file.getId() + "=w800";
                var encoded = Utilities.base64Encode(rawUrl);
-               
                if (fileName.toLowerCase().indexOf('logo') > -1) {
-                 logo = encoded;
-                 logoUrl = rawUrl;
+                 logo = encoded; logoUrl = rawUrl;
                } else if (galleryCount < 10) {
-                 imageList.push(encoded);
-                 galleryUrls.push(rawUrl);
-                 galleryCount++;
+                 imageList.push(encoded); galleryUrls.push(rawUrl); galleryCount++;
                }
             }
           }
-          
           var newJson = JSON.stringify({ logo: logo, images: imageList });
           if (cacheIndex > -1 && currentCache !== newJson) {
              sheet.getRange(i + 1, cacheIndex + 1).setValue(newJson);
           }
         }
 
-        // B. SYNC TO FIRESTORE
+        // 2. FIRESTORE SYNC
+        var existingDoc = getFirestoreDoc(slug, token);
+        var ownerUid = null;
+        if (existingDoc && existingDoc.fields.account && existingDoc.fields.account.mapValue.fields.ownerUid) {
+          ownerUid = existingDoc.fields.account.mapValue.fields.ownerUid.stringValue || null;
+        }
+
+        if (ownerUid) {
+          if (managedIndex > -1 && row[managedIndex] !== true) {
+            sheet.getRange(i + 1, managedIndex + 1).setValue(true);
+          }
+          if (uidIndex > -1 && row[uidIndex] !== ownerUid) {
+            sheet.getRange(i + 1, uidIndex + 1).setValue(ownerUid);
+          }
+        }
+
         var memberData = {
           profile: {
             businessName: farmName,
@@ -227,18 +244,23 @@ function runJanitor() {
             galleryUrls: galleryUrls
           },
           account: {
-            ownerUid: (uidIndex > -1) ? row[uidIndex] : null,
-            status: (statusIndex > -1) ? row[statusIndex] : "published",
+            ownerUid: ownerUid || ((uidIndex > -1) ? row[uidIndex] : null),
+            status: (statusIndex > -1 && row[statusIndex]) ? row[statusIndex] : "published",
             isVerified: (verifiedIndex > -1) ? !!row[verifiedIndex] : false,
-            foundingMember: (foundingIndex > -1) ? row[foundingIndex] : null,
-            updatedAt: (dateIndex > -1 && row[dateIndex]) ? new Date(row[dateIndex]) : new Date()
+            foundingMember: (foundingIndex > -1 && row[foundingIndex] !== "") ? parseInt(row[foundingIndex]) : null,
+            updatedAt: new Date()
           }
         };
 
-        var slug = slugify(farmName);
-        pushToFirestore(memberData, slug, token);
-        updatedCount++;
+        if (ownerUid) {
+          console.log("👤 [" + farmName + "] is CLAIMED. Media sync only.");
+          pushToFirestore({ media: memberData.media }, slug, token, ['media.logoUrl', 'media.galleryUrls']);
+        } else {
+          console.log("🚜 [" + farmName + "] is UNCLAIMED. Full sync.");
+          pushToFirestore(memberData, slug, token);
+        }
         
+        updatedCount++;
       } catch (e) {
         console.error("❌ ERROR [" + farmName + "]: " + e.message);
         errorCount++;

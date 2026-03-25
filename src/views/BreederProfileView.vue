@@ -10,16 +10,25 @@ import ContactButton from '../components/ContactButton.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
 import { useBreederUtils } from '../composables/useBreederUtils';
+import { BButton } from 'bootstrap-vue-next';
 
 const route = useRoute();
 const router = useRouter();
 const store = useStore();
 const { generateSlug, splitBreederName } = useBreederUtils();
 
+const user = computed(() => store.getters.currentUser);
+const isAdmin = computed(() => store.getters.isAdmin);
+
 const breeder = computed(() => {
   const slug = route.params.slug as string;
   const allBreeders = store.getters.allBreeders as Breeder[];
   return allBreeders.find(b => b.verified && generateSlug(b.name) === slug);
+});
+
+const isOwner = computed(() => {
+  if (!user.value || !breeder.value) return false;
+  return isAdmin.value || breeder.value.ownerUid === user.value.uid;
 });
 
 // Since the store fetches asynchronously, we need to ensure it's fetched.
@@ -45,9 +54,22 @@ const goBack = () => {
 
 <template>
   <div class="container py-3">
-    <button class="btn btn-outline-secondary mb-4" @click="goBack">
-      <i class="bi bi-arrow-left me-2"></i>Back to Directory
-    </button>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <button class="btn btn-outline-secondary" @click="goBack">
+        <i class="bi bi-arrow-left me-2"></i>Back to Directory
+      </button>
+      
+      <!-- Show Edit button only to Owner or Admin -->
+      <BButton 
+        v-if="isOwner && breeder" 
+        :to="`/directory/${generateSlug(breeder.name)}/edit`" 
+        variant="primary" 
+        class="d-flex align-items-center gap-2 shadow-sm"
+      >
+        <i class="bi bi-pencil-square"></i>
+        {{ isAdmin ? 'Moderate Profile' : 'Edit Your Profile' }}
+      </BButton>
+    </div>
     
     <div v-if="!breeder && store.getters.allBreeders.length > 0" class="text-center py-5">
       <h2 class="display-6 fw-bold">Member Not Found</h2>
