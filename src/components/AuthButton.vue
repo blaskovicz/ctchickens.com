@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
 import { useBreederUtils } from '../composables/useBreederUtils';
 
 const store = useStore();
+const router = useRouter();
 const { generateSlug } = useBreederUtils();
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
@@ -13,7 +15,10 @@ const authReady = computed(() => store.getters.authReady);
 const myFarms = computed(() => store.getters.myBreeders);
 
 const login = () => store.dispatch('loginWithFacebook');
-const logout = () => store.dispatch('logout');
+const logout = async () => {
+  await store.dispatch('logout');
+  router.push('/');
+};
 
 const GROUP_URL = "https://www.facebook.com/groups/1465813350383274";
 </script>
