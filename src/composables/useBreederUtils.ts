@@ -2,13 +2,20 @@ export function useBreederUtils() {
   const formatContactLink = (link: string): string => {
     if (!link) return '';
     
-    if (link.startsWith('mailto:')) {
-      const subject = 'Inquiry from ctchickens.com';
-      const separator = link.includes('?') ? '&' : '?';
-      return `${link}${separator}subject=${encodeURIComponent(subject)}`;
+    let formattedLink = link;
+    
+    // Detect raw emails (contains @ but no protocol prefix like mailto: or https:)
+    if (formattedLink.includes('@') && !formattedLink.includes(':')) {
+      formattedLink = `mailto:${formattedLink}`;
     }
     
-    return link;
+    if (formattedLink.startsWith('mailto:')) {
+      const subject = 'Inquiry from ctchickens.com';
+      const separator = formattedLink.includes('?') ? '&' : '?';
+      return `${formattedLink}${separator}subject=${encodeURIComponent(subject)}`;
+    }
+    
+    return formattedLink;
   };
 
   const generateSlug = (name: string): string => {
