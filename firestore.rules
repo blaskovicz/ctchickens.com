@@ -63,11 +63,13 @@ service cloud.firestore {
         && !exists(/databases/(default)/documents/claim_requests/$(requestId))
         && get(/databases/(default)/documents/directory_members/$(requestId)).data.account.get('ownerUid', null) == null
         && request.resource.data.requesterUid == request.auth.uid
+        && request.auth.token.email_verified == true
         && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower()
         && request.resource.data.status == 'pending'
         && request.resource.data.businessSlug == requestId
         && request.resource.data.createdAt == request.time
-        && get(/databases/(default)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower();
+        && get(/databases/(default)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
+        && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'requesterFacebookUid', 'status', 'businessName', 'businessSlug', 'createdAt']);
       
       allow read: if resource == null || 
       (isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid));
