@@ -11,7 +11,7 @@ service cloud.firestore {
 
     // Pass UID explicitly to avoid interpolation crashes on null auth
     function isUserAdmin(uid) {
-      return exists(/databases/(default)/documents/users/$(uid)) && 
+      return uid != null && exists(/databases/(default)/documents/users/$(uid)) && 
       get(/databases/(default)/documents/users/$(uid)).data.get('isAdmin', false) == true;
     }
 
@@ -31,7 +31,10 @@ service cloud.firestore {
       allow read: if resource == null || 
       resource.data.account.status == "published" || 
       (isSignedIn() && isUserAdmin(request.auth.uid));
-      allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
+      
+      // Allow write by admins, but enforce schema to prevent accidental pollution
+      allow write: if isSignedIn() && isUserAdmin(request.auth.uid) &&
+        request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
     }
 
     match /draft_profiles/{draftId} {
@@ -41,13 +44,17 @@ service cloud.firestore {
       // Allow read/delete if owner or admin
       allow read, delete: if isSignedIn() && (
       isUserAdmin(request.auth.uid) || 
-      (resource != null && resource.data.get(['account', 'ownerUid'], '') == request.auth.uid)
+      (resource != null && resource.data.get('draft_owner_uid', resource.data.get(['account', 'ownerUid'], '')) == request.auth.uid)
       );
 
       // Allow create/update if signed in (ownerUid handled by schema/payload)
       allow create, update: if isSignedIn() && (
-      isUserAdmin(request.auth.uid) || 
-      (request.resource.data.get(['account', 'ownerUid'], '') == request.auth.uid)
+        isUserAdmin(request.auth.uid) || 
+        (
+          request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
+          !('account' in request.resource.data) &&
+          request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt'])
+        )
       );
     }
 
