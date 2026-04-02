@@ -39,7 +39,7 @@ const fetchData = async () => {
     // Fetch user profiles for all requesters/owners
     const uids = new Set([
       ...claims.value.map(c => c.requesterUid),
-      ...drafts.value.map(d => d.account?.ownerUid)
+      ...drafts.value.map(d => d.account?.ownerUid || d.draft_owner_uid)
     ].filter(uid => !!uid));
 
     for (const uid of uids) {
@@ -119,6 +119,9 @@ const handlePublish = async () => {
         updatedAt: serverTimestamp()
       }
     };
+    delete livePayload.draft_owner_uid;
+    delete livePayload.updatedAt; // Strip top-level updatedAt
+    delete livePayload.id; // Also make sure id isn't saved
     await setDoc(liveRef, livePayload, { merge: true });
     await deleteDoc(doc(db, 'draft_profiles', selectedItem.value.id));
 
@@ -232,9 +235,9 @@ const handleDeleteDraft = async (id: string) => {
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
                     <h6 class="mb-1 fw-bold">{{ draft.profile?.businessName || draft.id }}</h6>
-                    <p class="mb-0 small text-muted">Updated: {{ draft.account?.updatedAt?.toDate()?.toLocaleDateString() }}</p>
-                    <div v-if="draft.account?.ownerUid && userProfiles[draft.account.ownerUid]" class="mt-1">
-                      <a v-if="userProfiles[draft.account.ownerUid].facebookUid" :href="`https://facebook.com/${userProfiles[draft.account.ownerUid].facebookUid}`" target="_blank" class="badge bg-light text-primary border text-decoration-none small">
+                    <p class="mb-0 small text-muted">Updated: {{ (draft.account?.updatedAt || draft.updatedAt)?.toDate()?.toLocaleDateString() }}</p>
+                    <div v-if="(draft.account?.ownerUid || draft.draft_owner_uid) && userProfiles[draft.account?.ownerUid || draft.draft_owner_uid]" class="mt-1">
+                      <a v-if="userProfiles[draft.account?.ownerUid || draft.draft_owner_uid].facebookUid" :href="`https://facebook.com/${userProfiles[draft.account?.ownerUid || draft.draft_owner_uid].facebookUid}`" target="_blank" class="badge bg-light text-primary border text-decoration-none small">
                         <i class="bi bi-facebook me-1"></i>Owner Profile
                       </a>
                     </div>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import type { Breeder } from '../types';
 import BreederGallery from '../components/BreederGallery.vue';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
@@ -19,6 +21,7 @@ const { generateSlug, splitBreederName } = useBreederUtils();
 
 const user = computed(() => store.getters.currentUser);
 const isAdmin = computed(() => store.getters.isAdmin);
+const hasPendingDraft = ref(false);
 
 const isVerified = (val: any) => {
   if (val === null || val === undefined) return false;
@@ -66,9 +69,23 @@ const isOwner = computed(() => {
 });
 
 // Since the store fetches asynchronously, we need to ensure it's fetched.
-onMounted(() => {
+onMounted(async () => {
   if (store.getters.allBreeders.length === 0) {
-    store.dispatch('fetchDirectory');
+    await store.dispatch('fetchDirectory');
+  }
+
+  // Check for pending draft if user has access
+  const slug = route.params.slug as string;
+  if (user.value) {
+    try {
+      const draftRef = doc(db, 'draft_profiles', slug);
+      const draftSnap = await getDoc(draftRef);
+      if (draftSnap.exists()) {
+        hasPendingDraft.value = true;
+      }
+    } catch (err) {
+      console.warn("Draft check failed:", err);
+    }
   }
 });
 
@@ -93,16 +110,23 @@ const goBack = () => {
         <i class="bi bi-arrow-left me-2"></i>Back to Directory
       </button>
       
-      <!-- Show Edit button only to Owner or Admin -->
-      <BButton 
-        v-if="isOwner && breeder" 
-        :to="`/directory/${generateSlug(breeder.name)}/edit`" 
-        variant="primary" 
-        class="d-flex align-items-center gap-2 shadow-sm"
-      >
-        <i class="bi bi-pencil-square"></i>
-        {{ isAdmin ? 'Moderate Profile' : 'Edit Your Profile' }}
-      </BButton>
+      <div class="d-flex align-items-center gap-3">
+        <!-- Draft Badge -->
+        <div v-if="isOwner && hasPendingDraft" class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
+          <i class="bi bi-file-earmark-check me-1"></i> Draft Pending Approval
+        </div>
+
+        <!-- Show Edit button only to Owner or Admin -->
+        <BButton 
+          v-if="isOwner && breeder" 
+          :to="`/directory/${generateSlug(breeder.name)}/edit`" 
+          variant="primary" 
+          class="d-flex align-items-center gap-2 shadow-sm"
+        >
+          <i class="bi bi-pencil-square"></i>
+          {{ isAdmin ? 'Moderate Profile' : 'Edit Your Profile' }}
+        </BButton>
+      </div>
     </div>
     
     <div v-if="!breeder && store.getters.allBreeders.length > 0" class="text-center py-5">

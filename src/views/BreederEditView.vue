@@ -27,34 +27,16 @@ const isDiscarding = ref(false);
 const showDiscardModal = ref(false);
 const error = ref<string | null>(null);
 const liveData = ref<any | null>(null); // Store the actual live document
+const initialData = ref<any | null>(null); // Store the initial form data for comparison
+const initialAdminFields = ref<any | null>(null); // Store the initial admin fields for comparison
 const hasPendingDraft = ref(false);
 const isLocked = ref(true); // Admin-only: Lock fields during review
 
-// ... (onMounted, isDifferentFromLive, revertToLive, handleSave, addTag, removeTag)
+// Local state for the tag input box
+const tagInput = ref('');
 
 const toggleLock = () => {
   isLocked.value = !isLocked.value;
-};
-
-const handleDiscard = async () => {
-  if (!liveData.value) return;
-  isDiscarding.value = true;
-  try {
-    // 1. Delete from Firestore
-    const draftRef = doc(db, 'draft_profiles', slug);
-    await deleteDoc(draftRef);
-
-    // 2. Revert Editor to Live State
-    formData.value = JSON.parse(JSON.stringify(liveData.value));
-    hasPendingDraft.value = false;
-    showDiscardModal.value = false;
-
-    create?.({ body: "Pending draft discarded. Editor reset to live version.", variant: 'info' });
-  } catch (e: any) {
-    create?.({ body: "Discard error: " + e.message, variant: 'danger' });
-  } finally {
-    isDiscarding.value = false;
-  }
 };
 
 // Form Data (The Editor State)
@@ -71,6 +53,44 @@ const adminFields = ref({
   foundingMember: null as number | null
 });
 
+const hasChanges = computed(() => {
+  if (!initialData.value) return false;
+  const dataChanged = JSON.stringify(formData.value) !== JSON.stringify(initialData.value);
+  const adminChanged = isAdmin.value ? JSON.stringify(adminFields.value) !== JSON.stringify(initialAdminFields.value) : false;
+  return dataChanged || adminChanged;
+});
+
+const handleDiscard = async () => {
+  if (!liveData.value) return;
+  isDiscarding.value = true;
+  try {
+    // 1. Delete from Firestore
+    const draftRef = doc(db, 'draft_profiles', slug);
+    await deleteDoc(draftRef);
+
+    // 2. Revert Editor to Live State
+    formData.value = JSON.parse(JSON.stringify(liveData.value));
+    hasPendingDraft.value = false;
+    showDiscardModal.value = false;
+    
+    // Also reset initial state so hasChanges is correct
+    initialData.value = JSON.parse(JSON.stringify(liveData.value));
+    if (isAdmin.value) {
+      adminFields.value = {
+        isVerified: liveData.value.account?.isVerified || false,
+        foundingMember: liveData.value.account?.foundingMember || null
+      };
+      initialAdminFields.value = JSON.parse(JSON.stringify(adminFields.value));
+    }
+
+    create?.({ body: "Pending draft discarded. Editor reset to live version.", variant: 'info' });
+  } catch (e: any) {
+    create?.({ body: "Discard error: " + e.message, variant: 'danger' });
+  } finally {
+    isDiscarding.value = false;
+  }
+};
+
 onMounted(async () => {
   try {
     // 1. Fetch the LIVE data
@@ -78,15 +98,25 @@ onMounted(async () => {
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      liveData.value = docSnap.data();
+      const data = docSnap.data();
+      // Normalize data to ensure objects and arrays exist
+      if (!data.offerings) data.offerings = {};
+      if (!data.offerings.searchTags) data.offerings.searchTags = [];
+      if (!data.media) data.media = {};
+      if (!data.media.galleryUrls) data.media.galleryUrls = [];
       
-      // Default: Initialize editor with live data
+      liveData.value = data;
+      
+      // Default: Initialize editor with live data (Deep clone ensures no reference sharing)
       formData.value = JSON.parse(JSON.stringify(liveData.value));
       
       adminFields.value = {
         isVerified: liveData.value.account.isVerified || false,
         foundingMember: liveData.value.account.foundingMember || null
       };
+      
+      initialData.value = JSON.parse(JSON.stringify(formData.value));
+      initialAdminFields.value = JSON.parse(JSON.stringify(adminFields.value));
 
       // 2. Check for an existing draft
       const draftRef = doc(db, 'draft_profiles', slug);
@@ -94,18 +124,29 @@ onMounted(async () => {
       
       if (draftSnap.exists()) {
         const draftData = draftSnap.data();
-        // AUTO-LOAD: Overwrite editor with draft values
+        // Normalize draft data too
+        if (!draftData.offerings) draftData.offerings = {};
+        if (!draftData.offerings.searchTags) draftData.offerings.searchTags = [];
+        if (!draftData.media) draftData.media = {};
+        if (!draftData.media.galleryUrls) draftData.media.galleryUrls = [];
+        
+        // Preserve account data from liveData if the draft doesnt include it (non-admin drafts)
+        if (!draftData.account) {
+          draftData.account = JSON.parse(JSON.stringify(liveData.value.account));
+        }
+
         formData.value = JSON.parse(JSON.stringify(draftData));
         hasPendingDraft.value = true;
         
-        // If admin, we also want to ensure the adminFields are synced with what's in the draft
-        // or kept from live if they aren't in the draft
         if (isAdmin.value) {
           adminFields.value = {
             isVerified: draftData.account?.isVerified ?? adminFields.value.isVerified,
             foundingMember: draftData.account?.foundingMember ?? adminFields.value.foundingMember
           };
         }
+        
+        initialData.value = JSON.parse(JSON.stringify(formData.value));
+        initialAdminFields.value = JSON.parse(JSON.stringify(adminFields.value));
       }
     } else {
       error.value = "Listing not found.";
@@ -121,19 +162,23 @@ onMounted(async () => {
 const isDifferentFromLive = (section: string, field: string) => {
   if (!liveData.value) return false;
   const currentVal = (formData.value[section as keyof typeof formData.value] as any)[field];
-  const liveVal = liveData.value[section][field];
+  const liveVal = (liveData.value[section] || {})[field];
   
-  // Handle arrays (tags) or strings
-  if (Array.isArray(liveVal)) {
-    return JSON.stringify(currentVal) !== JSON.stringify(liveVal);
+  // Handle arrays (tags) or strings with normalization for comparison
+  if (Array.isArray(liveVal) || Array.isArray(currentVal)) {
+    return JSON.stringify(currentVal || []) !== JSON.stringify(liveVal || []);
   }
   return currentVal !== liveVal;
 };
 
 // Helper to revert one field back to the live value
 const revertToLive = (section: string, field: string) => {
+  if (isAdmin.value && hasPendingDraft.value && isLocked.value) return;
   if (!liveData.value) return;
-  (formData.value[section as keyof typeof formData.value] as any)[field] = liveData.value[section][field];
+  const original = (liveData.value[section] || {})[field];
+  // Use deep cloning to prevent reference sharing between liveData and formData
+  (formData.value[section as keyof typeof formData.value] as any)[field] = 
+    (typeof original === 'object' && original !== null) ? JSON.parse(JSON.stringify(original)) : original;
 };
 
 const handleSave = async () => {
@@ -141,8 +186,6 @@ const handleSave = async () => {
   isSaving.value = true;
 
   try {
-    // Only denormalize facebookUid if the current user is the OWNER. 
-    // If it's an admin, we just preserve what's in the formData.
     const isListingOwner = formData.value.account.ownerUid === user.value.uid;
     const resolvedFbUid = isListingOwner 
       ? (store.state.userData?.facebookUid || formData.value.account.facebookUid || null)
@@ -166,26 +209,23 @@ const handleSave = async () => {
           status: 'published'
         }
       };
+      delete (livePayload as any).draft_owner_uid;
+      delete (livePayload as any).updatedAt;
       await setDoc(doc(db, 'directory_members', slug), livePayload, { merge: true });
-      
-      // CLEANUP: If there was a pending draft, remove it now that it's live
       if (hasPendingDraft.value) {
         await deleteDoc(doc(db, 'draft_profiles', slug));
       }
-      
       create?.({ body: "Changes published successfully!", variant: 'success' });
     } else {
       const draftPayload = {
         ...payload,
-        account: {
-          ...payload.account,
-          ownerUid: user.value.uid
-        }
+        draft_owner_uid: user.value.uid,
+        updatedAt: serverTimestamp()
       };
+      delete draftPayload.account;
       await setDoc(doc(db, 'draft_profiles', slug), draftPayload);
       create?.({ body: "Draft submitted for admin approval!", variant: 'success' });
     }
-    // FIX: Redirect to the profile page instead of the main directory
     router.push(`/directory/${slug}`);
   } catch (e: any) {
     console.error(e);
@@ -195,22 +235,24 @@ const handleSave = async () => {
   }
 };
 
-const addTag = (event: any) => {
-  const val = event.target.value.trim();
+const addTag = () => {
+  const val = tagInput.value.trim();
   if (val && !formData.value.offerings.searchTags.includes(val)) {
-    formData.value.offerings.searchTags.push(val);
-    event.target.value = '';
+    // Replace the array reference for proper reactivity
+    formData.value.offerings.searchTags = [...formData.value.offerings.searchTags, val];
+    tagInput.value = '';
   }
 };
 
 const removeTag = (tag: string) => {
+  // Replace the array reference for proper reactivity
   formData.value.offerings.searchTags = formData.value.offerings.searchTags.filter(t => t !== tag);
 };
 </script>
 
 <template>
   <div class="container py-3">
-    <div class="d-flex justify-content-betweenF align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
       <BButton :to="`/directory/${slug}`" variant="outline-secondary" class="d-flex align-items-center">
         <i class="bi bi-arrow-left me-2"></i>Back to Profile
       </BButton>
@@ -263,24 +305,27 @@ const removeTag = (tag: string) => {
               <div class="col-md-6">
                 <label class="form-label">Town/Location</label>
                 <BFormInput v-model="formData.profile.town" :class="{'bg-diff-highlight': isDifferentFromLive('profile', 'town')}" :disabled="isAdmin && hasPendingDraft && isLocked" required />
-                <div v-if="isDifferentFromLive('profile', 'town')" @click="revertToLive('profile', 'town')" class="current-value-hint mt-1">
-                  <i class="bi bi-globe me-1"></i> Current: {{ liveData.profile.town }}
+                <div v-if="isDifferentFromLive('profile', 'town')" @click="revertToLive('profile', 'town')" class="current-value-hint mt-1 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': isAdmin && hasPendingDraft && isLocked}">
+                  <span><i class="bi bi-globe me-1"></i><strong>Original Live Town:</strong> {{ liveData.profile.town }}</span>
+                  <span v-if="!(isAdmin && hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
                 </div>
               </div>
               
               <div class="col-md-6">
                 <label class="form-label">Contact Email</label>
                 <BFormInput v-model="formData.profile.contactEmail" type="email" :class="{'bg-diff-highlight': isDifferentFromLive('profile', 'contactEmail')}" :disabled="isAdmin && hasPendingDraft && isLocked" required />
-                <div v-if="isDifferentFromLive('profile', 'contactEmail')" @click="revertToLive('profile', 'contactEmail')" class="current-value-hint mt-1">
-                  <i class="bi bi-envelope me-1"></i> Current: {{ liveData.profile.contactEmail }}
+                <div v-if="isDifferentFromLive('profile', 'contactEmail')" @click="revertToLive('profile', 'contactEmail')" class="current-value-hint mt-1 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': isAdmin && hasPendingDraft && isLocked}">
+                  <span><i class="bi bi-envelope me-1"></i><strong>Original Live Email:</strong> {{ liveData.profile.contactEmail }}</span>
+                  <span v-if="!(isAdmin && hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
                 </div>
               </div>
 
               <div class="col-12">
                 <label class="form-label">Website URL</label>
                 <BFormInput v-model="formData.profile.website" type="url" :class="{'bg-diff-highlight': isDifferentFromLive('profile', 'website')}" :disabled="isAdmin && hasPendingDraft && isLocked" placeholder="https://..." />
-                <div v-if="isDifferentFromLive('profile', 'website')" @click="revertToLive('profile', 'website')" class="current-value-hint mt-1">
-                  <i class="bi bi-link-45deg me-1"></i> Current: {{ liveData.profile.website || '(none)' }}
+                <div v-if="isDifferentFromLive('profile', 'website')" @click="revertToLive('profile', 'website')" class="current-value-hint mt-1 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': isAdmin && hasPendingDraft && isLocked}">
+                  <span><i class="bi bi-link-45deg me-1"></i><strong>Original Live Website:</strong> {{ liveData.profile.website || '(none)' }}</span>
+                  <span v-if="!(isAdmin && hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
                 </div>
               </div>
             </div>
@@ -290,17 +335,26 @@ const removeTag = (tag: string) => {
             <div class="mb-4">
               <label class="form-label">Description</label>
               <BFormTextarea v-model="formData.offerings.description" rows="4" :class="{'bg-diff-highlight': isDifferentFromLive('offerings', 'description')}" :disabled="isAdmin && hasPendingDraft && isLocked" required />
-              <div v-if="isDifferentFromLive('offerings', 'description')" @click="revertToLive('offerings', 'description')" class="current-value-hint mt-1">
-                <i class="bi bi-arrow-counterclockwise"></i> Revert to Live Description
+              
+              <!-- Original Description Hint -->
+              <div v-if="isDifferentFromLive('offerings', 'description')" class="mt-2">
+                <div class="current-value-hint d-block w-100 p-3" @click="revertToLive('offerings', 'description')" style="font-size: 0.85rem;" :class="{'pe-none': isAdmin && hasPendingDraft && isLocked}">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span><i class="bi bi-card-text me-1"></i><strong>Original Live Description:</strong></span>
+                    <span v-if="!(isAdmin && hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0">Click to Revert</span>
+                  </div>
+                  <div class="text-wrap text-start" style="white-space: pre-wrap; font-weight: normal;">{{ liveData.offerings.description }}</div>
+                </div>
               </div>
             </div>
             <div class="mb-4">
               <label class="form-label">Search Tags (Press Enter)</label>
-              <BFormInput @keydown.enter.prevent="addTag" placeholder="e.g. Silkies, Fresh Eggs" class="mb-2" :class="{'bg-diff-highlight': isDifferentFromLive('offerings', 'searchTags')}" :disabled="isAdmin && hasPendingDraft && isLocked" />
+              <BFormInput v-model="tagInput" @keydown.enter.prevent="addTag" placeholder="e.g. Silkies, Fresh Eggs" class="mb-2" :class="{'bg-diff-highlight': isDifferentFromLive('offerings', 'searchTags')}" :disabled="isAdmin && hasPendingDraft && isLocked" />
               
               <!-- Tag Difference Hint -->
-              <div v-if="isDifferentFromLive('offerings', 'searchTags')" @click="revertToLive('offerings', 'searchTags')" class="current-value-hint mb-2">
-                <i class="bi bi-tags me-1"></i> Current: {{ liveData.offerings.searchTags.join(', ') || '(none)' }}
+              <div v-if="isDifferentFromLive('offerings', 'searchTags')" @click="revertToLive('offerings', 'searchTags')" class="current-value-hint mb-2 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': isAdmin && hasPendingDraft && isLocked}">
+                <span><i class="bi bi-tags me-1"></i><strong>Original Live Tags:</strong> {{ (liveData?.offerings?.searchTags || []).join(', ') || '(none)' }}</span>
+                <span v-if="!(isAdmin && hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
               </div>
 
               <div class="d-flex flex-wrap gap-2">
@@ -332,7 +386,7 @@ const removeTag = (tag: string) => {
                   Discard Draft
                 </BButton>
                 
-                <BButton type="submit" :disabled="isSaving" variant="primary" class="px-5 py-2 fw-bold shadow-sm">
+                <BButton type="submit" :disabled="isSaving || (!hasChanges && !(isAdmin && hasPendingDraft))" variant="primary" class="px-5 py-2 fw-bold shadow-sm">
                   <BSpinner v-if="isSaving" small class="me-2" />
                   {{ isAdmin ? 'Publish Live' : 'Submit Draft' }}
                 </BButton>
