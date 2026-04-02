@@ -11,6 +11,8 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 
+import { generateSlug } from '../composables/useBreederUtils';
+
 interface State {
   breeders: Breeder[];
   lastFetch: number;
@@ -35,7 +37,8 @@ const mapMemberToBreeder = (member: FirestoreMember): Breeder => {
     reviews: [], 
     logo: member.media.logoUrl,
     images: member.media.galleryUrls,
-    ownerUid: member.account.ownerUid
+    ownerUid: member.account.ownerUid,
+    facebookUid: member.account.facebookUid
   };
 };
 
@@ -123,12 +126,14 @@ export default createStore({
       try {
         const result = await signInWithPopup(auth, facebookProvider);
         const user = result.user;
+        const facebookProfile = user.providerData.find(p => p.providerId === 'facebook.com');
 
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, {
           displayName: user.displayName,
           email: user.email,
           photoURL: user.photoURL,
+          facebookUid: facebookProfile?.uid || null,
           lastLogin: serverTimestamp()
         }, { merge: true });
 
@@ -201,10 +206,7 @@ export default createStore({
       const userEmail = state.user.email.toLowerCase();
       
       return state.breeders.find(b => {
-        const slug = b.name.toLowerCase().replace(/\s+/g, '-');
-        return b.contact_link?.toLowerCase() === userEmail 
-               && !b.ownerUid 
-               && !state.activeClaims.includes(slug); // DON'T suggest if already requested
+        return b.contact_link?.toLowerCase() === userEmail && !b.ownerUid;
       }) || null;
     },
 

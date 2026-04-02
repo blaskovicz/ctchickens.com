@@ -20,10 +20,44 @@ const { generateSlug, splitBreederName } = useBreederUtils();
 const user = computed(() => store.getters.currentUser);
 const isAdmin = computed(() => store.getters.isAdmin);
 
+const isVerified = (val: any) => {
+  if (val === null || val === undefined) return false;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    return s !== '' && s !== 'false' && s !== '0' && s !== 'null' && s !== 'undefined';
+  }
+  return !!val;
+};
+
 const breeder = computed(() => {
   const slug = route.params.slug as string;
   const allBreeders = store.getters.allBreeders as Breeder[];
-  return allBreeders.find(b => b.verified && generateSlug(b.name) === slug);
+  const found = allBreeders.find(b => generateSlug(b.name) === slug);
+  
+  if (!found) return null;
+
+  const verified = isVerified(found.verified);
+  const admin = isAdmin.value;
+  // FIX: Ensure both IDs exist before comparing to avoid undefined === undefined
+  const owner = !!user.value?.uid && !!found.ownerUid && found.ownerUid === user.value?.uid;
+
+  console.log(`Access Check [${slug}]:`, {
+    businessName: found.name,
+    isVerified: verified,
+    rawVerified: found.verified,
+    isAdmin: admin,
+    isOwner: owner,
+    currentUid: user.value?.uid,
+    ownerUid: found.ownerUid
+  });
+
+  // PUBLIC SAFETY: Only allow viewing if verified OR if the current user is an admin/owner
+  if (!verified && !admin && !owner) {
+    console.warn(`Access Denied: Non-verified profile [${slug}] hidden from public.`);
+    return null;
+  }
+  
+  return found;
 });
 
 const isOwner = computed(() => {
@@ -78,6 +112,16 @@ const goBack = () => {
     
     <div v-else-if="breeder" class="card shadow-lg border-0">
       <div class="card-body p-4 p-md-5">
+        
+        <!-- Private Profile Notice -->
+        <div v-if="!isVerified(breeder.verified)" class="alert alert-warning border-warning shadow-sm d-flex align-items-center gap-3 mb-5">
+          <i class="bi bi-shield-lock-fill fs-2"></i>
+          <div>
+            <h5 class="alert-heading fw-bold mb-1">Private Profile</h5>
+            <p class="mb-0">This profile is not yet public. Only verified members have a public permalink. You are seeing this because you are the owner or an admin. <strong>Please contact an admin to get verified.</strong></p>
+          </div>
+        </div>
+
         <div class="row g-4">
           <!-- Main Info -->
           <div :class="(breeder.reviews && breeder.reviews.length > 0) ? 'col-lg-8' : 'col-12'">
@@ -119,6 +163,20 @@ const goBack = () => {
 
             <div class="d-flex align-right flex-wrap gap-2 mt-4">
               <ContactButton :link="breeder.contact_link" :show-label-on-mobile="true" />
+              
+              <!-- Messenger Button -->
+              <BButton 
+                v-if="breeder.facebookUid" 
+                :href="`https://m.me/${breeder.facebookUid}`" 
+                target="_blank" 
+                variant="outline-primary" 
+                size="sm"
+                class="d-inline-flex align-items-center gap-2 px-3 shadow-sm text-nowrap"
+              >
+                <i class="bi bi-messenger"></i>
+                <span>Chat on Messenger</span>
+              </BButton>
+
               <MoreInfoButton 
                 :link="breeder.info_link" 
                 :name="breeder.name" 

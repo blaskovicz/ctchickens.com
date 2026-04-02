@@ -4,7 +4,7 @@ import { useStore } from 'vuex';
 import { db } from '../firebase';
 import { 
   collection, getDocs, doc, setDoc, deleteDoc, 
-  serverTimestamp, updateDoc 
+  serverTimestamp, updateDoc, getDoc 
 } from 'firebase/firestore';
 import { 
   useToast, 
@@ -17,6 +17,7 @@ const { create } = useToast();
 
 const claims = ref<any[]>([]);
 const drafts = ref<any[]>([]);
+const userProfiles = ref<Record<string, any>>({});
 const isLoading = ref(true);
 
 // Modal state
@@ -34,6 +35,25 @@ const fetchData = async () => {
 
     const draftSnap = await getDocs(collection(db, 'draft_profiles'));
     drafts.value = draftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Fetch user profiles for all requesters/owners
+    const uids = new Set([
+      ...claims.value.map(c => c.requesterUid),
+      ...drafts.value.map(d => d.account?.ownerUid)
+    ].filter(uid => !!uid));
+
+    for (const uid of uids) {
+      if (!userProfiles.value[uid]) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', uid));
+          if (userDoc.exists()) {
+            userProfiles.value[uid] = userDoc.data();
+          }
+        } catch (err) {
+          console.warn(`Could not fetch profile for UID: ${uid}`, err);
+        }
+      }
+    }
   } catch (e: any) {
     create?.({ title: 'Error', body: `Fetch error: ${e.message}`, variant: 'danger' });
   } finally {
@@ -68,6 +88,7 @@ const handleApprove = async () => {
     const memberRef = doc(db, 'directory_members', selectedItem.value.businessSlug);
     await updateDoc(memberRef, {
       'account.ownerUid': selectedItem.value.requesterUid,
+      'account.facebookUid': selectedItem.value.requesterFacebookUid || null,
       'account.updatedAt': serverTimestamp()
     });
 
@@ -175,7 +196,12 @@ const handleDeleteDraft = async (id: string) => {
                     <div>
                       <h6 class="mb-1 fw-bold">{{ claim.businessName }}</h6>
                       <p class="mb-0 small text-muted">By: <strong>{{ claim.requesterName }}</strong> on {{ claim.createdAt?.toDate()?.toLocaleDateString() }}</p>
-                      <code class="small text-primary">{{ claim.requesterEmail }}</code>
+                      <div class="d-flex align-items-center gap-2 mt-1">
+                        <code class="small text-primary">{{ claim.requesterEmail }}</code>
+                        <a v-if="claim.requesterFacebookUid" :href="`https://facebook.com/${claim.requesterFacebookUid}`" target="_blank" class="badge bg-light text-primary border text-decoration-none">
+                          <i class="bi bi-facebook me-1"></i>FB Profile
+                        </a>
+                      </div>
                     </div>
                   </div>
                   <div class="d-flex gap-2">
@@ -207,6 +233,11 @@ const handleDeleteDraft = async (id: string) => {
                   <div>
                     <h6 class="mb-1 fw-bold">{{ draft.profile?.businessName || draft.id }}</h6>
                     <p class="mb-0 small text-muted">Updated: {{ draft.account?.updatedAt?.toDate()?.toLocaleDateString() }}</p>
+                    <div v-if="draft.account?.ownerUid && userProfiles[draft.account.ownerUid]" class="mt-1">
+                      <a v-if="userProfiles[draft.account.ownerUid].facebookUid" :href="`https://facebook.com/${userProfiles[draft.account.ownerUid].facebookUid}`" target="_blank" class="badge bg-light text-primary border text-decoration-none small">
+                        <i class="bi bi-facebook me-1"></i>Owner Profile
+                      </a>
+                    </div>
                   </div>
                   <div class="d-flex gap-2">
                     <BButton :to="`/directory/${draft.id}/edit`" variant="outline-primary" size="sm">Review</BButton>

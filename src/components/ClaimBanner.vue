@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { useToast, BButton, BSpinner, BAlert } from 'bootstrap-vue-next';
+import { useToast, BButton, BSpinner } from 'bootstrap-vue-next';
 import { useBreederUtils } from '../composables/useBreederUtils';
 
 const store = useStore();
@@ -12,9 +12,17 @@ const { generateSlug } = useBreederUtils();
 
 const suggested = computed(() => store.getters.suggestedClaim);
 const user = computed(() => store.getters.currentUser);
+const userData = computed(() => store.state.userData);
+const activeClaims = computed(() => store.state.activeClaims);
 
 const isSubmitting = ref(false);
 const isSuccess = ref(false);
+
+const isPending = computed(() => {
+  if (!suggested.value) return false;
+  const slug = generateSlug(suggested.value.name);
+  return activeClaims.value.includes(slug);
+});
 
 const submitClaim = async () => {
   if (!suggested.value || !user.value) return;
@@ -32,6 +40,7 @@ const submitClaim = async () => {
       requesterEmail: user.value.email,
       requesterName: user.value.displayName,
       requesterPhotoURL: user.value.photoURL,
+      requesterFacebookUid: userData.value?.facebookUid || null,
       status: 'pending',
       createdAt: serverTimestamp()
     });
@@ -61,10 +70,22 @@ const submitClaim = async () => {
         <div class="display-6"><i class="bi bi-shop"></i></div>
         <div>
           <h5 class="mb-0">Is this your business? <strong>{{ suggested.name }}</strong></h5>
-          <p class="mb-0 small opacity-75">We found a matching listing for your email. Claim it to manage your profile.</p>
+          <p class="mb-0 small opacity-75">
+            {{ isPending 
+               ? "Your claim request is pending approval by an administrator." 
+               : "We found a matching listing for your email. Claim it to manage your profile." 
+            }}
+          </p>
         </div>
       </div>
+      
+      <div v-if="isPending" class="d-flex align-items-center gap-2 text-white bg-white bg-opacity-10 px-3 py-2 rounded shadow-sm border border-white border-opacity-10">
+        <i class="bi bi-clock-history small"></i>
+        <span class="small fw-bold text-uppercase tracking-wider">Pending Approval</span>
+      </div>
+
       <BButton 
+        v-else
         @click="submitClaim" 
         :disabled="isSubmitting"
         variant="light"

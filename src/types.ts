@@ -22,6 +22,7 @@ export interface Review {
     logo?: string | null;
     images?: string[];
     ownerUid?: string | null;
+    facebookUid?: string | null;
   }
 
   export interface FirestoreMember {
@@ -43,6 +44,7 @@ export interface Review {
     };
     account: {
       ownerUid: string | null;
+      facebookUid: string | null;
       status: 'published' | 'draft';
       isVerified: boolean;
       foundingMember: number | null;

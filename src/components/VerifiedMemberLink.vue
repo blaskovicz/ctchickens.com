@@ -24,12 +24,10 @@ const computedIconStyle = computed(() => props.iconStyle || defaultIconStyle);
 
 <template>
   <router-link 
-    v-if="verified" 
     :to="`/directory/${generateSlug(name)}`" 
     :class="computedLinkClass"
   >
     {{ displayName || name }}
-    <i :class="computedIconClass" :style="computedIconStyle" title="View Profile Permalink"></i>
+    <i v-if="verified" :class="computedIconClass" :style="computedIconStyle" title="View Profile Permalink"></i>
   </router-link>
-  <span v-else>{{ displayName || name }}</span>
 </template>
