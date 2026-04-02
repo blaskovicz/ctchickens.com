@@ -3,7 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import { 
-  collection, getDocs, doc, setDoc, deleteDoc, 
+  collection, getDocs, doc, deleteDoc, 
   serverTimestamp, updateDoc, getDoc 
 } from 'firebase/firestore';
 import { 
@@ -22,7 +22,6 @@ const isLoading = ref(true);
 
 // Modal state
 const showApproveModal = ref(false);
-const showPublishModal = ref(false);
 const selectedItem = ref<any>(null);
 const isProcessing = ref(false);
 
@@ -75,11 +74,6 @@ const confirmApprove = (claim: any) => {
   showApproveModal.value = true;
 };
 
-const confirmPublish = (draft: any) => {
-  selectedItem.value = draft;
-  showPublishModal.value = true;
-};
-
 const handleApprove = async () => {
   if (!selectedItem.value) return;
   isProcessing.value = true;
@@ -105,37 +99,6 @@ const handleApprove = async () => {
   }
 };
 
-const handlePublish = async () => {
-  if (!selectedItem.value) return;
-  isProcessing.value = true;
-
-  try {
-    const liveRef = doc(db, 'directory_members', selectedItem.value.id);
-    const livePayload = {
-      ...selectedItem.value,
-      account: {
-        ...selectedItem.value.account,
-        status: 'published',
-        updatedAt: serverTimestamp()
-      }
-    };
-    delete livePayload.draft_owner_uid;
-    delete livePayload.updatedAt; // Strip top-level updatedAt
-    delete livePayload.id; // Also make sure id isn't saved
-    await setDoc(liveRef, livePayload, { merge: true });
-    await deleteDoc(doc(db, 'draft_profiles', selectedItem.value.id));
-
-    create?.({ body: 'Profile Published Live!', variant: 'success' });
-    showPublishModal.value = false;
-    fetchData();
-    store.dispatch('fetchDirectory');
-  } catch (e: any) {
-    create?.({ body: `Error: ${e.message}`, variant: 'danger' });
-  } finally {
-    isProcessing.value = false;
-  }
-};
-
 const handleRejectClaim = async (id: string) => {
   try {
     await deleteDoc(doc(db, 'claim_requests', id));
@@ -146,15 +109,6 @@ const handleRejectClaim = async (id: string) => {
   }
 };
 
-const handleDeleteDraft = async (id: string) => {
-  try {
-    await deleteDoc(doc(db, 'draft_profiles', id));
-    create?.({ body: 'Draft discarded.', variant: 'info' });
-    fetchData();
-  } catch (e: any) {
-    create?.({ body: `Error: ${e.message}`, variant: 'danger' });
-  }
-};
 </script>
 
 <template>
@@ -244,8 +198,6 @@ const handleDeleteDraft = async (id: string) => {
                   </div>
                   <div class="d-flex gap-2">
                     <BButton :to="`/directory/${draft.id}/edit`" variant="outline-primary" size="sm">Review</BButton>
-                    <BButton @click="confirmPublish(draft)" variant="warning" size="sm" class="fw-bold">Publish</BButton>
-                    <BButton @click="handleDeleteDraft(draft.id)" variant="outline-danger" size="sm"><i class="bi bi-trash"></i></BButton>
                   </div>
                 </div>
               </BListGroupItem>
@@ -265,18 +217,6 @@ const handleDeleteDraft = async (id: string) => {
         <BButton variant="success" @click="ok()" :disabled="isProcessing">
           <BSpinner v-if="isProcessing" small class="me-1" />
           Approve Claim
-        </BButton>
-      </template>
-    </BModal>
-
-    <BModal v-model="showPublishModal" title="Publish Profile" @ok="handlePublish" :ok-disabled="isProcessing">
-      <p v-if="selectedItem">Are you sure you want to publish the updates for <strong>{{ selectedItem.profile?.businessName || selectedItem.id }}</strong>?</p>
-      <p class="small text-muted">These changes will be visible to the public immediately.</p>
-      <template #footer="{ ok, cancel }">
-        <BButton variant="secondary" @click="cancel()">Cancel</BButton>
-        <BButton variant="warning" @click="ok()" :disabled="isProcessing">
-          <BSpinner v-if="isProcessing" small class="me-1" />
-          Publish Live
         </BButton>
       </template>
     </BModal>

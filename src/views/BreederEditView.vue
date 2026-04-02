@@ -3,13 +3,13 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
+import BreederGallery from '../components/BreederGallery.vue';
 import { 
-  collection, getDocs, doc, getDoc, setDoc, deleteDoc, 
-  serverTimestamp, updateDoc 
+  doc, getDoc, setDoc, deleteDoc, serverTimestamp
 } from 'firebase/firestore';
 import { 
   useToast, 
-  BAlert, BBadge, BButton, BCard, BFormCheckbox, BFormInput, BFormTextarea, BSpinner, BModal 
+  BAlert, BBadge, BButton, BCard, BFormCheckbox, BFormInput, BFormTextarea, BSpinner, BModal, BFormSelect
 } from 'bootstrap-vue-next';
 
 const route = useRoute();
@@ -41,10 +41,10 @@ const toggleLock = () => {
 
 // Form Data (The Editor State)
 const formData = ref({
-  profile: { businessName: '', town: '', contactEmail: '', website: '' },
+  profile: { businessName: '', memberType: '', town: '', contactEmail: '', website: '' },
   offerings: { description: '', searchTags: [] as string[] },
   media: { logoUrl: '', galleryUrls: [] as string[] },
-  account: { ownerUid: '', status: 'draft' }
+  account: { ownerUid: '', status: 'draft', facebookUid: null as string | null }
 });
 
 // Admin-only fields
@@ -52,6 +52,16 @@ const adminFields = ref({
   isVerified: false,
   foundingMember: null as number | null
 });
+
+const breederTypeOptions = [
+  { value: 'breeder', text: 'Breeder' },
+  { value: 'hobbyist', text: 'Hobbyist' },
+  { value: 'farm', text: 'Farm' },
+  { value: 'hatchery', text: 'Hatchery' },
+  { value: 'supplier', text: 'Supplier' },
+  { value: 'rescue', text: 'Rescue' },
+  { value: 'other', text: 'Other' }
+];
 
 const hasChanges = computed(() => {
   if (!initialData.value) return false;
@@ -109,6 +119,7 @@ onMounted(async () => {
       
       // Default: Initialize editor with live data (Deep clone ensures no reference sharing)
       formData.value = JSON.parse(JSON.stringify(liveData.value));
+      formData.value.profile.memberType = (formData.value.profile.memberType || '').toLowerCase();
       
       adminFields.value = {
         isVerified: liveData.value.account.isVerified || false,
@@ -136,6 +147,7 @@ onMounted(async () => {
         }
 
         formData.value = JSON.parse(JSON.stringify(draftData));
+        formData.value.profile.memberType = (formData.value.profile.memberType || '').toLowerCase();
         hasPendingDraft.value = true;
         
         if (isAdmin.value) {
@@ -181,6 +193,38 @@ const revertToLive = (section: string, field: string) => {
     (typeof original === 'object' && original !== null) ? JSON.parse(JSON.stringify(original)) : original;
 };
 
+const isAdminFieldDifferent = (field: 'memberType' | 'isVerified' | 'foundingMember') => {
+  if (!liveData.value) return false;
+  if (field === 'memberType') {
+    const current = (formData.value.profile.memberType || '').toLowerCase();
+    const live = (liveData.value.profile?.memberType || '').toLowerCase();
+    return current !== live;
+  }
+
+  const current = adminFields.value[field];
+  const live = liveData.value.account?.[field];
+  return (current ?? null) !== (live ?? null);
+};
+
+const revertAdminFieldToLive = (field: 'memberType' | 'isVerified' | 'foundingMember') => {
+  if (isAdmin.value && hasPendingDraft.value && isLocked.value) return;
+  if (!liveData.value) return;
+  if (field === 'memberType') {
+    formData.value.profile.memberType = (liveData.value.profile?.memberType || '').toLowerCase();
+    return;
+  }
+  if (field === 'isVerified') {
+    adminFields.value.isVerified = !!liveData.value.account?.isVerified;
+    return;
+  }
+  adminFields.value.foundingMember = liveData.value.account?.foundingMember ?? null;
+};
+
+const formatBreederTypeLabel = (value: string | null | undefined) => {
+  if (!value) return '(none)';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
 const handleSave = async () => {
   if (!user.value) return;
   isSaving.value = true;
@@ -222,8 +266,8 @@ const handleSave = async () => {
         draft_owner_uid: user.value.uid,
         updatedAt: serverTimestamp()
       };
-      delete draftPayload.account;
-      await setDoc(doc(db, 'draft_profiles', slug), draftPayload);
+      const { account, ...draftPayloadWithoutAccount } = draftPayload;
+      await setDoc(doc(db, 'draft_profiles', slug), draftPayloadWithoutAccount);
       create?.({ body: "Draft submitted for admin approval!", variant: 'success' });
     }
     router.push(`/directory/${slug}`);
@@ -365,15 +409,49 @@ const removeTag = (tag: string) => {
               </div>
             </div>
 
+            <!-- Gallery Preview -->
+            <div class="mb-4">
+              <h5 class="mb-3 border-bottom pb-2 fw-bold text-dark">Gallery Preview</h5>
+              <div v-if="formData.media.logoUrl || (formData.media.galleryUrls && formData.media.galleryUrls.length > 0)" class="p-3 border rounded bg-light-subtle">
+                <BreederGallery
+                  id="draft-gallery"
+                  :logo="formData.media.logoUrl"
+                  :images="formData.media.galleryUrls"
+                />
+              </div>
+              <div v-else class="text-muted small">No gallery images in this draft yet.</div>
+            </div>
+
             <!-- Admin Only Section -->
             <div v-if="isAdmin" class="bg-light p-3 rounded mb-4 border">
               <h5 class="mb-3 text-primary"><i class="bi bi-shield-lock-fill me-2"></i>Admin Controls</h5>
+              <div class="mb-3">
+                <label class="form-label small">Breeder Type</label>
+                <BFormSelect
+                  v-model="formData.profile.memberType"
+                  :options="breederTypeOptions"
+                  class="w-auto"
+                  :disabled="hasPendingDraft && isLocked"
+                />
+                <div v-if="isAdminFieldDifferent('memberType')" @click="revertAdminFieldToLive('memberType')" class="current-value-hint mt-1 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': hasPendingDraft && isLocked}">
+                  <span><i class="bi bi-diagram-3 me-1"></i><strong>Original Live Breeder Type:</strong> {{ formatBreederTypeLabel(liveData?.profile?.memberType) }}</span>
+                  <span v-if="!(hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
+                </div>
+              </div>
               <BFormCheckbox v-model="adminFields.isVerified" switch class="mb-2" :disabled="hasPendingDraft && isLocked">
                 Verified Member
               </BFormCheckbox>
+              <div v-if="isAdminFieldDifferent('isVerified')" @click="revertAdminFieldToLive('isVerified')" class="current-value-hint mt-1 mb-2 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': hasPendingDraft && isLocked}">
+                <span><i class="bi bi-patch-check me-1"></i><strong>Original Live Verified Member:</strong> {{ liveData?.account?.isVerified ? 'Yes' : 'No' }}</span>
+                <span v-if="!(hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
+              </div>
               <div class="mb-2">
                 <label class="form-label small">Founding ID / Rank (optional)</label>
                 <BFormInput v-model.number="adminFields.foundingMember" type="number" class="w-25" size="sm" :disabled="hasPendingDraft && isLocked" />
+                <div v-if="isAdminFieldDifferent('foundingMember')" @click="revertAdminFieldToLive('foundingMember')" class="current-value-hint mt-1 d-flex justify-content-between align-items-center px-2 py-1" :class="{'pe-none': hasPendingDraft && isLocked}">
+                  <span><i class="bi bi-award me-1"></i><strong>Original Live Founding ID:</strong> {{ liveData?.account?.foundingMember ?? '(none)' }}</span>
+                  <span v-if="!(hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0 ms-2" style="font-size: 0.6rem;">Click to Revert</span>
+                </div>
               </div>
             </div>
 
