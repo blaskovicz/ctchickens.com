@@ -72,7 +72,7 @@
       <hr class="my-3 bg-secondary">
       <div class="row">
         <div class="col text-center">
-          <small>&copy; 2026 Connecticut Backyard Chickens. All rights reserved | Owned and Operated by Zachary Auclair</small>
+          <small>&copy; 2026 Connecticut Backyard Chickens. All rights reserved | Owned and Operated by Zachary Joseph Auclair</small>
         </div>
       </div>
     </div>
