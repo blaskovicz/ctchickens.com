@@ -14,7 +14,24 @@ const userData = computed(() => store.state.userData);
 const authReady = computed(() => store.getters.authReady);
 const myFarms = computed(() => store.getters.myBreeders);
 
-const login = () => store.dispatch('loginWithFacebook');
+const login = async () => {
+  try {
+    await store.dispatch('loginWithFacebook');
+    
+    // Ensure directory is loaded to check ownership
+    if (store.state.breeders.length === 0) {
+      await store.dispatch('fetchDirectory');
+    }
+
+    // Redirect if they own a farm
+    if (myFarms.value.length > 0) {
+      const slug = generateSlug(myFarms.value[0].name);
+      router.push(`/directory/${slug}`);
+    }
+  } catch (err) {
+    // Error is handled in the store action
+  }
+};
 const logout = async () => {
   await store.dispatch('logout');
   router.push('/');

@@ -37,6 +37,11 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
     }
 
+    match /draft_profile_history/{historyId} {
+      allow read, create, delete: if isSignedIn() && isUserAdmin(request.auth.uid);
+      allow update: if false;
+    }
+
     match /draft_profiles/{draftId} {
       // Allow read if it doesn't exist (returns 404 cleanly)
       allow read: if resource == null;

@@ -5,7 +5,8 @@ import { useStore } from 'vuex';
 import { db } from '../firebase';
 import BreederGallery from '../components/BreederGallery.vue';
 import { 
-  doc, getDoc, setDoc, deleteDoc, serverTimestamp
+  doc, getDoc, setDoc, deleteDoc, serverTimestamp,
+  Timestamp, collection, query, where, orderBy, getDocs, limit
 } from 'firebase/firestore';
 import { 
   useToast, 
@@ -25,6 +26,8 @@ const isLoading = ref(true);
 const isSaving = ref(false);
 const isDiscarding = ref(false);
 const showDiscardModal = ref(false);
+const discardReason = ref('');
+const showPublishModal = ref(false);
 const error = ref<string | null>(null);
 const liveData = ref<any | null>(null); // Store the actual live document
 const initialData = ref<any | null>(null); // Store the initial form data for comparison
@@ -63,6 +66,47 @@ const breederTypeOptions = [
   { value: 'other', text: 'Other' }
 ];
 
+const DRAFT_PROFILE_HISTORY = 'draft_profile_history';
+
+/** Doc id uses client millis (Firestore document paths cannot use FieldValue.serverTimestamp()). */
+const newDraftHistoryDocId = (farmSlug: string) =>
+  `${farmSlug}_${Timestamp.now().toMillis()}`;
+
+async function recordDraftProfileHistory(
+  farmSlug: string,
+  snapshot: Record<string, unknown>,
+  draftMeta: { status: 'published' | 'discarded'; discard_reason?: string | null }
+) {
+  const id = newDraftHistoryDocId(farmSlug);
+  const archivedAt = serverTimestamp();
+  const meta: Record<string, unknown> = {
+    status: draftMeta.status,
+    archivedAt,
+    updatedAt: snapshot.updatedAt || (snapshot.account as any)?.updatedAt || null,
+    draft_owner_id: snapshot.draft_owner_uid || (snapshot.account as any)?.ownerUid || null
+  };
+  const reason = draftMeta.discard_reason?.trim();
+  if (reason) meta.discard_reason = reason;
+  await setDoc(doc(db, DRAFT_PROFILE_HISTORY, id), {
+    slug: farmSlug,
+    draft_meta: meta,
+    snapshot
+  });
+  await pruneDraftProfileHistory(farmSlug);
+}
+
+async function pruneDraftProfileHistory(farmSlug: string) {
+  const q = query(
+    collection(db, DRAFT_PROFILE_HISTORY),
+    where('slug', '==', farmSlug),
+    orderBy('draft_meta.archivedAt', 'desc'),
+    limit(100)
+  );
+  const snap = await getDocs(q);
+  const toDelete = snap.docs.slice(10);
+  await Promise.all(toDelete.map((d) => deleteDoc(d.ref)));
+}
+
 const hasChanges = computed(() => {
   if (!initialData.value) return false;
   const dataChanged = JSON.stringify(formData.value) !== JSON.stringify(initialData.value);
@@ -74,14 +118,30 @@ const handleDiscard = async () => {
   if (!liveData.value) return;
   isDiscarding.value = true;
   try {
-    // 1. Delete from Firestore
     const draftRef = doc(db, 'draft_profiles', slug);
+    const draftSnap = await getDoc(draftRef);
+    if (draftSnap.exists() && isAdmin.value) {
+      try {
+        await recordDraftProfileHistory(slug, draftSnap.data() as Record<string, unknown>, {
+          status: 'discarded',
+          discard_reason: discardReason.value || null
+        });
+      } catch (histErr: any) {
+        console.error(histErr);
+        create?.({
+          body: `Draft history not saved (${histErr.message}). Draft was not discarded.`,
+          variant: 'danger'
+        });
+        return;
+      }
+    }
     await deleteDoc(draftRef);
 
     // 2. Revert Editor to Live State
     formData.value = JSON.parse(JSON.stringify(liveData.value));
     hasPendingDraft.value = false;
     showDiscardModal.value = false;
+    discardReason.value = '';
     
     // Also reset initial state so hasChanges is correct
     initialData.value = JSON.parse(JSON.stringify(liveData.value));
@@ -225,8 +285,172 @@ const formatBreederTypeLabel = (value: string | null | undefined) => {
   return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
-const handleSave = async () => {
-  if (!user.value) return;
+/** Flatten nested objects/arrays to dot/bracket paths for diff display */
+const flattenForDiff = (obj: unknown, prefix = ''): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (obj === null || obj === undefined) {
+    if (prefix) out[prefix] = obj;
+    return out;
+  }
+  if (Array.isArray(obj)) {
+    obj.forEach((item, i) => {
+      const p = `${prefix}[${i}]`;
+      if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+        Object.assign(out, flattenForDiff(item, p));
+      } else {
+        out[p] = item;
+      }
+    });
+    return out;
+  }
+  if (typeof obj === 'object') {
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const p = prefix ? `${prefix}.${k}` : k;
+      if (v !== null && typeof v === 'object') {
+        if (Array.isArray(v)) {
+          v.forEach((item, i) => {
+            const ap = `${p}[${i}]`;
+            if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+              Object.assign(out, flattenForDiff(item, ap));
+            } else {
+              out[ap] = item;
+            }
+          });
+        } else {
+          Object.assign(out, flattenForDiff(v, p));
+        }
+      } else {
+        out[p] = v;
+      }
+    }
+    return out;
+  }
+  if (prefix) out[prefix] = obj;
+  return out;
+};
+
+const DIFF_VALUE_MAX = 200;
+const formatDiffValue = (v: unknown): string => {
+  try {
+    const s = JSON.stringify(v);
+    if (s === undefined) return 'undefined';
+    if (s.length > DIFF_VALUE_MAX) return s.slice(0, DIFF_VALUE_MAX) + '…';
+    return s;
+  } catch {
+    return String(v);
+  }
+};
+
+const DIFF_EXCLUDED_PATHS = new Set([
+  'account.updatedAt',
+  'updatedAt',
+  // Publish logic deletes this before writing to the live doc.
+  'draft_owner_uid'
+]);
+
+type PublishDiffRow = { path: string; oldVal: string; newVal: string };
+
+const topLevelSection = (path: string): string => {
+  const m = path.match(/^([a-zA-Z_][a-zA-Z0-9_]*)/);
+  return m?.[1] ?? 'other';
+};
+
+const buildLiveCompareShape = () => {
+  if (!liveData.value) return null;
+  const shape = JSON.parse(JSON.stringify(liveData.value));
+
+  // Normalize memberType for stable comparisons (and to match how we store draft values)
+  if (shape.profile?.memberType !== undefined) {
+    shape.profile.memberType = (shape.profile.memberType || '').toLowerCase();
+  }
+
+  // Ignore timestamps in the visual diff
+  if (shape.account) delete shape.account.updatedAt;
+  delete shape.updatedAt;
+
+  return shape;
+};
+
+const buildProposedCompareShape = () => {
+  const isListingOwner = formData.value.account.ownerUid === user.value?.uid;
+  const resolvedFbUid = isListingOwner
+    ? (store.state.userData?.facebookUid || formData.value.account.facebookUid || null)
+    : (formData.value.account.facebookUid || null);
+
+  // Clone everything from the editor state so top-level rogue keys also show up in the diff.
+  // (This is visual-only; the publish write logic remains unchanged.)
+  const proposed = JSON.parse(JSON.stringify(formData.value));
+
+  if (proposed.profile?.memberType !== undefined) {
+    proposed.profile.memberType = (proposed.profile.memberType || '').toLowerCase();
+  }
+
+  // Publish logic deletes this before writing to the live doc.
+  delete proposed.draft_owner_uid;
+
+  proposed.account = {
+    ...JSON.parse(JSON.stringify(formData.value.account)),
+    ...adminFields.value,
+    status: 'published' as const,
+    facebookUid: resolvedFbUid
+  };
+
+  delete proposed.account?.updatedAt;
+  delete proposed.updatedAt;
+
+  return proposed;
+};
+
+const publishDiffGrouped = computed(() => {
+  if (!isAdmin.value || !liveData.value) return {} as Record<string, PublishDiffRow[]>;
+  const liveShape = buildLiveCompareShape();
+  const proposedShape = buildProposedCompareShape();
+  if (!liveShape || !proposedShape) return {};
+  const liveFlat = flattenForDiff(liveShape);
+  const proposedFlat = flattenForDiff(proposedShape);
+  const allPaths = new Set([...Object.keys(liveFlat), ...Object.keys(proposedFlat)]);
+  const rows: PublishDiffRow[] = [];
+  for (const path of allPaths) {
+    if (DIFF_EXCLUDED_PATHS.has(path)) continue;
+    const a = liveFlat[path];
+    const b = proposedFlat[path];
+    const same = JSON.stringify(a) === JSON.stringify(b);
+    if (!same) {
+      rows.push({
+        path,
+        oldVal: formatDiffValue(a),
+        newVal: formatDiffValue(b)
+      });
+    }
+  }
+  rows.sort((x, y) => x.path.localeCompare(y.path));
+  const grouped: Record<string, PublishDiffRow[]> = {};
+  const order = ['profile', 'offerings', 'media', 'account'];
+  for (const key of order) grouped[key] = [];
+  for (const row of rows) {
+    const sec = topLevelSection(row.path);
+    if (!grouped[sec]) grouped[sec] = [];
+    grouped[sec].push(row);
+  }
+  return grouped;
+});
+
+const publishDiffSectionKeys = computed(() => {
+  const g = publishDiffGrouped.value;
+  const baseOrder = ['profile', 'offerings', 'media', 'account'];
+  const baseKeys = baseOrder.filter((k) => (g[k]?.length ?? 0) > 0);
+  const remainingKeys = Object.keys(g)
+    .filter((k) => !baseOrder.includes(k) && (g[k]?.length ?? 0) > 0)
+    .sort((a, b) => a.localeCompare(b));
+  return [...baseKeys, ...remainingKeys];
+});
+
+const hasPublishDiffChanges = computed(() =>
+  publishDiffSectionKeys.value.length > 0
+);
+
+const handleSave = async (): Promise<boolean> => {
+  if (!user.value) return false;
   isSaving.value = true;
 
   try {
@@ -245,6 +469,11 @@ const handleSave = async () => {
     };
 
     if (isAdmin.value) {
+      let draftSnapshotForHistory: Record<string, unknown> | null = null;
+      if (hasPendingDraft.value) {
+        const draftSnap = await getDoc(doc(db, 'draft_profiles', slug));
+        if (draftSnap.exists()) draftSnapshotForHistory = draftSnap.data() as Record<string, unknown>;
+      }
       const livePayload = {
         ...payload,
         account: {
@@ -257,6 +486,17 @@ const handleSave = async () => {
       delete (livePayload as any).updatedAt;
       await setDoc(doc(db, 'directory_members', slug), livePayload, { merge: true });
       if (hasPendingDraft.value) {
+        if (draftSnapshotForHistory) {
+          try {
+            await recordDraftProfileHistory(slug, draftSnapshotForHistory, { status: 'published' });
+          } catch (histErr: any) {
+            console.error(histErr);
+            create?.({
+              body: `Published live, but history archive failed: ${histErr.message}`,
+              variant: 'warning'
+            });
+          }
+        }
         await deleteDoc(doc(db, 'draft_profiles', slug));
       }
       create?.({ body: "Changes published successfully!", variant: 'success' });
@@ -271,12 +511,28 @@ const handleSave = async () => {
       create?.({ body: "Draft submitted for admin approval!", variant: 'success' });
     }
     router.push(`/directory/${slug}`);
+    return true;
   } catch (e: any) {
     console.error(e);
     create?.({ body: "Error saving: " + e.message, variant: 'danger' });
+    return false;
   } finally {
     isSaving.value = false;
   }
+};
+
+const onFormSubmit = () => {
+  if (!user.value) return;
+  if (!isAdmin.value) {
+    void handleSave();
+    return;
+  }
+  showPublishModal.value = true;
+};
+
+const confirmPublishFromModal = async () => {
+  const ok = await handleSave();
+  if (ok) showPublishModal.value = false;
 };
 
 const addTag = () => {
@@ -338,7 +594,7 @@ const removeTag = (tag: string) => {
             </div>
           </template>
           
-          <form @submit.prevent="handleSave">
+          <form @submit.prevent="onFormSubmit">
             <!-- Profile Section -->
             <h5 class="mb-3 border-bottom pb-2 fw-bold text-dark d-flex align-items-center gap-2">
               Business Profile
@@ -457,16 +713,16 @@ const removeTag = (tag: string) => {
 
             <!-- Action Buttons -->
             <div class="d-flex justify-content-between align-items-center mt-5">
-              <BButton @click="router.back()" variant="link" class="text-muted text-decoration-none">Cancel</BButton>
+              <BButton @click="router.back()" variant="outline-secondary">Cancel</BButton>
               
               <div class="d-flex gap-2">
                 <BButton v-if="hasPendingDraft" @click="showDiscardModal = true" variant="outline-danger" class="px-4 fw-bold">
-                  Discard Draft
+                  Discard Draft...
                 </BButton>
                 
                 <BButton type="submit" :disabled="isSaving || (!hasChanges && !(isAdmin && hasPendingDraft))" variant="primary" class="px-5 py-2 fw-bold shadow-sm">
                   <BSpinner v-if="isSaving" small class="me-2" />
-                  {{ isAdmin ? 'Publish Live' : 'Submit Draft' }}
+                  {{ isAdmin ? 'Publish Live...' : 'Submit Draft' }}
                 </BButton>
               </div>
             </div>
@@ -474,10 +730,58 @@ const removeTag = (tag: string) => {
         </BCard>
     </div>
 
+    <!-- ADMIN PUBLISH DIFF MODAL -->
+    <BModal
+      v-model="showPublishModal"
+      title="Review changes before publishing"
+      size="lg"
+      scrollable
+      :ok-disabled="isSaving"
+    >
+      <p class="small text-muted mb-3">
+        Clicking <strong>Publish Live</strong> will copy the draft into the public listing.
+        The list below shows what would change compared to the current live version.
+        If you see something you didn't expect (weird/extra fields), do <strong>not</strong> publish.
+        Click <strong>Cancel</strong> and use <strong>Discard Draft</strong> (or clean it up in the editor first).
+      </p>
+      <div v-if="!hasPublishDiffChanges" class="alert alert-secondary small mb-0">
+        No nested changes detected (live already matches the editor).
+      </div>
+      <div v-else class="publish-diff-scroll">
+        <div
+          v-for="sec in publishDiffSectionKeys"
+          :key="sec"
+          class="mb-3"
+        >
+          <h6 class="fw-bold text-primary border-bottom pb-1 mb-2 text-capitalize">{{ sec }}</h6>
+          <div
+            v-for="row in publishDiffGrouped[sec]"
+            :key="row.path"
+            class="publish-diff-row font-monospace small mb-2 p-2 rounded border bg-light"
+          >
+            <div class="text-break fw-semibold text-dark mb-1">{{ row.path }}</div>
+            <div class="text-danger mb-1"><span class="me-1">−</span>{{ row.oldVal }}</div>
+            <div class="text-success"><span class="me-1">+</span>{{ row.newVal }}</div>
+          </div>
+        </div>
+      </div>
+      <template #footer="{ cancel }">
+        <BButton variant="secondary" @click="cancel()">Cancel</BButton>
+        <BButton variant="primary" :disabled="isSaving" @click="confirmPublishFromModal">
+          <BSpinner v-if="isSaving" small class="me-1" />
+          Publish Live
+        </BButton>
+      </template>
+    </BModal>
+
     <!-- DISCARD CONFIRMATION MODAL -->
-    <BModal v-model="showDiscardModal" title="Discard Pending Draft?" @ok="handleDiscard" :ok-disabled="isDiscarding">
+    <BModal v-model="showDiscardModal" title="Delete Pending Draft?" @ok="handleDiscard" :ok-disabled="isDiscarding">
       <p>Are you sure you want to permanently delete your pending draft for <strong>{{ liveData?.profile?.businessName }}</strong>?</p>
       <p class="small text-muted">This action cannot be undone. The editor will be reset to the current live production data.</p>
+      <div v-if="isAdmin">
+        <label class="form-label small text-muted">Reason for discard (optional, saved with the archived copy)</label>
+        <BFormTextarea v-model="discardReason" rows="2" class="small" placeholder="e.g. spam / duplicate / owner requested cancel" />
+      </div>
       
       <template #footer="{ ok, cancel }">
         <BButton variant="secondary" @click="cancel()">Keep Draft</BButton>
@@ -526,5 +830,10 @@ const removeTag = (tag: string) => {
 }
 .animate-pulse {
   animation: pulse-soft 2s infinite ease-in-out;
+}
+
+.publish-diff-scroll {
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
 }
 </style>
