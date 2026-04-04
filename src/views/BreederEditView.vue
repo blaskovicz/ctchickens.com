@@ -499,6 +499,11 @@ const handleSave = async (): Promise<boolean> => {
         }
         await deleteDoc(doc(db, 'draft_profiles', slug));
       }
+
+      // REFRESH STORE: Update the local Vuex store with the newly published data
+      // This ensures that when we navigate to the profile, it shows the latest data.
+      await store.dispatch('fetchBreeder', slug);
+
       create?.({ body: "Changes published successfully!", variant: 'success' });
     } else {
       const draftPayload = {

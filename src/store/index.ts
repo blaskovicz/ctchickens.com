@@ -11,6 +11,7 @@ import {
   signOut
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
+import { generateSlug } from '../composables/useBreederUtils';
 
 interface State {
   breeders: Breeder[];
@@ -21,8 +22,9 @@ interface State {
   authReady: boolean;
 }
 
-const mapMemberToBreeder = (member: FirestoreMember): Breeder => {
+const mapMemberToBreeder = (member: FirestoreMember, id: string): Breeder => {
   return {
+    id,
     name: member.profile.businessName,
     location: member.profile.town,
     selling: member.offerings.description,
@@ -61,6 +63,14 @@ export default createStore({
   mutations: {
     SET_BREEDERS(state: State, payload: Breeder[]) {
       state.breeders = payload;
+    },
+    UPDATE_BREEDER(state: State, updatedBreeder: Breeder) {
+      const index = state.breeders.findIndex(b => b.id === updatedBreeder.id);
+      if (index !== -1) {
+        state.breeders[index] = updatedBreeder;
+      } else {
+        state.breeders.push(updatedBreeder);
+      }
     },
     SET_LAST_FETCH(state: State, time: number) {
       state.lastFetch = time;
@@ -164,16 +174,29 @@ export default createStore({
           orderBy("account.updatedAt", "desc")
         );
         const querySnapshot = await getDocs(q);
-        const members: FirestoreMember[] = [];
-        querySnapshot.forEach((doc) => {
-          members.push({ id: doc.id, ...doc.data() } as FirestoreMember);
-        });
-        const breeders = members.map(mapMemberToBreeder);
+        const breeders = querySnapshot.docs.map(doc => mapMemberToBreeder(doc.data() as FirestoreMember, doc.id));
         commit('SET_BREEDERS', breeders);
         commit('SET_LAST_FETCH', Date.now());
       } catch (err) {
         console.error('Firestore sync error:', err);
       }
+    },
+
+    async fetchBreeder({ commit }: ActionContext<State, State>, slug: string) {
+      try {
+        console.log(`Refreshing breeder [${slug}] from Firestore...`);
+        const docRef = doc(db, 'directory_members', slug);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const breeder = mapMemberToBreeder(docSnap.data() as FirestoreMember, docSnap.id);
+          commit('UPDATE_BREEDER', breeder);
+          return breeder;
+        }
+      } catch (err) {
+        console.error(`Error fetching breeder [${slug}]:`, err);
+      }
+      return null;
     }
   },
 
