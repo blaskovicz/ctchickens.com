@@ -1,5 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils';
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import HomeView from '../../views/HomeView.vue';
 import store from '../../store';
 import { createRouter, createWebHistory } from 'vue-router';

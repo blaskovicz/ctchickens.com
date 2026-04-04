@@ -1,4 +1,5 @@
 import { createStore } from 'vuex';
+import type { ActionContext } from 'vuex';
 import type { Breeder, FirestoreMember } from '../types';
 import { db, auth, facebookProvider } from '../firebase';
 import { 
@@ -10,8 +11,6 @@ import {
   signOut
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-
-import { generateSlug } from '../composables/useBreederUtils';
 
 interface State {
   breeders: Breeder[];
@@ -81,7 +80,7 @@ export default createStore({
   },
 
   actions: {
-    async initAuth({ commit, dispatch }) {
+    async initAuth({ commit, dispatch }: ActionContext<State, State>) {
       return new Promise<void>((resolve) => {
         onAuthStateChanged(auth, async (user) => {
           commit('SET_USER', user);
@@ -100,7 +99,7 @@ export default createStore({
       });
     },
 
-    async fetchUserData({ commit }, uid: string) {
+    async fetchUserData({ commit }: ActionContext<State, State>, uid: string) {
       try {
         const userDoc = await getDoc(doc(db, 'users', uid));
         if (userDoc.exists()) {
@@ -111,7 +110,7 @@ export default createStore({
       }
     },
 
-    async fetchActiveClaims({ commit }, uid: string) {
+    async fetchActiveClaims({ commit }: ActionContext<State, State>, uid: string) {
       try {
         const q = query(collection(db, 'claim_requests'), where("requesterUid", "==", uid));
         const snap = await getDocs(q);
@@ -122,7 +121,7 @@ export default createStore({
       }
     },
 
-    async loginWithFacebook({ commit, dispatch }) {
+    async loginWithFacebook({ commit, dispatch }: ActionContext<State, State>) {
       try {
         const result = await signInWithPopup(auth, facebookProvider);
         const user = result.user;
@@ -148,14 +147,14 @@ export default createStore({
       }
     },
 
-    async logout({ commit }) {
+    async logout({ commit }: ActionContext<State, State>) {
       await signOut(auth);
       commit('SET_USER', null);
       commit('SET_USER_DATA', null);
       commit('SET_ACTIVE_CLAIMS', []);
     },
 
-    async fetchDirectory({ commit }) {
+    async fetchDirectory({ commit }: ActionContext<State, State>) {
       try {
         console.log("Fetching directory from Firestore...");
         const membersRef = collection(db, 'directory_members');
