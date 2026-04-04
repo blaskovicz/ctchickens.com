@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://ctchickens.com",
+      "https://www.ctchickens.com",
+      "https://blaskovicz.github.io",
+      "http://localhost:5173"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type"]
+  }
+]
