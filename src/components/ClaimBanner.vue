@@ -89,7 +89,7 @@ const submitClaim = async () => {
         @click="submitClaim" 
         :disabled="isSubmitting"
         variant="light"
-        class="px-4 shadow-sm d-flex align-items-center gap-2 text-primary fw-bold"
+        class="px-4 shadow-sm d-flex align-items-center gap-2 text-primary fw-bold claim-btn"
       >
         <BSpinner v-if="isSubmitting" small />
         <i v-else class="bi bi-check-circle-fill"></i>
