@@ -20,7 +20,7 @@ const show = computed(() => {
 <template>
   <span 
     v-if="show" 
-    v-b-tooltip.hover="'A confirmed, known member of our community in good standing.'"
+    v-b-tooltip.hover="'Verified listings confirm the breeder is a known member of our community in good standing.'"
     class="badge bg-success d-inline-flex align-items-center me-1"
     style="cursor: help;"
   >

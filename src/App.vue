@@ -75,11 +75,15 @@
         </div>
       </div>
       <hr class="my-3 bg-secondary">
-      <div class="row">
-        <div class="col text-center">
-          <small>&copy; 2026 Connecticut Backyard Chickens. All rights reserved | Owned and Operated by Zachary Joseph Auclair</small>
+        <div class="row">
+          <div class="col text-center">
+            <small>
+              &copy; 2026 Connecticut Backyard Chickens. All rights reserved | 
+              Owned and Operated by Zachary Joseph Auclair | 
+              <router-link to="/legal" class="text-light ms-1" style="text-decoration: underline;">Site Terms Agreement</router-link>
+            </small>
+          </div>
         </div>
-      </div>
     </footer>
   </BApp>
 </template>

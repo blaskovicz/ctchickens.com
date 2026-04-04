@@ -30,6 +30,11 @@ const router = createRouter({
       component: HomeView
     },
     {
+      path: '/legal',
+      name: 'legal',
+      component: () => import('../views/LegalView.vue')
+    },
+    {
       path: '/directory/:slug',
       name: 'breeder-profile',
       component: () => import('../views/BreederProfileView.vue')
