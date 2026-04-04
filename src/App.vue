@@ -76,10 +76,11 @@
         </div>
       </div>
       <hr class="my-3 bg-secondary">
+      <div class="container">
         <div class="row">
           <div class="col text-center">
             <small>
-              &copy; 2026 Connecticut Backyard Chickens. All rights reserved | 
+              &copy; 2026 Connecticut Backyard Chickens | 
               Owned and Operated by Zachary Joseph Auclair | 
               <router-link to="/legal" class="text-light ms-1" style="text-decoration: underline;">Site Terms Agreement</router-link>
             </small>
@@ -95,6 +96,7 @@
             </div>
           </div>
         </div>
+      </div>
     </footer>
   </BApp>
 </template>
@@ -121,10 +123,10 @@
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    padding: 8rem 0;
+    padding: 4rem 0;
     position: relative;
     overflow: hidden;
-    min-height: 500px;
+    min-height: 400px;
   }
   
   .hero-overlay {

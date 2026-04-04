@@ -18,10 +18,9 @@ import FeaturedPartnerBanner from '../components/FeaturedPartnerBanner.vue';
           <p class="lead mb-4">
             <span class="text-primary fw-bold">Over 12,000 active members</span> in one of Connecticut's largest backyard chicken communities!
           </p>
-          <a href="https://www.facebook.com/groups/1465813350383274" target="_blank" class="btn btn-primary btn-lg me-2">
+          <a href="https://www.facebook.com/groups/1465813350383274" target="_blank" class="btn btn-primary btn-lg">
             <i class="bi bi-facebook"></i> Join the Facebook Group
           </a>
-          <router-link to="/about" class="btn btn-outline-secondary btn-lg">Learn More</router-link>
         </div>
       </div>
     </div>
