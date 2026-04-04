@@ -187,7 +187,7 @@
             <p class="text-muted mt-2">Loading...</p>
           </div>
           
-          <div v-else>
+          <div v-else class="table-responsive">
             <table class="table table-striped table-hover mb-0">
               <thead class="table-light">
                 <tr>

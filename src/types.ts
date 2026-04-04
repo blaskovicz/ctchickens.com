@@ -7,7 +7,6 @@ export interface Review {
     date: string;
   }
   
-  // LEGACY Interface (Used by UI Components)
   export interface Breeder {
     name: string;
     location: string;
@@ -22,11 +21,12 @@ export interface Review {
     reviews: Review[];
     logo?: string | null;
     images?: string[];
+    ownerUid?: string | null;
+    facebookUid?: string | null;
   }
 
-  // V2 Schema (Firestore directory_members)
   export interface FirestoreMember {
-    id: string; // The Slug (Doc ID)
+    id: string; 
     profile: {
       businessName: string;
       memberType: string;
@@ -44,11 +44,11 @@ export interface Review {
     };
     account: {
       ownerUid: string | null;
+      facebookUid: string | null;
       status: 'published' | 'draft';
       isVerified: boolean;
-      isFoundingMember: boolean;
       foundingMember: number | null;
-      updatedAt: any; // Firestore Timestamp
+      updatedAt: any; 
     };
   }
   

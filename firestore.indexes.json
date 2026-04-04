@@ -1,0 +1,22 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "directory_members",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "account.status", "order": "ASCENDING" },
+        { "fieldPath": "account.updatedAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "draft_profile_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "slug", "order": "ASCENDING" },
+        { "fieldPath": "draft_meta.archivedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

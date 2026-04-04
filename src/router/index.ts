@@ -30,9 +30,24 @@ const router = createRouter({
       component: HomeView
     },
     {
+      path: '/legal',
+      name: 'legal',
+      component: () => import('../views/LegalView.vue')
+    },
+    {
       path: '/directory/:slug',
       name: 'breeder-profile',
       component: () => import('../views/BreederProfileView.vue')
+    },
+    {
+      path: '/directory/:slug/edit',
+      name: 'breeder-edit',
+      component: () => import('../views/BreederEditView.vue')
+    },
+    {
+      path: '/admin/inbox',
+      name: 'admin-inbox',
+      component: () => import('../views/AdminInboxView.vue')
     }
   ],
   scrollBehavior(to, _from, savedPosition) {

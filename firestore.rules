@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+
+    // Pass UID explicitly to avoid interpolation crashes on null auth
+    function isUserAdmin(uid) {
+      return uid != null && exists(/databases/(default)/documents/users/$(uid)) && 
+      get(/databases/(default)/documents/users/$(uid)).data.get('isAdmin', false) == true;
+    }
+
+    function isOwner(uid) { 
+      return isSignedIn() && request.auth.uid == uid; 
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || (isSignedIn() && isUserAdmin(request.auth.uid));
+      allow write: if isOwner(userId) || (isSignedIn() && isUserAdmin(request.auth.uid));
+    }
+
+    match /directory_members/{memberId} {
+      // Allow read if document doesn't exist OR it's published OR user is admin
+      allow read: if resource == null || 
+      resource.data.account.status == "published" || 
+      (isSignedIn() && isUserAdmin(request.auth.uid));
+      
+      // Allow write by admins, but enforce schema to prevent accidental pollution
+      allow write: if isSignedIn() && isUserAdmin(request.auth.uid) &&
+        request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
+    }
+
+    match /draft_profile_history/{historyId} {
+      allow read, create, delete: if isSignedIn() && isUserAdmin(request.auth.uid);
+      allow update: if false;
+    }
+
+    match /draft_profiles/{draftId} {
+      // Allow read if it doesn't exist (returns 404 cleanly)
+      allow read: if resource == null;
+
+      // Allow read/delete if owner or admin
+      allow read, delete: if isSignedIn() && (
+      isUserAdmin(request.auth.uid) || 
+      (resource != null && resource.data.get('draft_owner_uid', resource.data.get(['account', 'ownerUid'], '')) == request.auth.uid)
+      );
+
+      // Allow create/update if signed in (ownerUid handled by schema/payload)
+      allow create, update: if isSignedIn() && (
+        isUserAdmin(request.auth.uid) || 
+        (
+          request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
+          !('account' in request.resource.data) &&
+          request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt'])
+        )
+      );
+    }
+
+    match /claim_requests/{requestId} {
+      allow create: if isSignedIn() 
+        && !exists(/databases/(default)/documents/claim_requests/$(requestId))
+        && get(/databases/(default)/documents/directory_members/$(requestId)).data.account.get('ownerUid', null) == null
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.auth.token.email_verified == true
+        && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.businessSlug == requestId
+        && request.resource.data.createdAt == request.time
+        && get(/databases/(default)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
+        && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'requesterFacebookUid', 'status', 'businessName', 'businessSlug', 'createdAt']);
+      
+      allow read: if resource == null || 
+      (isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid));
+      
+      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || (resource != null && resource.data.requesterUid == request.auth.uid));
+      
+      allow update: if isSignedIn() && isUserAdmin(request.auth.uid);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

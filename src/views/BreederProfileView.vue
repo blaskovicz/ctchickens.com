@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
+import { db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import type { Breeder } from '../types';
 import BreederGallery from '../components/BreederGallery.vue';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
@@ -10,22 +12,80 @@ import ContactButton from '../components/ContactButton.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
 import { useBreederUtils } from '../composables/useBreederUtils';
+import { BButton } from 'bootstrap-vue-next';
 
 const route = useRoute();
 const router = useRouter();
 const store = useStore();
 const { generateSlug, splitBreederName } = useBreederUtils();
 
+const user = computed(() => store.getters.currentUser);
+const isAdmin = computed(() => store.getters.isAdmin);
+const hasPendingDraft = ref(false);
+
+const isVerified = (val: any) => {
+  if (val === null || val === undefined) return false;
+  if (typeof val === 'string') {
+    const s = val.trim().toLowerCase();
+    return s !== '' && s !== 'false' && s !== '0' && s !== 'null' && s !== 'undefined';
+  }
+  return !!val;
+};
+
 const breeder = computed(() => {
   const slug = route.params.slug as string;
   const allBreeders = store.getters.allBreeders as Breeder[];
-  return allBreeders.find(b => b.verified && generateSlug(b.name) === slug);
+  const found = allBreeders.find(b => generateSlug(b.name) === slug);
+  
+  if (!found) return null;
+
+  const verified = isVerified(found.verified);
+  const admin = isAdmin.value;
+  // FIX: Ensure both IDs exist before comparing to avoid undefined === undefined
+  const owner = !!user.value?.uid && !!found.ownerUid && found.ownerUid === user.value?.uid;
+
+  console.log(`Access Check [${slug}]:`, {
+    businessName: found.name,
+    isVerified: verified,
+    rawVerified: found.verified,
+    isAdmin: admin,
+    isOwner: owner,
+    currentUid: user.value?.uid,
+    ownerUid: found.ownerUid
+  });
+
+  // PUBLIC SAFETY: Only allow viewing if verified OR if the current user is an admin/owner
+  if (!verified && !admin && !owner) {
+    console.warn(`Access Denied: Non-verified profile [${slug}] hidden from public.`);
+    return null;
+  }
+  
+  return found;
+});
+
+const isOwner = computed(() => {
+  if (!user.value || !breeder.value) return false;
+  return isAdmin.value || breeder.value.ownerUid === user.value.uid;
 });
 
 // Since the store fetches asynchronously, we need to ensure it's fetched.
-onMounted(() => {
+onMounted(async () => {
   if (store.getters.allBreeders.length === 0) {
-    store.dispatch('fetchDirectory');
+    await store.dispatch('fetchDirectory');
+  }
+
+  // Check for pending draft if user has access
+  const slug = route.params.slug as string;
+  if (user.value) {
+    try {
+      const draftRef = doc(db, 'draft_profiles', slug);
+      const draftSnap = await getDoc(draftRef);
+      if (draftSnap.exists()) {
+        hasPendingDraft.value = true;
+      }
+    } catch (err) {
+      console.warn("Draft check failed:", err);
+    }
   }
 });
 
@@ -45,9 +105,29 @@ const goBack = () => {
 
 <template>
   <div class="container py-3">
-    <button class="btn btn-outline-secondary mb-4" @click="goBack">
-      <i class="bi bi-arrow-left me-2"></i>Back to Directory
-    </button>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <button class="btn btn-outline-secondary" @click="goBack">
+        <i class="bi bi-arrow-left me-2"></i>Back to Directory
+      </button>
+      
+      <div class="d-flex align-items-center gap-3">
+        <!-- Draft Badge -->
+        <div v-if="isOwner && hasPendingDraft" class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
+          <i class="bi bi-file-earmark-check me-1"></i> Draft Pending Approval
+        </div>
+
+        <!-- Show Edit button only to Owner or Admin -->
+        <BButton 
+          v-if="isOwner && breeder" 
+          :to="`/directory/${generateSlug(breeder.name)}/edit`" 
+          variant="primary" 
+          class="d-flex align-items-center gap-2 shadow-sm"
+        >
+          <i class="bi bi-pencil-square"></i>
+          {{ isAdmin ? 'Moderate Profile' : 'Edit Your Profile' }}
+        </BButton>
+      </div>
+    </div>
     
     <div v-if="!breeder && store.getters.allBreeders.length > 0" class="text-center py-5">
       <h2 class="display-6 fw-bold">Member Not Found</h2>
@@ -56,6 +136,16 @@ const goBack = () => {
     
     <div v-else-if="breeder" class="card shadow-lg border-0">
       <div class="card-body p-4 p-md-5">
+        
+        <!-- Private Profile Notice -->
+        <div v-if="!isVerified(breeder.verified)" class="alert alert-warning border-warning shadow-sm d-flex align-items-center gap-3 mb-5">
+          <i class="bi bi-shield-lock-fill fs-2"></i>
+          <div>
+            <h5 class="alert-heading fw-bold mb-1">Private Profile</h5>
+            <p class="mb-0">This profile is not yet public. Only verified members have a public permalink. You are seeing this because you are the owner or an admin. <strong>Please contact an admin to get verified.</strong></p>
+          </div>
+        </div>
+
         <div class="row g-4">
           <!-- Main Info -->
           <div :class="(breeder.reviews && breeder.reviews.length > 0) ? 'col-lg-8' : 'col-12'">
@@ -97,6 +187,20 @@ const goBack = () => {
 
             <div class="d-flex align-right flex-wrap gap-2 mt-4">
               <ContactButton :link="breeder.contact_link" :show-label-on-mobile="true" />
+              
+              <!-- Messenger Button -->
+              <BButton 
+                v-if="breeder.facebookUid" 
+                :href="`https://m.me/${breeder.facebookUid}`" 
+                target="_blank" 
+                variant="outline-primary" 
+                size="sm"
+                class="d-inline-flex align-items-center gap-2 px-3 shadow-sm text-nowrap"
+              >
+                <i class="bi bi-messenger"></i>
+                <span>Chat on Messenger</span>
+              </BButton>
+
               <MoreInfoButton 
                 :link="breeder.info_link" 
                 :name="breeder.name" 
