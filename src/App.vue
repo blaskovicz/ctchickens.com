@@ -9,6 +9,7 @@
   import ClaimBanner from './components/ClaimBanner.vue';
 
   const store = useStore();
+  const gitCommitHash = import.meta.env.VITE_GIT_COMMIT_HASH || '';
   
   onMounted(async () => {
     await store.dispatch('initAuth');
@@ -82,6 +83,16 @@
               Owned and Operated by Zachary Joseph Auclair | 
               <router-link to="/legal" class="text-light ms-1" style="text-decoration: underline;">Site Terms Agreement</router-link>
             </small>
+            <div class="mt-2" v-if="gitCommitHash">
+              <a 
+                :href="`https://github.com/blaskovicz/ctchickens.com/commit/${gitCommitHash}`" 
+                target="_blank" 
+                class="text-secondary small text-decoration-none hover-underline"
+              >
+                <i class="bi bi-git me-1"></i>
+                rev: {{ gitCommitHash.substring(0, 7) }}
+              </a>
+            </div>
           </div>
         </div>
     </footer>
