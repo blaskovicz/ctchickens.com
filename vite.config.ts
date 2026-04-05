@@ -5,6 +5,16 @@ import vue from '@vitejs/plugin-vue'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'firebase-vendor': ['firebase/app', 'firebase/firestore', 'firebase/auth', 'firebase/storage'],
+          'bootstrap-vendor': ['bootstrap-vue-next', 'bootstrap']
+        }
+      }
+    }
+  },
   test: {
     environment: 'jsdom',
     globals: true,
