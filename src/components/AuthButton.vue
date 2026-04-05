@@ -3,9 +3,11 @@ import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { useBreederUtils } from '../composables/useBreederUtils';
+import { useToast } from 'bootstrap-vue-next';
 
 const store = useStore();
 const router = useRouter();
+const { create } = useToast();
 const { generateSlug } = useBreederUtils();
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
@@ -15,23 +17,10 @@ const authReady = computed(() => store.getters.authReady);
 const myFarms = computed(() => store.getters.myBreeders);
 
 const login = async () => {
-  try {
-    await store.dispatch('loginWithFacebook');
-    
-    // Ensure directory is loaded to check ownership
-    if (store.state.breeders.length === 0) {
-      await store.dispatch('fetchDirectory');
-    }
-
-    // Redirect if they own a farm
-    if (myFarms.value.length > 0) {
-      const slug = generateSlug(myFarms.value[0].name);
-      router.push(`/directory/${slug}`);
-    }
-  } catch (err) {
-    // Error is handled in the store action
-  }
+  // The store's loginWithFacebook now handles its own errors via the global toast queue.
+  await store.dispatch('loginWithFacebook');
 };
+
 const logout = async () => {
   await store.dispatch('logout');
   router.push('/');

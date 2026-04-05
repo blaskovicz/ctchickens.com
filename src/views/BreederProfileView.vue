@@ -189,7 +189,7 @@ const goBack = () => {
               <ContactButton :link="breeder.contact_link" :show-label-on-mobile="true" />
               
               <!-- Messenger Button -->
-              <BButton 
+              <!-- <BButton 
                 v-if="breeder.facebookUid" 
                 :href="`https://m.me/${breeder.facebookUid}`" 
                 target="_blank" 
@@ -199,7 +199,7 @@ const goBack = () => {
               >
                 <i class="bi bi-messenger"></i>
                 <span>Chat on Messenger</span>
-              </BButton>
+              </BButton> -->
 
               <MoreInfoButton 
                 :link="breeder.info_link" 

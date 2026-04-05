@@ -9,9 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "emulate:seed": "node .\\seed-emualtor.js",
-    "emulate": "firebase emulators:start --project demo-ct-chickens",
-    "emulate:persist": "firebase emulators:start --project demo-ct-chickens --import=./seed-data --export-on-exit",
-    "emulate:export": "firebase emulators:export ./seed-data --project demo-ct-chickens"
+    "emulate": "firebase emulators:start",
+    "emulate:persist": "firebase emulators:start --import=./seed-data --export-on-exit",
+    "emulate:export": "firebase emulators:export ./seed-data"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

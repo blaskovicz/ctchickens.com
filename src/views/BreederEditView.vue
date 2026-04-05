@@ -331,9 +331,10 @@ const flattenForDiff = (obj: unknown, prefix = ''): Record<string, unknown> => {
 
 const DIFF_VALUE_MAX = 200;
 const formatDiffValue = (v: unknown): string => {
+  if (v === undefined) return 'undefined';
+  if (v === null) return 'null';
   try {
     const s = JSON.stringify(v);
-    if (s === undefined) return 'undefined';
     if (s.length > DIFF_VALUE_MAX) return s.slice(0, DIFF_VALUE_MAX) + '…';
     return s;
   } catch {
@@ -414,7 +415,11 @@ const publishDiffGrouped = computed(() => {
     if (DIFF_EXCLUDED_PATHS.has(path)) continue;
     const a = liveFlat[path];
     const b = proposedFlat[path];
-    const same = JSON.stringify(a) === JSON.stringify(b);
+    
+    // Treat null, undefined, and empty string as identical for diffing purposes
+    const isNullish = (v: any) => v === null || v === undefined || v === '';
+    const same = (isNullish(a) && isNullish(b)) || (JSON.stringify(a) === JSON.stringify(b));
+    
     if (!same) {
       rows.push({
         path,

@@ -3,22 +3,38 @@
   import 'bootstrap-icons/font/bootstrap-icons.css';
   import 'bootstrap/dist/js/bootstrap.bundle.min.js';
   import { useStore } from 'vuex';
-  import { onMounted } from 'vue';
-  import { BApp } from 'bootstrap-vue-next';
+  import { onMounted, watch } from 'vue';
+  import { BApp, BOrchestrator, useToast } from 'bootstrap-vue-next';
   import AuthButton from './components/AuthButton.vue';
   import ClaimBanner from './components/ClaimBanner.vue';
 
   const store = useStore();
+  const { create } = useToast();
   const gitCommitHash = import.meta.env.VITE_GIT_COMMIT_HASH || '';
   
+  // Watch for global toasts from the store
+  watch(() => store.state.toasts, (newToasts) => {
+    if (newToasts.length > 0) {
+      newToasts.forEach((t: any) => {
+        create?.({
+          body: t.message,
+          title: t.title,
+          variant: t.variant || 'info',
+          pos: 'top-center'
+        });
+      });
+      store.commit('CLEAR_TOASTS');
+    }
+  }, { deep: true });
+
   onMounted(async () => {
     await store.dispatch('initAuth');
-    store.dispatch('fetchDirectory');
   });
 </script>
   
 <template>
   <BApp>
+    <BOrchestrator />
     <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
       <div class="container">
         <router-link class="navbar-brand fw-bold d-flex align-items-center" to="/">
