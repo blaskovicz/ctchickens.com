@@ -1,5 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { defineComponent, h } from 'vue';
 import BreederEditView from '../../views/BreederEditView.vue';
 import store from '../../store';

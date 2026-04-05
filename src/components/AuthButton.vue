@@ -3,11 +3,9 @@ import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { useBreederUtils } from '../composables/useBreederUtils';
-import { useToast } from 'bootstrap-vue-next';
 
 const store = useStore();
 const router = useRouter();
-const { create } = useToast();
 const { generateSlug } = useBreederUtils();
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
