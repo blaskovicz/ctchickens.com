@@ -102,15 +102,16 @@ export default createStore({
   actions: {
     async initAuth({ commit, dispatch, getters }: ActionContext<State, State>) {
       console.log("Auth: Initializing...");
+      const url = window.location.href;
+      const hasRedirectParams = url.includes('__firebase_request_key') || url.includes('code=') || url.includes('state=');
+      console.log("Auth: URL State:", { url, hasRedirectParams });
       
-      const dirPromise = dispatch('fetchDirectory');
-
-      // 1. Handle redirect result FIRST
       try {
+        // 1. Handle redirect result FIRST
         console.log("Auth: Checking for redirect result...");
         const result = await getRedirectResult(auth);
         if (result?.user) {
-          console.log("Auth: Redirect success, updating user...");
+          console.log("Auth: Redirect success for user:", result.user.uid);
           const user = result.user;
           const facebookProfile = user.providerData.find(p => p.providerId === 'facebook.com');
 
@@ -122,41 +123,69 @@ export default createStore({
             lastLogin: serverTimestamp()
           }, { merge: true });
           
-          // Explicitly fetch data for the redirect user immediately
           await Promise.all([
             dispatch('fetchUserData', user.uid),
             dispatch('fetchActiveClaims', user.uid)
           ]);
+        } else {
+          console.log("Auth: No redirect result found.");
         }
       } catch (error: any) {
         console.error("Auth: Redirect error detail:", error);
         commit('PUSH_TOAST', {
           title: 'Authentication Error',
-          message: error.message || 'Login failed',
+          message: error.message || 'Login failed during redirect',
           variant: 'danger'
         });
       }
 
       // 2. Setup observer and wait for the first settled state
       await new Promise<void>((resolve) => {
+        let isResolved = false;
+        const timeout = setTimeout(() => {
+          if (!isResolved) {
+            console.warn("Auth: Observer timed out, forcing ready state.");
+            isResolved = true;
+            resolve();
+          }
+        }, 5000);
+
         onAuthStateChanged(auth, async (user) => {
           console.log("Auth: State change ->", user ? "User detected" : "No session");
           commit('SET_USER', user);
+          
           if (user) {
             await Promise.all([
               dispatch('fetchUserData', user.uid),
               dispatch('fetchActiveClaims', user.uid)
             ]);
+            if (!isResolved) {
+              isResolved = true;
+              clearTimeout(timeout);
+              resolve();
+            }
+          } else if (!hasRedirectParams) {
+            // Only resolve "No session" immediately if we aren't expecting a redirect
+            if (!isResolved) {
+              isResolved = true;
+              clearTimeout(timeout);
+              resolve();
+            }
           } else {
-            commit('SET_USER_DATA', null);
-            commit('SET_ACTIVE_CLAIMS', []);
+            console.log("Auth: Redirect suspected, waiting for session to settle...");
+            // If we have redirect params but user is still null, 
+            // the SDK might still be processing. We let the timeout or a 
+            // subsequent non-null user fire resolve.
           }
-          resolve();
         });
       });
 
       // 3. Final synchronization and navigation
-      await dirPromise;
+      try {
+        await dispatch('fetchDirectory');
+      } catch (e) {
+        console.error("Auth: fetchDirectory failed", e);
+      }
       
       if (getters.isLoggedIn && getters.myBreeders.length > 0 && router.currentRoute.value.path === '/') {
         const slug = generateSlug(getters.myBreeders[0].name);
