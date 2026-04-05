@@ -1,5 +1,17 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
+import { auth } from '../firebase';
+import { getRedirectResult } from 'firebase/auth';
+
+// --- AUTH REDIRECT JUICE ---
+// We trigger this at the module level immediately. This happens as soon as 
+// the router file is imported (which is before the app mounts).
+// By calling it before createRouter(), we ensure the Firebase SDK reads the 
+// URL parameters (juice) before Hash Mode cleans them up.
+const redirectPromise = getRedirectResult(auth);
+if (redirectPromise instanceof Promise) {
+  void redirectPromise.catch(e => console.error("Router-level redirect error:", e));
+}
 
 const router = createRouter({
   history: createWebHashHistory(),
