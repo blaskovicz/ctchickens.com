@@ -83,14 +83,16 @@ function toFirestoreValue(val) {
 function slugify(name) {
   if (!name) return 'untitled';
   
-  // 1. Remove content in parentheses
+  // 1. Remove content in parentheses (often person name)
   var main = name.toString().split('(')[0].trim();
   
   // 2. Sanitize
-  return main.toLowerCase()
+  var slug = main.toLowerCase()
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '');
+    
+  return slug;
 }
 
 function pushToFirestore(data, slug, token, updateMask) {
@@ -114,8 +116,9 @@ function pushToFirestore(data, slug, token, updateMask) {
   };
 
   const response = UrlFetchApp.fetch(url, options);
-  if (response.getResponseCode() !== 200) {
-    throw new Error(`Firestore Error (${response.getResponseCode()}): ${response.getContentText()}`);
+  const respCode = response.getResponseCode();
+  if (respCode !== 200) {
+    throw new Error(`Firestore Error (${respCode}): ${response.getContentText()}`);
   }
 }
 
@@ -171,9 +174,13 @@ function runJanitor() {
     for (var i = 1; i < data.length; i++) {
       var row = data[i];
       var farmName = (nameIndex > -1) ? row[nameIndex] : ("Row " + (i + 1));
+      
+      var slug = slugify(farmName);
+      
       var folderId = (folderIdIndex > -1) ? row[folderIdIndex] : null;
       var currentCache = (cacheIndex > -1) ? row[cacheIndex] : "";
-      var slug = slugify(farmName);
+      
+      console.log(`[${i}/${data.length-1}] Processing: "${farmName}" -> slug: "${slug}"`);
       
       try {
         var logoUrl = "";
@@ -253,16 +260,16 @@ function runJanitor() {
         };
 
         if (ownerUid) {
-          console.log("👤 [" + farmName + "] is CLAIMED. Media sync only.");
+          console.log("   👤 CLAIMED. Media sync only.");
           pushToFirestore({ media: memberData.media }, slug, token, ['media.logoUrl', 'media.galleryUrls']);
         } else {
-          console.log("🚜 [" + farmName + "] is UNCLAIMED. Full sync.");
+          console.log("   🚜 UNCLAIMED. Full sync.");
           pushToFirestore(memberData, slug, token);
         }
         
         updatedCount++;
       } catch (e) {
-        console.error("❌ ERROR [" + farmName + "]: " + e.message);
+        console.error("   ❌ ERROR [" + farmName + "]: " + e.message);
         errorCount++;
       }
     }

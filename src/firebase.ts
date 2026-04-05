@@ -20,14 +20,16 @@ const auth = getAuth(app);
 const storage = getStorage(app);
 
 if (USE_EMULATOR) {
-  console.log("🛠️ Emulator Mode: Using project " + firebaseConfig.projectId + " at 127.0.0.1");
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099');
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
+  // Using 'localhost' instead of '127.0.0.1' to prevent origin mismatch in redirects
+  console.log("🛠️ Emulator Mode: Using project " + firebaseConfig.projectId + " at localhost");
+  console.log("🛠️ Auth Domain:", firebaseConfig.authDomain);
+  
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectAuthEmulator(auth, 'http://localhost:9099');
+  connectStorageEmulator(storage, 'localhost', 9199);
 }
 
 const facebookProvider = new FacebookAuthProvider();
 facebookProvider.addScope('email');
-facebookProvider.setCustomParameters({ 'display': 'popup' });
 
 export { db, auth, storage, facebookProvider };

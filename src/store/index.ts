@@ -2,15 +2,18 @@ import { createStore } from 'vuex';
 import type { ActionContext } from 'vuex';
 import type { Breeder, FirestoreMember } from '../types';
 import { db, auth, facebookProvider } from '../firebase';
+import router from '../router';
 import { 
   collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp 
 } from 'firebase/firestore';
 import { 
   onAuthStateChanged, 
-  signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signOut
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
+import { generateSlug } from '../composables/useBreederUtils';
 
 interface State {
   breeders: Breeder[];
@@ -19,10 +22,12 @@ interface State {
   userData: any | null; 
   activeClaims: string[]; // List of businessSlugs currently being claimed
   authReady: boolean;
+  toasts: { message: string; title?: string; variant: string }[];
 }
 
-const mapMemberToBreeder = (member: FirestoreMember): Breeder => {
+const mapMemberToBreeder = (member: FirestoreMember, id: string): Breeder => {
   return {
+    id,
     name: member.profile.businessName,
     location: member.profile.town,
     selling: member.offerings.description,
@@ -56,11 +61,20 @@ export default createStore({
     userData: null,
     activeClaims: [],
     authReady: false,
+    toasts: []
   } as State,
 
   mutations: {
     SET_BREEDERS(state: State, payload: Breeder[]) {
       state.breeders = payload;
+    },
+    UPDATE_BREEDER(state: State, updatedBreeder: Breeder) {
+      const index = state.breeders.findIndex(b => b.id === updatedBreeder.id);
+      if (index !== -1) {
+        state.breeders[index] = updatedBreeder;
+      } else {
+        state.breeders.push(updatedBreeder);
+      }
     },
     SET_LAST_FETCH(state: State, time: number) {
       state.lastFetch = time;
@@ -76,13 +90,57 @@ export default createStore({
     },
     SET_AUTH_READY(state: State, ready: boolean) {
       state.authReady = ready;
+    },
+    PUSH_TOAST(state: State, toast: State['toasts'][0]) {
+      state.toasts.push(toast);
+    },
+    CLEAR_TOASTS(state: State) {
+      state.toasts = [];
     }
   },
 
   actions: {
-    async initAuth({ commit, dispatch }: ActionContext<State, State>) {
-      return new Promise<void>((resolve) => {
+    async initAuth({ commit, dispatch, getters }: ActionContext<State, State>) {
+      console.log("Auth: Initializing...");
+      
+      const dirPromise = dispatch('fetchDirectory');
+
+      // 1. Handle redirect result FIRST
+      try {
+        console.log("Auth: Checking for redirect result...");
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("Auth: Redirect success, updating user...");
+          const user = result.user;
+          const facebookProfile = user.providerData.find(p => p.providerId === 'facebook.com');
+
+          await setDoc(doc(db, 'users', user.uid), {
+            displayName: user.displayName,
+            email: user.email,
+            photoURL: user.photoURL,
+            facebookUid: facebookProfile?.uid || null,
+            lastLogin: serverTimestamp()
+          }, { merge: true });
+          
+          // Explicitly fetch data for the redirect user immediately
+          await Promise.all([
+            dispatch('fetchUserData', user.uid),
+            dispatch('fetchActiveClaims', user.uid)
+          ]);
+        }
+      } catch (error: any) {
+        console.error("Auth: Redirect error detail:", error);
+        commit('PUSH_TOAST', {
+          title: 'Authentication Error',
+          message: error.message || 'Login failed',
+          variant: 'danger'
+        });
+      }
+
+      // 2. Setup observer and wait for the first settled state
+      await new Promise<void>((resolve) => {
         onAuthStateChanged(auth, async (user) => {
+          console.log("Auth: State change ->", user ? "User detected" : "No session");
           commit('SET_USER', user);
           if (user) {
             await Promise.all([
@@ -93,10 +151,21 @@ export default createStore({
             commit('SET_USER_DATA', null);
             commit('SET_ACTIVE_CLAIMS', []);
           }
-          commit('SET_AUTH_READY', true);
           resolve();
         });
       });
+
+      // 3. Final synchronization and navigation
+      await dirPromise;
+      
+      if (getters.isLoggedIn && getters.myBreeders.length > 0 && router.currentRoute.value.path === '/') {
+        const slug = generateSlug(getters.myBreeders[0].name);
+        console.log(`Auth: Auto-navigating owner to farm: ${slug}`);
+        router.push(`/directory/${slug}`);
+      }
+
+      commit('SET_AUTH_READY', true);
+      console.log("Auth: Ready.");
     },
 
     async fetchUserData({ commit }: ActionContext<State, State>, uid: string) {
@@ -121,29 +190,17 @@ export default createStore({
       }
     },
 
-    async loginWithFacebook({ commit, dispatch }: ActionContext<State, State>) {
+    async loginWithFacebook({ commit }: ActionContext<State, State>) {
       try {
-        const result = await signInWithPopup(auth, facebookProvider);
-        const user = result.user;
-        const facebookProfile = user.providerData.find(p => p.providerId === 'facebook.com');
-
-        const userRef = doc(db, 'users', user.uid);
-        await setDoc(userRef, {
-          displayName: user.displayName,
-          email: user.email,
-          photoURL: user.photoURL,
-          facebookUid: facebookProfile?.uid || null,
-          lastLogin: serverTimestamp()
-        }, { merge: true });
-
-        await Promise.all([
-          dispatch('fetchUserData', user.uid),
-          dispatch('fetchActiveClaims', user.uid)
-        ]);
-        commit('SET_USER', user);
+        await signInWithRedirect(auth, facebookProvider);
+        // this code never runs on success because of the redirect auth
       } catch (error: any) {
         console.error("Facebook Login Error:", error.message);
-        throw error;
+        commit('PUSH_TOAST', {
+          title: 'Authentication Error',
+          message: error.message || 'Failed to start login flow',
+          variant: 'danger'
+        });
       }
     },
 
@@ -164,16 +221,29 @@ export default createStore({
           orderBy("account.updatedAt", "desc")
         );
         const querySnapshot = await getDocs(q);
-        const members: FirestoreMember[] = [];
-        querySnapshot.forEach((doc) => {
-          members.push({ id: doc.id, ...doc.data() } as FirestoreMember);
-        });
-        const breeders = members.map(mapMemberToBreeder);
+        const breeders = querySnapshot.docs.map(doc => mapMemberToBreeder(doc.data() as FirestoreMember, doc.id));
         commit('SET_BREEDERS', breeders);
         commit('SET_LAST_FETCH', Date.now());
       } catch (err) {
         console.error('Firestore sync error:', err);
       }
+    },
+
+    async fetchBreeder({ commit }: ActionContext<State, State>, slug: string) {
+      try {
+        console.log(`Refreshing breeder [${slug}] from Firestore...`);
+        const docRef = doc(db, 'directory_members', slug);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const breeder = mapMemberToBreeder(docSnap.data() as FirestoreMember, docSnap.id);
+          commit('UPDATE_BREEDER', breeder);
+          return breeder;
+        }
+      } catch (err) {
+        console.error(`Error fetching breeder [${slug}]:`, err);
+      }
+      return null;
     }
   },
 
@@ -189,14 +259,10 @@ export default createStore({
         console.log("MyBreeders: No user logged in.");
         return [];
       }
-      console.log("MyBreeders: Checking for UID:", state.user.uid);
       const matched = state.breeders.filter(b => {
-        if (b.ownerUid) {
-          console.log(`Checking farm [${b.name}] with ownerUid [${b.ownerUid}]`);
-        }
         return b.ownerUid === state.user?.uid;
       });
-      console.log("MyBreeders: Found matches:", matched.length);
+      console.debug(`MyBreeders: user ${state.user.uid} owns farms`, matched.map(b => b.name));
       return matched;
     },
 

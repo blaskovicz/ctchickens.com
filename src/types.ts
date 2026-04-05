@@ -8,6 +8,7 @@ export interface Review {
   }
   
   export interface Breeder {
+    id: string;
     name: string;
     location: string;
     selling: string;
@@ -26,7 +27,6 @@ export interface Review {
   }
 
   export interface FirestoreMember {
-    id: string; 
     profile: {
       businessName: string;
       memberType: string;
