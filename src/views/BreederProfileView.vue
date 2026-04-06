@@ -139,7 +139,13 @@ const goBack = () => {
       <div class="profile-header p-4 text-white position-relative">
         <div class="profile-header-content position-relative z-1">
           <div class="d-flex flex-column flex-md-row align-items-center align-items-md-start gap-3 gap-md-4">
-            <img v-if="breeder.logo" :src="breeder.logo" class="rounded border border-3 border-white border-opacity-25 shadow-sm profile-logo mb-2 mb-md-0 bg-white" :alt="breeder.name + ' Logo'" referrerpolicy="no-referrer" />
+            <img 
+              :src="breeder.logo || '/hen.png'" 
+              class="rounded border border-3 border-white border-opacity-25 shadow-sm profile-logo mb-2 mb-md-0 bg-white" 
+              :class="{ 'grayscale': !breeder.logo }"
+              :alt="breeder.name + ' Logo'" 
+              referrerpolicy="no-referrer" 
+            />
             <div class="flex-grow-1 text-center text-md-start">
               <div class="d-flex flex-wrap justify-content-center justify-content-md-start align-items-center gap-2 mb-2">
                 <span class="badge bg-white text-primary uc-first px-3 py-1 small fw-bold shadow-sm border-0">
@@ -312,6 +318,11 @@ const goBack = () => {
   object-fit: contain;
   background-color: white;
   flex-shrink: 0;
+}
+
+.grayscale {
+  filter: grayscale(100%);
+  opacity: 0.7;
 }
 
 @media (min-width: 768px) {
