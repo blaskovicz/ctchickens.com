@@ -315,14 +315,14 @@
             Listings are provided by community members. Please contact breeders/suppliers directly to verify availability.
           </p>
           <p class="text-muted small text-center">
-            To update ratings, leave comments, or get listed, please email us at <a href="mailto:marketing@ctchickens.com">marketing@ctchickens.com</a>.
+            To update ratings or leave comments, please email us at <a href="mailto:marketing@ctchickens.com">marketing@ctchickens.com</a>.
+            To get listed, <router-link to="/get-listed">click here to start your listing</router-link>.
           </p>
-        </div>
-      </div>
-    </template>
-      
-  <style scoped>
-    .uc-first {
+          </div>
+          </div>
+          </template>
+
+          <style scoped>    .uc-first {
       text-transform: capitalize;
     }
     .breeds-row td {

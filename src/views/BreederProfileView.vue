@@ -187,20 +187,6 @@ const goBack = () => {
 
             <div class="d-flex align-right flex-wrap gap-2 mt-4">
               <ContactButton :link="breeder.contact_link" :show-label-on-mobile="true" />
-              
-              <!-- Messenger Button -->
-              <!-- <BButton 
-                v-if="breeder.facebookUid" 
-                :href="`https://m.me/${breeder.facebookUid}`" 
-                target="_blank" 
-                variant="outline-primary" 
-                size="sm"
-                class="d-inline-flex align-items-center gap-2 px-3 shadow-sm text-nowrap"
-              >
-                <i class="bi bi-messenger"></i>
-                <span>Chat on Messenger</span>
-              </BButton> -->
-
               <MoreInfoButton 
                 :link="breeder.info_link" 
                 :name="breeder.name" 

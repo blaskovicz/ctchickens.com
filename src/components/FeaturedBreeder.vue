@@ -161,17 +161,14 @@ const formatDate = (dateString: string) => {
           <div class="mb-3">
              <i class="bi bi-shop fs-2 text-muted opacity-50"></i>
           </div>
-          <h5 class="fw-bold">Are you a local breeder?</h5>
+          <h5 class="fw-bold">Are you a local breeder or supplier?</h5>
           <p class="small text-muted px-4">
             Get listed to show up in our directory of thousands of local keepers.
             Get verified to build trust with our community.
           </p>
-          <a href="mailto:marketing@ctchickens.com?subject=Breeder%20Directory%20Listing%20Application" class="btn btn-primary mt-2">
+          <router-link to="/get-listed" class="btn btn-primary mt-2 fw-bold shadow-sm">
             Apply to Get Listed
-          </a>
-          <div class="mt-3">
-            <small class="text-muted fst-italic">marketing@ctchickens.com</small>
-          </div>
+          </router-link>
         </div>
       </div>
     </div>

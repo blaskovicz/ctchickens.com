@@ -4,7 +4,7 @@ import type { Breeder, FirestoreMember } from '../types';
 import { db, auth, facebookProvider } from '../firebase';
 import router from '../router';
 import { 
-  collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp 
+  collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction 
 } from 'firebase/firestore';
 import { 
   onAuthStateChanged, 
@@ -17,6 +17,7 @@ import { generateSlug } from '../composables/useBreederUtils';
 
 interface State {
   breeders: Breeder[];
+  myDrafts: Breeder[]; // List of drafts owned by the current user
   lastFetch: number;
   user: User | null; 
   userData: any | null; 
@@ -32,17 +33,17 @@ const mapMemberToBreeder = (member: FirestoreMember, id: string): Breeder => {
     location: member.profile.town,
     selling: member.offerings.description,
     category: member.profile.memberType,
-    verified: member.account.isVerified,
-    founding_breeder: member.account.foundingMember, 
+    verified: member.account?.isVerified || false,
+    founding_breeder: member.account?.foundingMember || null, 
     contact_link: member.profile.contactEmail,
     info_link: member.profile.website,
-    updated: member.account.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    updated: member.account?.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
     featured: false, 
     reviews: [], 
     logo: member.media.logoUrl,
     images: member.media.galleryUrls,
-    ownerUid: member.account.ownerUid,
-    facebookUid: member.account.facebookUid
+    ownerUid: member.account?.ownerUid || (member as any).draft_owner_uid || null,
+    status: member.account?.status || 'draft'
   };
 };
 
@@ -56,6 +57,7 @@ const getWeekNumber = () => {
 export default createStore({
   state: {
     breeders: [],
+    myDrafts: [],
     lastFetch: 0,
     user: null,
     userData: null,
@@ -67,6 +69,12 @@ export default createStore({
   mutations: {
     SET_BREEDERS(state: State, payload: Breeder[]) {
       state.breeders = payload;
+    },
+    SET_MY_DRAFTS(state: State, payload: Breeder[]) {
+      state.myDrafts = payload;
+    },
+    REMOVE_DRAFT(state: State, slug: string) {
+      state.myDrafts = state.myDrafts.filter(d => d.id !== slug);
     },
     UPDATE_BREEDER(state: State, updatedBreeder: Breeder) {
       const index = state.breeders.findIndex(b => b.id === updatedBreeder.id);
@@ -104,14 +112,11 @@ export default createStore({
       console.log("Auth: Initializing...");
       const url = window.location.href;
       const hasRedirectParams = url.includes('__firebase_request_key') || url.includes('code=') || url.includes('state=');
-      console.log("Auth: URL State:", { url, hasRedirectParams });
       
       try {
         // 1. Handle redirect result FIRST
-        console.log("Auth: Checking for redirect result...");
         const result = await getRedirectResult(auth);
         if (result?.user) {
-          console.log("Auth: Redirect success for user:", result.user.uid);
           const user = result.user;
           const facebookProfile = user.providerData.find(p => p.providerId === 'facebook.com');
 
@@ -119,16 +124,14 @@ export default createStore({
             displayName: user.displayName,
             email: user.email,
             photoURL: user.photoURL,
-            facebookUid: facebookProfile?.uid || null,
             lastLogin: serverTimestamp()
           }, { merge: true });
           
           await Promise.all([
             dispatch('fetchUserData', user.uid),
-            dispatch('fetchActiveClaims', user.uid)
+            dispatch('fetchActiveClaims', user.uid),
+            dispatch('fetchMyDrafts', user.uid)
           ]);
-        } else {
-          console.log("Auth: No redirect result found.");
         }
       } catch (error: any) {
         console.error("Auth: Redirect error detail:", error);
@@ -139,25 +142,24 @@ export default createStore({
         });
       }
 
-      // 2. Setup observer and wait for the first settled state
+      // 2. Setup observer
       await new Promise<void>((resolve) => {
         let isResolved = false;
         const timeout = setTimeout(() => {
           if (!isResolved) {
-            console.warn("Auth: Observer timed out, forcing ready state.");
             isResolved = true;
             resolve();
           }
         }, 5000);
 
         onAuthStateChanged(auth, async (user) => {
-          console.log("Auth: State change ->", user ? "User detected" : "No session");
           commit('SET_USER', user);
           
           if (user) {
             await Promise.all([
               dispatch('fetchUserData', user.uid),
-              dispatch('fetchActiveClaims', user.uid)
+              dispatch('fetchActiveClaims', user.uid),
+              dispatch('fetchMyDrafts', user.uid)
             ]);
             if (!isResolved) {
               isResolved = true;
@@ -165,22 +167,16 @@ export default createStore({
               resolve();
             }
           } else if (!hasRedirectParams) {
-            // Only resolve "No session" immediately if we aren't expecting a redirect
             if (!isResolved) {
               isResolved = true;
               clearTimeout(timeout);
               resolve();
             }
-          } else {
-            console.log("Auth: Redirect suspected, waiting for session to settle...");
-            // If we have redirect params but user is still null, 
-            // the SDK might still be processing. We let the timeout or a 
-            // subsequent non-null user fire resolve.
           }
         });
       });
 
-      // 3. Final synchronization and navigation
+      // 3. Final synchronization
       try {
         await dispatch('fetchDirectory');
       } catch (e) {
@@ -188,13 +184,12 @@ export default createStore({
       }
       
       if (getters.isLoggedIn && getters.myBreeders.length > 0 && router.currentRoute.value.path === '/') {
-        const slug = generateSlug(getters.myBreeders[0].name);
-        console.log(`Auth: Auto-navigating owner to farm: ${slug}`);
-        router.push(`/directory/${slug}`);
+        const farm = getters.myBreeders[0];
+        const path = farm.status === 'draft' ? `/get-listed/${farm.id}` : `/directory/${farm.id}`;
+        router.push(path);
       }
 
       commit('SET_AUTH_READY', true);
-      console.log("Auth: Ready.");
     },
 
     async fetchUserData({ commit }: ActionContext<State, State>, uid: string) {
@@ -219,12 +214,21 @@ export default createStore({
       }
     },
 
+    async fetchMyDrafts({ commit }: ActionContext<State, State>, uid: string) {
+      try {
+        const q = query(collection(db, 'draft_profiles'), where("draft_owner_uid", "==", uid));
+        const snap = await getDocs(q);
+        const drafts = snap.docs.map(doc => mapMemberToBreeder(doc.data() as FirestoreMember, doc.id));
+        commit('SET_MY_DRAFTS', drafts);
+      } catch (e) {
+        console.error("Error fetching drafts:", e);
+      }
+    },
+
     async loginWithFacebook({ commit }: ActionContext<State, State>) {
       try {
         await signInWithRedirect(auth, facebookProvider);
-        // this code never runs on success because of the redirect auth
       } catch (error: any) {
-        console.error("Facebook Login Error:", error.message);
         commit('PUSH_TOAST', {
           title: 'Authentication Error',
           message: error.message || 'Failed to start login flow',
@@ -238,11 +242,11 @@ export default createStore({
       commit('SET_USER', null);
       commit('SET_USER_DATA', null);
       commit('SET_ACTIVE_CLAIMS', []);
+      commit('SET_MY_DRAFTS', []);
     },
 
     async fetchDirectory({ commit }: ActionContext<State, State>) {
       try {
-        console.log("Fetching directory from Firestore...");
         const membersRef = collection(db, 'directory_members');
         const q = query(
           membersRef, 
@@ -258,9 +262,13 @@ export default createStore({
       }
     },
 
-    async fetchBreeder({ commit }: ActionContext<State, State>, slug: string) {
+    async fetchBreeder({ commit, state, getters }: ActionContext<State, State>, slug: string) {
       try {
-        console.log(`Refreshing breeder [${slug}] from Firestore...`);
+        // 1. Check local directory first
+        const local = state.breeders.find(b => b.id === slug);
+        if (local) return local;
+
+        // 2. Try live Firestore
         const docRef = doc(db, 'directory_members', slug);
         const docSnap = await getDoc(docRef);
         
@@ -269,10 +277,79 @@ export default createStore({
           commit('UPDATE_BREEDER', breeder);
           return breeder;
         }
+
+        // 3. Try draft Firestore (Only if logged in)
+        if (state.user) {
+          const draftRef = doc(db, 'draft_profiles', slug);
+          const draftSnap = await getDoc(draftRef);
+          if (draftSnap.exists()) {
+            const draftData = draftSnap.data() as FirestoreMember;
+            const isOwner = (draftData as any).draft_owner_uid === state.user.uid;
+            if (isOwner || getters.isAdmin) {
+              return mapMemberToBreeder(draftData, draftSnap.id);
+            }
+          }
+        }
       } catch (err) {
         console.error(`Error fetching breeder [${slug}]:`, err);
       }
       return null;
+    },
+
+    async createDraftListing({ state, dispatch }: ActionContext<State, State>, payload: { businessName: string; town: string; memberType: string }) {
+      if (!state.user) {
+        throw new Error("Must be logged in to create a listing.");
+      }
+
+      const slug = generateSlug(payload.businessName);
+      if (!slug) throw new Error("Invalid business name.");
+
+      const liveDocRef = doc(db, 'directory_members', slug);
+      const draftDocRef = doc(db, 'draft_profiles', slug);
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const liveDoc = await transaction.get(liveDocRef);
+          if (liveDoc.exists()) {
+            throw new Error("A listing with this name already exists in the directory.");
+          }
+
+          const draftDoc = await transaction.get(draftDocRef);
+          if (draftDoc.exists()) {
+            throw new Error("A listing with this name is already pending approval.");
+          }
+
+          const draftPayload: any = {
+            profile: {
+              businessName: payload.businessName,
+              town: payload.town,
+              memberType: payload.memberType,
+              contactEmail: state.user!.email || '',
+              website: ''
+            },
+            offerings: {
+              description: '',
+              searchTags: []
+            },
+            media: {
+              logoUrl: null,
+              galleryUrls: []
+            },
+            draft_owner_uid: state.user!.uid,
+            updatedAt: serverTimestamp()
+          };
+
+          transaction.set(draftDocRef, draftPayload);
+        });
+        
+        await dispatch('fetchMyDrafts', state.user.uid);
+        return slug;
+      } catch (e: any) {
+        if (e.message.includes("already exists") || e.message.includes("pending approval")) {
+          throw e;
+        }
+        throw new Error("Failed to create listing due to a system error. Please try again.");
+      }
     }
   },
 
@@ -284,15 +361,16 @@ export default createStore({
     authReady: (state: State) => state.authReady,
     
     myBreeders: (state: State) => {
-      if (!state.user) {
-        console.log("MyBreeders: No user logged in.");
-        return [];
-      }
-      const matched = state.breeders.filter(b => {
-        return b.ownerUid === state.user?.uid;
-      });
-      console.debug(`MyBreeders: user ${state.user.uid} owns farms`, matched.map(b => b.name));
-      return matched;
+      if (!state.user) return [];
+      
+      // Combine live and drafts owned by me
+      const live = state.breeders.filter(b => b.ownerUid === state.user?.uid);
+      const drafts = state.myDrafts;
+      
+      const seenIds = new Set(live.map(l => l.id));
+      const filteredDrafts = drafts.filter(d => !seenIds.has(d.id));
+      
+      return [...live, ...filteredDrafts];
     },
 
     suggestedClaim: (state: State) => {

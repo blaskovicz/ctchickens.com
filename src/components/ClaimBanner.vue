@@ -40,7 +40,6 @@ const submitClaim = async () => {
       requesterEmail: user.value.email,
       requesterName: user.value.displayName,
       requesterPhotoURL: user.value.photoURL,
-      requesterFacebookUid: userData.value?.facebookUid || null,
       status: 'pending',
       createdAt: serverTimestamp()
     });

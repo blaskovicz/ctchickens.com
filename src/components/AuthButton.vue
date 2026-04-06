@@ -2,11 +2,9 @@
 import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
-import { useBreederUtils } from '../composables/useBreederUtils';
 
 const store = useStore();
 const router = useRouter();
-const { generateSlug } = useBreederUtils();
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
 const user = computed(() => store.getters.currentUser);
@@ -73,12 +71,19 @@ const GROUP_URL = "https://www.facebook.com/groups/1465813350383274";
           <hr class="dropdown-divider">
           <h6 class="dropdown-header small text-muted">MY FARMS</h6>
         </li>
-        <li v-for="farm in myFarms" :key="farm.name">
-          <router-link :to="`/directory/${generateSlug(farm.name)}`" class="dropdown-item d-flex align-items-center gap-2">
-            <i class="bi bi-shop small"></i> {{ farm.name }}
+        <li v-for="farm in myFarms" :key="farm.id">
+          <router-link
+            :to="farm.status === 'draft' ? `/get-listed/${farm.id}` : `/directory/${farm.id}`"
+            class="dropdown-item d-flex align-items-center justify-content-between gap-2"
+          >
+            <span class="text-truncate">
+              <i class="bi bi-shop small me-1"></i> {{ farm.name }}
+            </span>
+            <span v-if="farm.status === 'draft'" class="badge bg-warning-subtle text-warning border border-warning-subtle small" style="font-size: 0.65rem;">
+              PENDING
+            </span>
           </router-link>
         </li>
-
         <li><hr class="dropdown-divider"></li>
         <li>
           <a class="dropdown-item text-danger d-flex align-items-center gap-2" href="#" @click.prevent="logout">

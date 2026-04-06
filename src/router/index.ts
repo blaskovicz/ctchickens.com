@@ -30,6 +30,11 @@ const router = createRouter({
       component: HomeView
     },
     {
+      path: '/get-listed/:slug?',
+      name: 'get-listed',
+      component: () => import('../views/BreederSignupView.vue')
+    },
+    {
       path: '/legal',
       name: 'legal',
       component: () => import('../views/LegalView.vue')
