@@ -19,6 +19,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid; 
     }
 
+    function isValidDraftSchema() {
+      return request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
+    }
+
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
@@ -43,23 +47,46 @@ service cloud.firestore {
     }
 
     match /draft_profiles/{draftId} {
-      // Allow read if it doesn't exist (returns 404 cleanly)
+      // Allow anyone to "check" for a draft (returns 404 cleanly if null, 403 if exists but not owner)
       allow read: if resource == null;
 
-      // Allow read/delete if owner or admin
-      allow read, delete: if isSignedIn() && (
-      isUserAdmin(request.auth.uid) || 
-      (resource != null && resource.data.get('draft_owner_uid', resource.data.get(['account', 'ownerUid'], '')) == request.auth.uid)
+      // Allow read if owner or admin
+      allow read: if isSignedIn() && (
+        isUserAdmin(request.auth.uid) || 
+        (resource != null && (resource.data.get('draft_owner_uid', '') == request.auth.uid || resource.data.get(['account', 'ownerUid'], '') == request.auth.uid))
       );
 
-      // Allow create/update if signed in (ownerUid handled by schema/payload)
-      allow create, update: if isSignedIn() && (
+      // Allow creation of a draft (Initial Signup or Change Request)
+      allow create: if isSignedIn() && (
         isUserAdmin(request.auth.uid) || 
         (
+          isValidDraftSchema() &&
           request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
-          !('account' in request.resource.data) &&
-          request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt'])
+          // New signup (!exists) OR Owner of the live listing (exists)
+          (
+            !exists(/databases/$(database)/documents/directory_members/$(draftId)) ||
+            get(/databases/$(database)/documents/directory_members/$(draftId)).data.account.ownerUid == request.auth.uid
+          )
         )
+      );
+
+      // Enforce the Wizard Lock: Owners can only update if the listing is ALREADY LIVE (Change Request mode)
+      // Onboarding drafts (not yet live) are locked until admin review.
+      allow update: if isSignedIn() && (
+        isUserAdmin(request.auth.uid) || 
+        (
+          isValidDraftSchema() &&
+          exists(/databases/$(database)/documents/directory_members/$(draftId)) &&
+          resource.data.get('draft_owner_uid', '') == request.auth.uid &&
+          request.resource.data.get('draft_owner_uid', '') == request.auth.uid
+        )
+      );
+
+      // Admins can delete drafts, and owners can discard their own drafts
+      allow delete: if isSignedIn() && (
+        isUserAdmin(request.auth.uid) || 
+        resource.data.get('draft_owner_uid', '') == request.auth.uid || 
+        resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
       );
     }
 
@@ -74,7 +101,7 @@ service cloud.firestore {
         && request.resource.data.businessSlug == requestId
         && request.resource.data.createdAt == request.time
         && get(/databases/(default)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
-        && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'requesterFacebookUid', 'status', 'businessName', 'businessSlug', 'createdAt']);
+        && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'status', 'businessName', 'businessSlug', 'createdAt']);
       
       allow read: if resource == null || 
       (isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid));

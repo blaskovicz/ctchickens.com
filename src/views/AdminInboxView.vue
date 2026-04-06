@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { 
   useToast, 
-  BButton, BCard, BListGroup, BListGroupItem, BModal, BSpinner 
+  BButton, BCard, BListGroup, BListGroupItem, BModal, BSpinner, BBadge
 } from 'bootstrap-vue-next';
 
 const store = useStore();
@@ -17,6 +17,7 @@ const { create } = useToast();
 
 const claims = ref<any[]>([]);
 const drafts = ref<any[]>([]);
+const liveSlugs = ref<Set<string>>(new Set()); // Track which drafts are already live
 const userProfiles = ref<Record<string, any>>({});
 const isLoading = ref(true);
 
@@ -34,6 +35,10 @@ const fetchData = async () => {
 
     const draftSnap = await getDocs(collection(db, 'draft_profiles'));
     drafts.value = draftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Check which drafts exist in the live directory
+    const directorySnap = await getDocs(collection(db, 'directory_members'));
+    liveSlugs.value = new Set(directorySnap.docs.map(d => d.id));
 
     // Fetch user profiles for all requesters/owners
     const uids = new Set([
@@ -82,7 +87,6 @@ const handleApprove = async () => {
     const memberRef = doc(db, 'directory_members', selectedItem.value.businessSlug);
     await updateDoc(memberRef, {
       'account.ownerUid': selectedItem.value.requesterUid,
-      'account.facebookUid': selectedItem.value.requesterFacebookUid || null,
       'account.updatedAt': serverTimestamp()
     });
 
@@ -155,9 +159,6 @@ const handleRejectClaim = async (id: string) => {
                       <p class="mb-0 small text-muted">By: <strong>{{ claim.requesterName }}</strong> on {{ claim.createdAt?.toDate()?.toLocaleDateString() }}</p>
                       <div class="d-flex align-items-center gap-2 mt-1">
                         <code class="small text-primary">{{ claim.requesterEmail }}</code>
-                        <a v-if="claim.requesterFacebookUid" :href="`https://facebook.com/${claim.requesterFacebookUid}`" target="_blank" class="badge bg-light text-primary border text-decoration-none">
-                          <i class="bi bi-facebook me-1"></i>FB Profile
-                        </a>
                       </div>
                     </div>
                   </div>
@@ -187,14 +188,22 @@ const handleRejectClaim = async (id: string) => {
               </BListGroupItem>
               <BListGroupItem v-for="draft in drafts" :key="draft.id" class="p-3">
                 <div class="d-flex justify-content-between align-items-start">
-                  <div>
-                    <h6 class="mb-1 fw-bold">{{ draft.profile?.businessName || draft.id }}</h6>
-                    <p class="mb-0 small text-muted">Updated: {{ (draft.account?.updatedAt || draft.updatedAt)?.toDate()?.toLocaleDateString() }}</p>
-                    <div v-if="(draft.account?.ownerUid || draft.draft_owner_uid) && userProfiles[draft.account?.ownerUid || draft.draft_owner_uid]" class="mt-1">
-                      <a v-if="userProfiles[draft.account?.ownerUid || draft.draft_owner_uid].facebookUid" :href="`https://facebook.com/${userProfiles[draft.account?.ownerUid || draft.draft_owner_uid].facebookUid}`" target="_blank" class="badge bg-light text-primary border text-decoration-none small">
-                        <i class="bi bi-facebook me-1"></i>Owner Profile
-                      </a>
+                  <div class="d-flex flex-column gap-1">
+                    <div class="d-flex align-items-center gap-2">
+                      <h6 class="mb-0 fw-bold">{{ draft.profile?.businessName || draft.id }}</h6>
+                      <BBadge v-if="!liveSlugs.has(draft.id)" variant="success" pill style="font-size: 0.65rem;">NEW LISTING</BBadge>
+                      <BBadge v-else variant="info" pill style="font-size: 0.65rem;">UPDATE</BBadge>
                     </div>
+                    
+                    <p class="mb-0 small text-muted">
+                      Owner: 
+                      <strong v-if="userProfiles[draft.account?.ownerUid || draft.draft_owner_uid]">
+                        {{ userProfiles[draft.account?.ownerUid || draft.draft_owner_uid].displayName }}
+                      </strong>
+                      <span v-else class="fst-italic">Unknown User</span>
+                      <span class="mx-1">•</span>
+                      {{ (draft.account?.updatedAt || draft.updatedAt)?.toDate()?.toLocaleDateString() }}
+                    </p>
                   </div>
                   <div class="d-flex gap-2">
                     <BButton :to="`/directory/${draft.id}/edit`" variant="outline-primary" size="sm">Review</BButton>

@@ -25,7 +25,7 @@ const messages = ref<BannerAd[]>([
   {
     id: 2,
     text: "Are you a local breeder or supplier? Get verified and listed today.",
-    link: "mailto:marketing@ctchickens.com",
+    link: "/get-listed",
     linkText: "Get Listed",
     icon: "bi-patch-check-fill",
     isExternal: false
@@ -107,13 +107,22 @@ onUnmounted(() => {
           
           <span class="fw-bold me-2 message-text">{{ currentMessage.text }}</span>
           
-          <a 
-            :href="currentMessage.link" 
-            :target="currentMessage.isExternal ? '_blank' : '_self'"
+          <router-link 
+            v-if="!currentMessage.isExternal"
+            :to="currentMessage.link"
             class="badge bg-dark text-decoration-none ms-1 px-3 py-2 rounded-pill shadow-sm"
           >
             {{ currentMessage.linkText }}
-            <i v-if="currentMessage.isExternal" class="bi bi-box-arrow-up-right ms-1" style="font-size: 0.75em;"></i>
+          </router-link>
+          
+          <a 
+            v-else
+            :href="currentMessage.link" 
+            target="_blank"
+            class="badge bg-dark text-decoration-none ms-1 px-3 py-2 rounded-pill shadow-sm"
+          >
+            {{ currentMessage.linkText }}
+            <i class="bi bi-box-arrow-up-right ms-1" style="font-size: 0.75em;"></i>
           </a>
         </div>
       </Transition>

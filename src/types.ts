@@ -12,9 +12,9 @@ export interface Review {
     name: string;
     location: string;
     selling: string;
-    category: string; 
+    category: string;
     verified: boolean;
-    founding_breeder?: number | null; 
+    founding_breeder?: number | null;
     contact_link: string | null;
     info_link: string | null;
     updated: string;
@@ -23,9 +23,8 @@ export interface Review {
     logo?: string | null;
     images?: string[];
     ownerUid?: string | null;
-    facebookUid?: string | null;
+    status?: 'published' | 'draft';
   }
-
   export interface FirestoreMember {
     profile: {
       businessName: string;
@@ -44,7 +43,6 @@ export interface Review {
     };
     account: {
       ownerUid: string | null;
-      facebookUid: string | null;
       status: 'published' | 'draft';
       isVerified: boolean;
       foundingMember: number | null;
