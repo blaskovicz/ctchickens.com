@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
@@ -68,24 +68,31 @@ const isOwner = computed(() => {
   return isAdmin.value || breeder.value.ownerUid === user.value.uid;
 });
 
+// Check for pending draft in Firestore
+const checkDraftStatus = async () => {
+  hasPendingDraft.value = false;
+  const slug = route.params.slug as string;
+  
+  if (user.value && slug) {
+    try {
+      const draftRef = doc(db, 'draft_profiles', slug);
+      const draftSnap = await getDoc(draftRef);
+      hasPendingDraft.value = draftSnap.exists();
+    } catch (err) {
+      console.warn("Draft check failed:", err);
+    }
+  }
+};
+
+// Re-check draft status whenever the slug or user session changes
+watch([() => route.params.slug, user], () => {
+  checkDraftStatus();
+}, { immediate: true });
+
 // Since the store fetches asynchronously, we need to ensure it's fetched.
 onMounted(async () => {
   if (store.getters.allBreeders.length === 0) {
     await store.dispatch('fetchDirectory');
-  }
-
-  // Check for pending draft if user has access
-  const slug = route.params.slug as string;
-  if (user.value) {
-    try {
-      const draftRef = doc(db, 'draft_profiles', slug);
-      const draftSnap = await getDoc(draftRef);
-      if (draftSnap.exists()) {
-        hasPendingDraft.value = true;
-      }
-    } catch (err) {
-      console.warn("Draft check failed:", err);
-    }
   }
 });
 
