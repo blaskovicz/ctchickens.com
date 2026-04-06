@@ -3,7 +3,14 @@
  */
 import fs from 'fs';
 
-const LOCAL_PROJECT_ID = "demo-ct-chickens";
+// load from .firebaserc
+const firebaserc = JSON.parse(fs.readFileSync('.firebaserc', 'utf8'));
+
+const LOCAL_PROJECT_ID = firebaserc.projects.default;
+if (!LOCAL_PROJECT_ID) {  
+  throw new Error("no project id specified in .firebaserc")
+}
+console.log(`🌱 Seeding ${LOCAL_PROJECT_ID}...`);
 const COLLECTION = "directory_members";
 const INPUT_FILE = "production-backup.json";
 
