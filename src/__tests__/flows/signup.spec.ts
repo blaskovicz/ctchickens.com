@@ -130,6 +130,8 @@ describe('Self-Service Signup Flow', () => {
     // Verify redirect
     expect(router.currentRoute.value.path).toBe('/get-listed/flow-test-farm-two-unique');
     
+    await new Promise(r => setTimeout(r, 500)); // Give Firestore transaction time
+    await flushPromises();
     expect(wrapper.text()).toContain('Listing Submitted!');
     expect(wrapper.text()).toContain('Flow Test Farm Two Unique');
   });
