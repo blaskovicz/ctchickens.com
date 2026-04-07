@@ -11,8 +11,8 @@ service cloud.firestore {
 
     // Pass UID explicitly to avoid interpolation crashes on null auth
     function isUserAdmin(uid) {
-      return uid != null && exists(/databases/(default)/documents/users/$(uid)) && 
-      get(/databases/(default)/documents/users/$(uid)).data.get('isAdmin', false) == true;
+      let userDoc = get(/databases/(default)/documents/users/$(uid));
+      return uid != null && userDoc != null && userDoc.data.get('isAdmin', false) == true;
     }
 
     function isOwner(uid) { 
@@ -26,8 +26,19 @@ service cloud.firestore {
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || (isSignedIn() && isUserAdmin(request.auth.uid));
-      allow write: if isOwner(userId) || (isSignedIn() && isUserAdmin(request.auth.uid));
+      allow read: if isOwner(userId) || isUserAdmin(request.auth.uid);
+
+      // Admins can do anything
+      allow write: if isUserAdmin(request.auth.uid);
+
+      // Users can only create their own document with specific fields
+      allow create: if isOwner(userId) && 
+      request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
+
+      // Users can only update specific fields on their own document
+      allow update: if isOwner(userId) && 
+      request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);      
     }
 
     match /directory_members/{memberId} {
@@ -35,10 +46,10 @@ service cloud.firestore {
       allow read: if resource == null || 
       resource.data.account.status == "published" || 
       (isSignedIn() && isUserAdmin(request.auth.uid));
-      
+
       // Allow write by admins, but enforce schema to prevent accidental pollution
       allow write: if isSignedIn() && isUserAdmin(request.auth.uid) &&
-        request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
+      request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
     }
 
     match /draft_profile_history/{historyId} {
@@ -48,45 +59,45 @@ service cloud.firestore {
 
     match /draft_profiles/{draftId} {
       // Allow anyone to "check" for a draft (returns 404 cleanly if null, 403 if exists but not owner)
-      allow read: if resource == null;
+      allow read: if isSignedIn() && resource == null;
 
       // Allow read if owner or admin
       allow read: if isSignedIn() && (
-        isUserAdmin(request.auth.uid) || 
-        (resource != null && (resource.data.get('draft_owner_uid', '') == request.auth.uid || resource.data.get(['account', 'ownerUid'], '') == request.auth.uid))
+      isUserAdmin(request.auth.uid) || 
+      (resource != null && (resource.data.get('draft_owner_uid', '') == request.auth.uid || resource.data.get(['account', 'ownerUid'], '') == request.auth.uid))
       );
 
       // Allow creation of a draft (Initial Signup or Change Request)
       allow create: if isSignedIn() && (
-        isUserAdmin(request.auth.uid) || 
-        (
-          isValidDraftSchema() &&
-          request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
-          // New signup (!exists) OR Owner of the live listing (exists)
-          (
-            !exists(/databases/$(database)/documents/directory_members/$(draftId)) ||
-            get(/databases/$(database)/documents/directory_members/$(draftId)).data.account.ownerUid == request.auth.uid
-          )
-        )
+      isUserAdmin(request.auth.uid) || 
+      (
+      isValidDraftSchema() &&
+      request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
+      // New signup (!exists) OR Owner of the live listing (exists)
+      (
+      !exists(/databases/$(database)/documents/directory_members/$(draftId)) ||
+      get(/databases/$(database)/documents/directory_members/$(draftId)).data.account.ownerUid == request.auth.uid
+      )
+      )
       );
 
       // Enforce the Wizard Lock: Owners can only update if the listing is ALREADY LIVE (Change Request mode)
       // Onboarding drafts (not yet live) are locked until admin review.
       allow update: if isSignedIn() && (
-        isUserAdmin(request.auth.uid) || 
-        (
-          isValidDraftSchema() &&
-          exists(/databases/$(database)/documents/directory_members/$(draftId)) &&
-          resource.data.get('draft_owner_uid', '') == request.auth.uid &&
-          request.resource.data.get('draft_owner_uid', '') == request.auth.uid
-        )
+      isUserAdmin(request.auth.uid) || 
+      (
+      isValidDraftSchema() &&
+      exists(/databases/$(database)/documents/directory_members/$(draftId)) &&
+      resource.data.get('draft_owner_uid', '') == request.auth.uid &&
+      request.resource.data.get('draft_owner_uid', '') == request.auth.uid
+      )
       );
 
       // Admins can delete drafts, and owners can discard their own drafts
       allow delete: if isSignedIn() && (
-        isUserAdmin(request.auth.uid) || 
-        resource.data.get('draft_owner_uid', '') == request.auth.uid || 
-        resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
+      isUserAdmin(request.auth.uid) || 
+      resource.data.get('draft_owner_uid', '') == request.auth.uid || 
+      resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
       );
     }
 
@@ -102,12 +113,12 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && get(/databases/(default)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
         && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'status', 'businessName', 'businessSlug', 'createdAt']);
-      
+
       allow read: if resource == null || 
       (isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid));
-      
+
       allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || (resource != null && resource.data.requesterUid == request.auth.uid));
-      
+
       allow update: if isSignedIn() && isUserAdmin(request.auth.uid);
     }
 
