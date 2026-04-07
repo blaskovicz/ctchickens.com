@@ -12,7 +12,6 @@ const { generateSlug } = useBreederUtils();
 
 const suggested = computed(() => store.getters.suggestedClaim);
 const user = computed(() => store.getters.currentUser);
-const userData = computed(() => store.state.userData);
 const activeClaims = computed(() => store.state.activeClaims);
 
 const isSubmitting = ref(false);

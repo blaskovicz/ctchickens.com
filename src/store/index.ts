@@ -118,7 +118,6 @@ export default createStore({
         const result = await getRedirectResult(auth);
         if (result?.user) {
           const user = result.user;
-          const facebookProfile = user.providerData.find(p => p.providerId === 'facebook.com');
 
           await setDoc(doc(db, 'users', user.uid), {
             displayName: user.displayName,
