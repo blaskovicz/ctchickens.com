@@ -301,7 +301,7 @@ watch(user, (newVal) => {
                     >
                       <i class="bi bi-flag"></i>
                     </button>
-                    <i v-else-if="msg.flaggedByUid" class="bi bi-flag-fill text-danger ms-2" title="Flagged"></i>
+                    <i v-else-if="msg.flaggedByUid && msg.flaggedByUid === user?.uid" class="bi bi-flag-fill text-danger ms-2" title="Flagged by you"></i>
                   </div>
                 </div>
               </div>

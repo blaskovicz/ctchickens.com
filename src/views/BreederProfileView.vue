@@ -54,18 +54,18 @@ const breeder = computed(() => {
     ownerUid: found.ownerUid
   });
 
-  // PUBLIC SAFETY: Only allow viewing if verified OR if the current user is an admin/owner
-  if (!verified && !admin && !owner) {
-    console.warn(`Access Denied: Non-verified profile [${slug}] hidden from public.`);
-    return null;
-  }
-  
+  // No longer blocking unverified profiles from public view.
   return found;
+});
+
+const isRealOwner = computed(() => {
+  if (!user.value || !breeder.value) return false;
+  return breeder.value.ownerUid === user.value.uid;
 });
 
 const isOwner = computed(() => {
   if (!user.value || !breeder.value) return false;
-  return isAdmin.value || breeder.value.ownerUid === user.value.uid;
+  return isAdmin.value || isRealOwner.value;
 });
 
 // Check for pending draft in Firestore
@@ -186,12 +186,22 @@ const goBack = () => {
 
       <div class="card-body p-4 bg-white">
         
-        <!-- Private Profile Notice -->
-        <div v-if="!isVerified(breeder.verified)" class="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-3 mb-4 py-2">
-          <i class="bi bi-shield-lock-fill fs-3"></i>
+        <!-- Verification Perks Banner (Visible only to unverified owner) -->
+        <div v-if="isRealOwner && !isVerified(breeder.verified)" class="alert alert-info border-0 shadow-sm d-flex align-items-center gap-3 mb-4 py-3">
+          <i class="bi bi-patch-check-fill fs-2 text-primary"></i>
           <div>
-            <h6 class="alert-heading fw-bold mb-0">Private Profile</h6>
-            <p class="mb-0 small">This profile is not yet public. Only verified members have a public permalink. <strong>Please contact an admin to get verified.</strong></p>
+            <h6 class="alert-heading fw-bold mb-1 text-primary">Unlock Your Professional Profile</h6>
+            <p class="mb-0 small text-dark">
+              Your profile is currently visible, but restricted. Once verified, you'll unlock:
+              <span class="d-block mt-1">
+                <i class="bi bi-check2-circle me-1"></i> Public Photo Gallery & Trust Badges
+                <i class="bi bi-check2-circle me-1 ms-2"></i> Direct Website & Email links
+                <i class="bi bi-check2-circle me-1 ms-2"></i> Featured Listing status
+              </span>
+              <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-primary text-decoration-none d-inline-block mt-2">
+                Complete your profile to get started &rarr;
+              </router-link>
+            </p>
           </div>
         </div>
 
@@ -209,13 +219,23 @@ const goBack = () => {
             </div>
 
             <div class="d-flex align-right flex-wrap gap-2 mt-3">
-              <ContactButton :link="breeder.contact_link" :breeder="breeder" :show-label-on-mobile="true" />
-              <MoreInfoButton 
-                :link="breeder.info_link" 
-                :name="breeder.name" 
-                :verified="breeder.verified" 
-                :show-label-on-mobile="true"
+              <!-- Always show Secure Message -->
+              <ContactButton 
+                :link="breeder.contact_link" 
+                :breeder="breeder" 
+                :show-label-on-mobile="true" 
+                :force-secure-only="false"
               />
+              
+              <!-- Only show external contact/info if verified -->
+              <template v-if="isVerified(breeder.verified)">
+                <MoreInfoButton 
+                  :link="breeder.info_link" 
+                  :name="breeder.name" 
+                  :verified="breeder.verified" 
+                  :show-label-on-mobile="true"
+                />
+              </template>
             </div>
           </div>
           
