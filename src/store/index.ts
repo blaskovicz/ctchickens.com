@@ -24,6 +24,7 @@ interface State {
   activeClaims: string[]; // List of businessSlugs currently being claimed
   authReady: boolean;
   toasts: { message: string; title?: string; variant: string }[];
+  showInquiryModal: { show: boolean; breeder?: Breeder };
 }
 
 const mapMemberToBreeder = (member: FirestoreMember, id: string): Breeder => {
@@ -63,7 +64,8 @@ export default createStore({
     userData: null,
     activeClaims: [],
     authReady: false,
-    toasts: []
+    toasts: [],
+    showInquiryModal: { show: false }
   } as State,
 
   mutations: {
@@ -104,10 +106,16 @@ export default createStore({
     },
     CLEAR_TOASTS(state: State) {
       state.toasts = [];
+    },
+    TOGGLE_INQUIRY_MODAL(state: State, payload: { show: boolean; breeder?: Breeder }) {
+      state.showInquiryModal = payload;
     }
   },
 
   actions: {
+    toggleInquiryModal({ commit }: ActionContext<State, State>, payload: { show: boolean; breeder?: Breeder }) {
+      commit('TOGGLE_INQUIRY_MODAL', payload);
+    },
     async initAuth({ commit, dispatch, getters }: ActionContext<State, State>) {
       console.log("Auth: Initializing...");
       const url = window.location.href;

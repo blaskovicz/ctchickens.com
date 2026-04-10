@@ -6,7 +6,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 
-const PROJECT_ID = () => import.meta.env.VITE_FIREBASE_PROJECT_ID;
+const PROJECT_ID = () => import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
 
 /** 
  * Clears Firestore data in the emulator via the REST API.
@@ -225,11 +225,94 @@ export async function seedDraftProfile(slug: string, data: any) {
     const err = await response.text();
     throw new Error(`Failed to seed draft profile: ${err}`);
   }
-}
+  }
 
-/**
- * Logs out the current user.
- */
+  /**
+  * Seeds an inquiry thread via REST API.
+  */
+  export async function seedInquiryThread(threadId: string, data: any) {
+  const projectId = PROJECT_ID();
+  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/inquiry_threads/${threadId}`;
+
+  const payload = {
+    fields: {
+      participants: { arrayValue: { values: data.participants.map((p: string) => ({ stringValue: p })) }},
+      userUid: { stringValue: data.userUid },
+      breederSlug: { stringValue: data.breederSlug },
+      breederName: { stringValue: data.breederName },
+      lastMessage: { stringValue: data.lastMessage || '' },
+      updatedAt: { timestampValue: data.updatedAt || new Date().toISOString() },
+      unreadCount: { mapValue: { fields: Object.fromEntries(
+        Object.entries(data.unreadCount || {}).map(([k, v]) => [k, { integerValue: v }])
+      )}}
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) throw new Error(`Failed to seed inquiry thread: ${await response.text()}`);
+  }
+
+  /**
+  * Seeds an inquiry message via REST API.
+  */
+  export async function seedInquiryMessage(threadId: string, messageId: string, data: any) {
+  const projectId = PROJECT_ID();
+  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/inquiry_threads/${threadId}/messages/${messageId}`;
+
+  const payload = {
+    fields: {
+      senderUid: { stringValue: data.senderUid },
+      text: { stringValue: data.text },
+      createdAt: { timestampValue: data.createdAt || new Date().toISOString() },
+      read: { booleanValue: data.read ?? false },
+      flaggedByUid: data.flaggedByUid ? { stringValue: data.flaggedByUid } : { nullValue: null },
+      adminReviewStatus: data.adminReviewStatus ? { stringValue: data.adminReviewStatus } : { nullValue: null }
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) throw new Error(`Failed to seed inquiry message: ${await response.text()}`);
+  }
+
+  /**
+  * Blocks a user via REST API (updates their user doc).
+  */
+  export async function blockUser(uid: string, blocked: boolean = true) {
+  const projectId = PROJECT_ID();
+  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`;
+
+  // Use mask to only update blockedFromChat
+  const updateUrl = `${url}?updateMask.fieldPaths=blockedFromChat`;
+
+  const payload = {
+    fields: {
+      blockedFromChat: { booleanValue: blocked }
+    }
+  };
+
+  const response = await fetch(updateUrl, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) throw new Error(`Failed to block user: ${await response.text()}`);
+  }
+
+  /**
+  * Logs out the current user.
+  */
+
 export async function logout() {
   await signOut(auth);
 }
