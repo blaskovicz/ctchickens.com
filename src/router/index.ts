@@ -50,6 +50,11 @@ const router = createRouter({
       component: () => import('../views/BreederEditView.vue')
     },
     {
+      path: '/inbox/:threadId?',
+      name: 'inbox',
+      component: () => import('../views/InboxView.vue')
+    },
+    {
       path: '/admin/inbox',
       name: 'admin-inbox',
       component: () => import('../views/AdminInboxView.vue')

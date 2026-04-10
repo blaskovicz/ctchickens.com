@@ -57,3 +57,26 @@ export interface Review {
   export interface ResponseError {
     error: string;
   }
+
+  export interface InquiryThread {
+    id: string; // generated: `${userUid}_${breederSlug}`
+    participants: string[]; // [userUid, breederOwnerUid]
+    userUid: string;
+    userName?: string;
+    breederSlug: string;
+    breederName: string;
+    lastMessage: string;
+    updatedAt: any; // ServerTimestamp
+    unreadCount: Record<string, number>; // { [uid]: count }
+  }
+
+  export interface InquiryMessage {
+    id?: string;
+    senderUid: string;
+    text: string;
+    createdAt: any; // ServerTimestamp
+    read: boolean;
+    // Safety & Moderation
+    flaggedByUid?: string | null; 
+    adminReviewStatus?: 'pending' | 'hidden' | 'approved';
+  }

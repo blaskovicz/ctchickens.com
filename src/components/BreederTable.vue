@@ -252,7 +252,7 @@
                     <td class="d-none d-md-table-cell">{{ breeder.location }}</td>
                     <td class="text-md-end align-middle">
                       <div class="d-flex flex-row justify-content-end gap-2">
-                        <ContactButton :link="breeder.contact_link" />
+                        <ContactButton :link="breeder.contact_link" :breeder="breeder" />
                         <MoreInfoButton 
                           :link="breeder.info_link" 
                           :name="breeder.name" 

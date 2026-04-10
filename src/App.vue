@@ -3,15 +3,40 @@
   import 'bootstrap-icons/font/bootstrap-icons.css';
   import 'bootstrap/dist/js/bootstrap.bundle.min.js';
   import { useStore } from 'vuex';
-  import { onMounted, watch } from 'vue';
-  import { BApp, BOrchestrator, useToast } from 'bootstrap-vue-next';
+  import { onMounted, watch, ref, computed, onUnmounted } from 'vue';
+  import { BApp, BOrchestrator, useToast, BBadge } from 'bootstrap-vue-next';
   import AuthButton from './components/AuthButton.vue';
   import ClaimBanner from './components/ClaimBanner.vue';
+  import InquiryModal from './components/InquiryModal.vue';
+  import { db } from './firebase';
+  import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
   const store = useStore();
   const { create } = useToast();
   const gitCommitHash = import.meta.env.VITE_GIT_COMMIT_HASH || '';
+
+  const user = computed(() => store.state.user);
+  const totalUnread = ref(0);
+  let unreadUnsubscribe: (() => void) | null = null;
   
+  const setupUnreadListener = (uid: string) => {
+    if (unreadUnsubscribe) unreadUnsubscribe();
+    
+    const q = query(
+      collection(db, 'inquiry_threads'),
+      where('participants', 'array-contains', uid)
+    );
+
+    unreadUnsubscribe = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        count += data.unreadCount?.[uid] || 0;
+      });
+      totalUnread.value = count;
+    });
+  };
+
   // Watch for global toasts from the store
   watch(() => store.state.toasts, (newToasts) => {
     if (newToasts.length > 0) {
@@ -27,8 +52,24 @@
     }
   }, { deep: true });
 
+  watch(user, (newUser) => {
+    if (newUser) {
+      setupUnreadListener(newUser.uid);
+    } else {
+      if (unreadUnsubscribe) unreadUnsubscribe();
+      totalUnread.value = 0;
+    }
+  });
+
   onMounted(async () => {
     await store.dispatch('initAuth');
+    if (user.value) {
+      setupUnreadListener(user.value.uid);
+    }
+  });
+
+  onUnmounted(() => {
+    if (unreadUnsubscribe) unreadUnsubscribe();
   });
 </script>
   
@@ -59,6 +100,21 @@
             <li class="nav-item">
               <router-link class="nav-link" to="/resources">Resources</router-link>
             </li>
+            <li v-if="user" class="nav-item">
+              <router-link class="nav-link position-relative px-3" to="/inbox">
+                <i class="bi bi-chat-right-text"></i>
+                <span class="ms-2 d-lg-none">Inbox</span>
+                <BBadge 
+                  v-if="totalUnread > 0" 
+                  pill 
+                  variant="danger" 
+                  class="position-absolute top-0 start-100 translate-middle"
+                  style="font-size: 0.65rem;"
+                >
+                  {{ totalUnread }}
+                </BBadge>
+              </router-link>
+            </li>
             <li class="nav-item">
               <AuthButton />
             </li>
@@ -70,6 +126,8 @@
     <ClaimBanner />
 
     <router-view />
+
+    <InquiryModal />
 
     <footer class="bg-dark text-light py-4 mt-5">
       <div class="container">

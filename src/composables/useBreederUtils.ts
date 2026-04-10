@@ -19,6 +19,18 @@ export const generateSlug = (name: string): string => {
     .replace(/^-+|-+$/g, '');
 };
 
+export const formatDisplayName = (fullName: string | null, isBreeder: boolean = false) => {
+  if (!fullName) return 'User';
+  if (isBreeder) return splitBreederName(fullName).main;
+  
+  const parts = fullName.trim().split(' ');
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const lastPart = parts[parts.length - 1];
+  const lastInitial = lastPart ? lastPart.substring(0, 1).toUpperCase() : '';
+  return `${first} ${lastInitial}.`;
+};
+
 export function useBreederUtils() {
   const formatContactLink = (link: string): string => {
     if (!link) return '';
@@ -42,6 +54,7 @@ export function useBreederUtils() {
   return {
     formatContactLink,
     generateSlug,
-    splitBreederName
+    splitBreederName,
+    formatDisplayName
   };
 }

@@ -4,7 +4,8 @@ import { useStore } from 'vuex';
 import { db } from '../firebase';
 import { 
   collection, getDocs, doc, deleteDoc, 
-  serverTimestamp, updateDoc, getDoc 
+  serverTimestamp, updateDoc, getDoc,
+  query, collectionGroup, where, orderBy
 } from 'firebase/firestore';
 import { 
   useToast, 
@@ -17,6 +18,7 @@ const { create } = useToast();
 
 const claims = ref<any[]>([]);
 const drafts = ref<any[]>([]);
+const flaggedMessages = ref<any[]>([]);
 const liveSlugs = ref<Set<string>>(new Set()); // Track which drafts are already live
 const userProfiles = ref<Record<string, any>>({});
 const isLoading = ref(true);
@@ -36,14 +38,28 @@ const fetchData = async () => {
     const draftSnap = await getDocs(collection(db, 'draft_profiles'));
     drafts.value = draftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+    // Fetch Flagged Messages
+    const flagQ = query(
+      collectionGroup(db, 'messages'),
+      where('adminReviewStatus', '==', 'pending'),
+      orderBy('createdAt', 'desc')
+    );
+    const flagSnap = await getDocs(flagQ);
+    flaggedMessages.value = flagSnap.docs.map(d => ({ 
+      id: d.id, 
+      path: d.ref.path,
+      ...d.data() 
+    }));
+
     // Check which drafts exist in the live directory
     const directorySnap = await getDocs(collection(db, 'directory_members'));
     liveSlugs.value = new Set(directorySnap.docs.map(d => d.id));
 
-    // Fetch user profiles for all requesters/owners
+    // Fetch user profiles for all requesters/owners/senders
     const uids = new Set([
       ...claims.value.map(c => c.requesterUid),
-      ...drafts.value.map(d => d.account?.ownerUid || d.draft_owner_uid)
+      ...drafts.value.map(d => d.account?.ownerUid || d.draft_owner_uid),
+      ...flaggedMessages.value.map(m => m.senderUid)
     ].filter(uid => !!uid));
 
     for (const uid of uids) {
@@ -62,6 +78,20 @@ const fetchData = async () => {
     create?.({ title: 'Error', body: `Fetch error: ${e.message}`, variant: 'danger' });
   } finally {
     isLoading.value = false;
+  }
+};
+
+// moderation logic
+const handleModeration = async (msg: any, status: 'approved' | 'hidden') => {
+  try {
+    const msgRef = doc(db, msg.path);
+    await updateDoc(msgRef, {
+      adminReviewStatus: status
+    });
+    create?.({ body: `Message ${status}.`, variant: 'success' });
+    fetchData();
+  } catch (e: any) {
+    create?.({ body: `Moderation failed: ${e.message}`, variant: 'danger' });
   }
 };
 
@@ -207,6 +237,49 @@ const handleRejectClaim = async (id: string) => {
                   </div>
                   <div class="d-flex gap-2">
                     <BButton :to="`/directory/${draft.id}/edit`" variant="outline-primary" size="sm">Review</BButton>
+                  </div>
+                </div>
+              </BListGroupItem>
+            </BListGroup>
+          </BCard>
+        </div>
+
+        <!-- SECTION: Flagged Messages -->
+        <div class="col-12 mt-4">
+          <BCard shadow class="border-0">
+            <template #header>
+              <div class="d-flex align-items-center gap-2 py-1">
+                <i class="bi bi-flag-fill text-danger"></i>
+                <h5 class="mb-0 fw-bold">Flagged Messages ({{ flaggedMessages.length }})</h5>
+              </div>
+            </template>
+            
+            <BListGroup flush>
+              <BListGroupItem v-if="flaggedMessages.length === 0" class="text-center py-4 text-muted">
+                No flagged messages to review.
+              </BListGroupItem>
+              <BListGroupItem v-for="msg in flaggedMessages" :key="msg.id" class="p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="d-flex gap-3 align-items-start">
+                    <div class="bg-light rounded-circle border d-flex align-items-center justify-content-center shadow-sm" style="width: 40px; height: 40px; flex-shrink: 0;">
+                      <i class="bi bi-chat-dots text-muted"></i>
+                    </div>
+                    <div>
+                      <p class="mb-1 text-dark">{{ msg.text }}</p>
+                      <small class="text-muted">
+                        Sender: 
+                        <strong v-if="userProfiles[msg.senderUid]">
+                          {{ userProfiles[msg.senderUid].displayName }}
+                        </strong>
+                        <span v-else class="fst-italic">Unknown</span>
+                        <span class="mx-1">•</span>
+                        {{ msg.createdAt?.toDate()?.toLocaleString() }}
+                      </small>
+                    </div>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <BButton @click="handleModeration(msg, 'approved')" variant="outline-success" size="sm">Approve</BButton>
+                    <BButton @click="handleModeration(msg, 'hidden')" variant="danger" size="sm">Hide</BButton>
                   </div>
                 </div>
               </BListGroupItem>

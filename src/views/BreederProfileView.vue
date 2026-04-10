@@ -209,7 +209,7 @@ const goBack = () => {
             </div>
 
             <div class="d-flex align-right flex-wrap gap-2 mt-3">
-              <ContactButton :link="breeder.contact_link" :show-label-on-mobile="true" />
+              <ContactButton :link="breeder.contact_link" :breeder="breeder" :show-label-on-mobile="true" />
               <MoreInfoButton 
                 :link="breeder.info_link" 
                 :name="breeder.name" 
