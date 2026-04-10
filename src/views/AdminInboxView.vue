@@ -55,11 +55,12 @@ const fetchData = async () => {
     const directorySnap = await getDocs(collection(db, 'directory_members'));
     liveSlugs.value = new Set(directorySnap.docs.map(d => d.id));
 
-    // Fetch user profiles for all requesters/owners/senders
+    // Fetch user profiles for all requesters/owners/senders/reporters
     const uids = new Set([
       ...claims.value.map(c => c.requesterUid),
       ...drafts.value.map(d => d.account?.ownerUid || d.draft_owner_uid),
-      ...flaggedMessages.value.map(m => m.senderUid)
+      ...flaggedMessages.value.map(m => m.senderUid),
+      ...flaggedMessages.value.map(m => m.flaggedByUid)
     ].filter(uid => !!uid));
 
     for (const uid of uids) {
@@ -266,15 +267,19 @@ const handleRejectClaim = async (id: string) => {
                     </div>
                     <div>
                       <p class="mb-1 text-dark">{{ msg.text }}</p>
-                      <small class="text-muted">
-                        Sender: 
-                        <strong v-if="userProfiles[msg.senderUid]">
-                          {{ userProfiles[msg.senderUid].displayName }}
-                        </strong>
-                        <span v-else class="fst-italic">Unknown</span>
-                        <span class="mx-1">•</span>
+                      <div class="small text-muted">
+                        <span class="me-2">Sender: 
+                          <strong v-if="userProfiles[msg.senderUid]">{{ userProfiles[msg.senderUid].displayName }}</strong>
+                          <span v-else class="fst-italic text-muted">Unknown</span>
+                        </span>
+                        <span class="me-2">|</span>
+                        <span>Flagged by: 
+                          <strong v-if="userProfiles[msg.flaggedByUid]">{{ userProfiles[msg.flaggedByUid].displayName }}</strong>
+                          <span v-else class="fst-italic text-muted">Unknown</span>
+                        </span>
+                        <span class="mx-2">•</span>
                         {{ msg.createdAt?.toDate()?.toLocaleString() }}
-                      </small>
+                      </div>
                     </div>
                   </div>
                   <div class="d-flex gap-2">

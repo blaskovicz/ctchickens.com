@@ -83,12 +83,12 @@ const formatDate = (dateString: string) => {
           </div>
 
           <div class="d-flex gap-2 mt-auto align-items-center flex-wrap">
-            <ContactButton :link="featured.contact_link" :show-label-on-mobile="true" />
-            <MoreInfoButton 
-              :link="featured.info_link" 
-              :name="featured.name" 
-              :verified="featured.verified" 
-              :show-label-on-mobile="true"
+            <!-- Directory ONLY shows Secure Message -->
+            <ContactButton 
+              :link="featured.contact_link" 
+              :breeder="featured"
+              :show-label-on-mobile="true" 
+              :force-secure-only="true"
             />
             
             <div v-if="featured.reviews && featured.reviews.length > 0" class="ms-auto d-flex align-items-center gap-1">
