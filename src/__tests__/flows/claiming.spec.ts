@@ -18,8 +18,8 @@ import { BApp } from 'bootstrap-vue-next';
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: HomeView },
-    { path: '/directory/:slug', component: { template: '<div>Profile</div>' } }
+    { path: '/', name: 'home', component: HomeView },
+    { path: '/directory/:slug', name: 'breeder-profile', component: { template: '<div>Profile</div>' } }
   ]
 });
 

@@ -9,9 +9,9 @@ import { clearFirestoreEmulator, seedTestBreeder } from '../test-helpers';
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', component: HomeView },
-    { path: '/about', component: { template: '<div>About</div>' } },
-    { path: '/directory/:slug', component: { template: '<div>Profile</div>' } }
+    { path: '/', name: 'home', component: HomeView },
+    { path: '/about', name: 'about', component: { template: '<div>About</div>' } },
+    { path: '/directory/:slug', name: 'breeder-profile', component: { template: '<div>Profile</div>' } }
   ]
 });
 
