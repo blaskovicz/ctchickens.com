@@ -3,7 +3,8 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signOut, 
-  updateProfile
+  updateProfile,
+  sendEmailVerification
 } from 'firebase/auth';
 
 const PROJECT_ID = () => import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
@@ -84,6 +85,16 @@ export async function seedTestBreeder(slug: string, data: any = {}) {
 }
 
 /**
+ * Helper to fetch OOB codes from the Auth Emulator.
+ */
+async function getOobCodes(projectId: string) {
+  const url = `http://127.0.0.1:9099/emulator/v1/projects/${projectId}/oobCodes`;
+  const res = await fetch(url);
+  if (!res.ok) return { oobCodes: [] };
+  return res.json();
+}
+
+/**
  * Creates a test user and bypasses rules to set Admin status if needed.
  */
 export async function createTestUser(email: string, displayName: string, isAdmin: boolean = false) {
@@ -102,22 +113,25 @@ export async function createTestUser(email: string, displayName: string, isAdmin
   }
   
   const projectId = PROJECT_ID();
+  const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 
-  // 1. Set verified email in Auth Emulator (required for claims)
-  // Use the EMULATOR-SPECIFIC endpoint which allows updating verified status directly
-  const authUrl = `http://127.0.0.1:9099/emulator/v1/projects/${projectId}/accounts/${user.uid}`;
-  const authRes = await fetch(authUrl, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      emailVerified: true 
-    })
-  });
-  
-  if (!authRes.ok) {
-    console.warn(`Failed to verify email via emulator PATCH: ${await authRes.text()}`);
-  } else {
-    console.log(`Successfully verified email for ${email} via emulator PATCH`);
+  // 1. Verify email via OOB flow (required for claims)
+  try {
+    await sendEmailVerification(user);
+    const { oobCodes } = await getOobCodes(projectId);
+    const oobCode = oobCodes.find((c: any) => c.email === email && c.requestType === 'VERIFY_EMAIL')?.oobCode;
+    
+    if (oobCode) {
+      const updateUrl = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`;
+      await fetch(updateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oobCode })
+      });
+      await user.reload();
+    }
+  } catch (e) {
+    console.warn(`Failed to verify email for ${email}:`, e);
   }
 
   // 2. Create the user document in Firestore via REST (bypasses rules)
