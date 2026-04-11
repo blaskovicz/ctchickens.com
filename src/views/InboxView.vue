@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { db } from '../firebase';
 import { 
   collection, query, where, orderBy, onSnapshot, 
-  doc, updateDoc, serverTimestamp, runTransaction, getDoc, setDoc,
+  doc, updateDoc, serverTimestamp, runTransaction, getDoc,
   writeBatch, or
 } from 'firebase/firestore';
 import { 
@@ -56,12 +56,12 @@ let messagesUnsubscribe: (() => void) | null = null;
 const fetchThreads = () => {
   if (!user.value) return;
   isLoadingThreads.value = true;
-  
+
   if (threadsUnsubscribe) threadsUnsubscribe();
 
   // Combine user's own threads and 'admin' threads if they are an admin
   const conditions = [where('participants', 'array-contains', user.value.uid)];
-  
+
   if (isAdmin.value) {
     conditions.push(where('participants', 'array-contains', 'admin'));
   }
@@ -121,7 +121,7 @@ const handleContactSupport = () => contactSupport();
 const markAsRead = async (threadId: string) => {
   if (!user.value) return;
   const threadRef = doc(db, 'inquiry_threads', threadId);
-  
+
   // 1. Reset thread-level counter
   await updateDoc(threadRef, {
     [`unreadCount.${user.value.uid}`]: 0
@@ -143,7 +143,7 @@ watch(activeThreadId, (newId) => {
   if (messagesUnsubscribe) messagesUnsubscribe();
   messages.value = [];
   activeBreederOwnerUid.value = null;
-  
+
   if (newId) {
     isLoadingMessages.value = true;
     const q = query(
@@ -167,18 +167,18 @@ watch(activeThreadId, (newId) => {
 
 const handleSend = async () => {
   if (!newMessage.value.trim() || !activeThreadId.value || !user.value || !activeThread.value) return;
-  
+
   isSending.value = true;
   const threadRef = doc(db, 'inquiry_threads', activeThreadId.value);
   const messagesCol = collection(db, 'inquiry_threads', activeThreadId.value, 'messages');
-  
+
   try {
     const text = newMessage.value.trim();
     const lastMsgText = text.substring(0, 50) + (text.length > 50 ? '...' : '');
-    
+
     // Recipient logic
     let recipientUid = activeThread.value.participants.find(p => p !== user.value?.uid) || 'admin';
-    
+
     // If we're the buyer and the farm is unclaimed, the recipient is admin
     if (activeThread.value.type !== 'support' && activeThread.value.userUid === user.value.uid && !activeBreederOwnerUid.value) {
       recipientUid = 'admin';
@@ -235,7 +235,7 @@ const getThreadDisplayName = (thread: InquiryThread) => {
   // If the user is the original buyer (userUid), the other participant is the breeder
   const isBuyer = thread.userUid === user.value?.uid;
   if (isBuyer) return thread.breederName;
-  
+
   // If the user is the breeder, the other participant is the buyer
   return formatDisplayName(thread.userName || 'User', false);
 };
@@ -244,7 +244,7 @@ onMounted(() => {
   fetchThreads();
 });
 
-watch([user, isAdmin], ([newUser, newIsAdmin]) => {
+watch([user, isAdmin], ([newUser]) => {
   if (newUser) {
     fetchThreads();
   }
@@ -259,7 +259,7 @@ onUnmounted(() => {
 <template>
   <BContainer class="py-4 inbox-container">
     <BRow class="h-100 g-0 shadow-sm border rounded overflow-hidden bg-white">
-      
+
       <!-- Thread List -->
       <BCol md="4" class="border-end h-100 d-flex flex-column bg-light">
         <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
@@ -273,12 +273,12 @@ onUnmounted(() => {
             </BButton>
           </div>
         </div>
-        
+
         <div class="flex-grow-1 overflow-auto">
           <div v-if="isLoadingThreads" class="text-center py-5">
             <BSpinner variant="primary" small />
           </div>
-          
+
           <BListGroup v-else flush>
             <BListGroupItem 
               v-for="thread in threads" 
@@ -305,7 +305,7 @@ onUnmounted(() => {
                 </BBadge>
               </div>
             </BListGroupItem>
-            
+
             <div v-if="threads.length === 0" class="text-center py-5 text-muted">
               <i class="bi bi-chat-dots fs-1 d-block mb-2"></i>
               No messages yet.
@@ -320,7 +320,7 @@ onUnmounted(() => {
           <!-- Header -->
           <div class="p-3 border-bottom bg-white d-flex align-items-center gap-3">
             <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-              {{ activeDisplayName.substring(0, 1) || '?' }}
+              {{ activeDisplayName?.substring(0, 1) || '?' }}
             </div>
             <div>
               <h6 class="mb-0 fw-bold">{{ activeDisplayName }}</h6>
@@ -347,7 +347,7 @@ onUnmounted(() => {
             <div v-if="isLoadingMessages" class="text-center py-5">
               <BSpinner variant="primary" />
             </div>
-            
+
             <template v-else>
               <div v-for="msg in messages" :key="msg.id" class="d-flex mb-3" :class="msg.senderUid === user?.uid ? 'justify-content-end' : 'justify-content-start'">
                 <div 
@@ -361,7 +361,7 @@ onUnmounted(() => {
                   <div v-else>
                     {{ msg.text }}
                   </div>
-                  
+
                   <div class="d-flex justify-content-between align-items-center mt-2 opacity-50" style="font-size: 0.65rem;">
                     <div class="d-flex align-items-center gap-1">
                       <span>{{ msg.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>

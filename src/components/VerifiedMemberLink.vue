@@ -14,12 +14,8 @@ const props = defineProps<{
 const { generateSlug } = useBreederUtils();
 
 const defaultLinkClass = "text-decoration-none text-dark d-flex align-items-start";
-const defaultIconClass = "bi bi-link-45deg ms-1 text-muted";
-const defaultIconStyle = "font-size: 1.2rem; line-height: inherit; margin-top: -0.1em;";
 
 const computedLinkClass = computed(() => props.linkClass || defaultLinkClass);
-const computedIconClass = computed(() => props.iconClass || defaultIconClass);
-const computedIconStyle = computed(() => props.iconStyle || defaultIconStyle);
 </script>
 
 <template>
