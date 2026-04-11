@@ -12,34 +12,34 @@ service cloud.firestore {
 
     function isUserAdmin(uid) {
       return uid != null && 
-             exists(/databases/$(database)/documents/users/$(uid)) && 
-             get(/databases/$(database)/documents/users/$(uid)).data.get('isAdmin', false) == true;
+      exists(/databases/$(database)/documents/users/$(uid)) && 
+      get(/databases/$(database)/documents/users/$(uid)).data.get('isAdmin', false) == true;
     }
 
     function isBlocked(uid) {
       return uid != null && 
-             exists(/databases/$(database)/documents/users/$(uid)) && 
-             get(/databases/$(database)/documents/users/$(uid)).data.get('blockedFromChat', false) == true;
+      exists(/databases/$(database)/documents/users/$(uid)) && 
+      get(/databases/$(database)/documents/users/$(uid)).data.get('blockedFromChat', false) == true;
     }
 
     function isParticipant(uid, tData) {
       return uid != null && tData != null && (
-        // 1. User is the original sender
-        tData.get('userUid', '') == uid || 
-        // 2. User is an Admin and this is a support thread
-        (tData.get('type', 'inquiry') == 'support' && isUserAdmin(uid)) ||
-        // 3. User is the CURRENT owner of the breederSlug
-        (tData.get('breederSlug', '') != '' && 
-         exists(/databases/$(database)/documents/directory_members/$(tData.breederSlug)) &&
-         get(/databases/$(database)/documents/directory_members/$(tData.breederSlug)).data.account.get('ownerUid', '') == uid) ||
-        // 4. Fallback for legacy threads or explicit participation
-        uid in tData.get('participants', [])
+      // 1. User is the original sender
+      tData.get('userUid', '') == uid || 
+      // 2. User is an Admin and this is a support thread
+      (tData.get('type', 'inquiry') == 'support' && isUserAdmin(uid)) ||
+      // 3. User is the CURRENT owner of the breederSlug
+      (tData.get('breederSlug', '') != '' && 
+      exists(/databases/$(database)/documents/directory_members/$(tData.breederSlug)) &&
+      get(/databases/$(database)/documents/directory_members/$(tData.breederSlug)).data.account.get('ownerUid', '') == uid) ||
+      // 4. Fallback for legacy threads or explicit participation
+      uid in tData.get('participants', [])
       );
     }
 
     function isValidDraftSchema(data) {
       return data.keys().hasAll(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']) &&
-             data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
+      data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
     }
 
     // --- COLLECTION RULES ---
@@ -50,11 +50,11 @@ service cloud.firestore {
       allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
       // Users can create their own doc on first login — safe fields only, no isAdmin/blockedFromChat
       allow create: if isSignedIn() && request.auth.uid == userId &&
-        request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
+      request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
       // Users can only touch their own profile fields — never isAdmin or blockedFromChat
       allow update: if isSignedIn() && request.auth.uid == userId &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
+      request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
     }
 
     match /directory_members/{memberId} {
@@ -62,7 +62,9 @@ service cloud.firestore {
       resource.data.account.status == "published" || 
       (isSignedIn() && isUserAdmin(request.auth.uid));
 
-      allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
+      // Allow write by admins, but enforce schema to prevent accidental pollution
+      allow write: if isSignedIn() && isUserAdmin(request.auth.uid) &&
+      request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
     }
 
     match /draft_profile_history/{historyId} {
@@ -71,68 +73,108 @@ service cloud.firestore {
     }
 
     match /draft_profiles/{draftId} {
-      allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource == null || resource.data.draft_owner_uid == request.auth.uid);
-      allow create: if isSignedIn() && (isUserAdmin(request.auth.uid) || request.resource.data.draft_owner_uid == request.auth.uid) && isValidDraftSchema(request.resource.data);
+      allow read: if isSignedIn() && (
+      isUserAdmin(request.auth.uid) || 
+      resource == null || 
+      resource.data.get('draft_owner_uid', '') == request.auth.uid || 
+      resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
+      );
+
+      allow create: if isSignedIn() && (
+      isUserAdmin(request.auth.uid) || 
+      (
+      isValidDraftSchema(request.resource.data) &&
+      request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
+      // New signup (!exists) OR Owner of the live listing (exists)
+      (
+      !exists(/databases/$(database)/documents/directory_members/$(draftId)) ||
+      get(/databases/$(database)/documents/directory_members/$(draftId)).data.account.ownerUid == request.auth.uid
+      )
+      )
+      );
+
       // update/delete must check the EXISTING owner (resource.data), not the incoming payload
-      allow update: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid) && isValidDraftSchema(request.resource.data);
-      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid);
+      allow update: if isSignedIn() && (
+      isUserAdmin(request.auth.uid) || 
+      resource.data.draft_owner_uid == request.auth.uid ||
+      resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
+      ) && isValidDraftSchema(request.resource.data);
+
+      allow delete: if isSignedIn() && (
+      isUserAdmin(request.auth.uid) || 
+      resource.data.draft_owner_uid == request.auth.uid ||
+      resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
+      );
     }
 
     match /claim_requests/{requestId} {
       allow read: if isSignedIn() && (resource == null || isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid);
-      // Users can submit their own claim; status/fields are enforced client-side
-      allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid;
+
+      allow create: if isSignedIn() 
+        && !exists(/databases/$(database)/documents/claim_requests/$(requestId))
+        && exists(/databases/$(database)/documents/directory_members/$(requestId))
+        && get(/databases/$(database)/documents/directory_members/$(requestId)).data.account.get('ownerUid', null) == null
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.auth.token.email_verified == true
+        && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.businessSlug == requestId
+        && request.resource.data.createdAt == request.time
+        && get(/databases/$(database)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
+        && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'status', 'businessName', 'businessSlug', 'createdAt']);
+
       // Only admins can change a claim's status (approve/reject workflow)
       allow update: if isSignedIn() && isUserAdmin(request.auth.uid);
+
       // Users can withdraw their own claim; check EXISTING owner, not incoming payload
-      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid);
+      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || (resource != null && resource.data.requesterUid == request.auth.uid));
     }
 
     match /inquiry_threads/{threadId} {
       allow list: if isSignedIn() && (
-        isUserAdmin(request.auth.uid) ||
-        request.auth.uid in resource.data.get('participants', []) ||
-        resource.data.get('userUid', '') == request.auth.uid
+      isUserAdmin(request.auth.uid) ||
+      request.auth.uid in resource.data.get('participants', []) ||
+      resource.data.get('userUid', '') == request.auth.uid
       );
       allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource == null || isParticipant(request.auth.uid, resource.data));
-      
+
       allow create: if isSignedIn() && !isBlocked(request.auth.uid) && 
-                    request.resource.data.userUid == request.auth.uid &&
-                    (
-                      (request.resource.data.get('type', 'inquiry') == 'support' && 
-                       threadId == 'support_' + request.auth.uid && 
-                       request.resource.data.breederSlug == 'support') ||
-                      (request.resource.data.get('type', 'inquiry') == 'inquiry' && 
-                       threadId == request.auth.uid + '_' + request.resource.data.breederSlug &&
-                       request.resource.data.breederSlug != 'support' &&
-                       exists(/databases/$(database)/documents/directory_members/$(request.resource.data.breederSlug)))
-                    );
+      request.resource.data.userUid == request.auth.uid &&
+      (
+      (request.resource.data.get('type', 'inquiry') == 'support' && 
+      threadId == 'support_' + request.auth.uid && 
+      request.resource.data.breederSlug == 'support') ||
+      (request.resource.data.get('type', 'inquiry') == 'inquiry' && 
+      threadId == request.auth.uid + '_' + request.resource.data.breederSlug &&
+      request.resource.data.breederSlug != 'support' &&
+      exists(/databases/$(database)/documents/directory_members/$(request.resource.data.breederSlug)))
+      );
 
       allow update: if isSignedIn() && !isBlocked(request.auth.uid) && (
-        isUserAdmin(request.auth.uid) || 
-        (isParticipant(request.auth.uid, resource.data) && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'updatedAt', 'unreadCount']))
+      isUserAdmin(request.auth.uid) || 
+      (isParticipant(request.auth.uid, resource.data) && 
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'updatedAt', 'unreadCount']))
       );
 
       match /messages/{messageId} {
         allow read: if isSignedIn() && (
-          isUserAdmin(request.auth.uid) || 
-          (exists(/databases/$(database)/documents/inquiry_threads/$(threadId)) && 
-           isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data))
+        isUserAdmin(request.auth.uid) || 
+        (exists(/databases/$(database)/documents/inquiry_threads/$(threadId)) && 
+        isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data))
         );
         allow create: if isSignedIn() && !isBlocked(request.auth.uid) && 
-                      request.resource.data.senderUid == request.auth.uid &&
-                      (isUserAdmin(request.auth.uid) || isParticipant(request.auth.uid, getAfter(/databases/$(database)/documents/inquiry_threads/$(threadId)).data));
+        request.resource.data.senderUid == request.auth.uid &&
+        (isUserAdmin(request.auth.uid) || isParticipant(request.auth.uid, getAfter(/databases/$(database)/documents/inquiry_threads/$(threadId)).data));
         allow update: if isSignedIn() && (
-          // Admin moderation
-          isUserAdmin(request.auth.uid) ||
-          // Participant: flag a message
-          (isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data) &&
-           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flaggedByUid', 'adminReviewStatus'])) ||
-          // Participant: mark a received message as read
-          (isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data) &&
-           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
-           resource.data.senderUid != request.auth.uid)
+        // Admin moderation
+        isUserAdmin(request.auth.uid) ||
+        // Participant: flag a message
+        (isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flaggedByUid', 'adminReviewStatus'])) ||
+        // Participant: mark a received message as read
+        (isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+        resource.data.senderUid != request.auth.uid)
         );
       }
     }

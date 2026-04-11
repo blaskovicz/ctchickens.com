@@ -7,7 +7,8 @@ import {
   clearAuthEmulator, 
   createTestUser, 
   blockUser,
-  seedInquiryThread
+  seedInquiryThread,
+  seedTestBreeder
 } from './test-helpers';
 
 describe('Security Rules: Users Collection', () => {
@@ -152,20 +153,93 @@ describe('Security Rules: Claim Requests', () => {
     await clearAuthEmulator();
   });
 
-  it('prevents strangers from reading a claim request', async () => {
-    const requesterEmail = 'requester@example.com';
+  it('prevents unauthorized claim requests (email mismatch)', async () => {
+    const ownerEmail = 'owner@example.com';
+    const otherEmail = 'other@example.com';
+    const slug = 'test-farm';
+
+    await seedTestBreeder(slug, {
+      profile: { businessName: 'Test Farm', contactEmail: ownerEmail },
+      account: { ownerUid: null, status: 'published' }
+    });
+
+    // DEBUG: Verify breeder exists
+    const breederSnap = await getDoc(doc(db, 'directory_members', slug));
+    console.log('DEBUG Breeder Data:', JSON.stringify(breederSnap.data(), null, 2));
+    expect(breederSnap.exists()).toBe(true);
+    expect(breederSnap.data()?.profile?.contactEmail).toBe(ownerEmail);
+
+    const otherUser = await createTestUser(otherEmail, 'Other User');
+    await signInWithEmailAndPassword(auth, otherEmail, 'password123');
+
+    const claimRef = doc(db, 'claim_requests', slug);
+    const claimData = {
+      requesterUid: otherUser.uid,
+      requesterEmail: otherEmail,
+      requesterName: 'Other User',
+      requesterPhotoURL: null,
+      status: 'pending',
+      businessName: 'Test Farm',
+      businessSlug: slug,
+      createdAt: serverTimestamp()
+    };
+
+    // Fails because email doesn't match directory
+    await expect(setDoc(claimRef, claimData)).rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error/i);
+  });
+
+  it('allows authorized claim requests', async () => {
+    const ownerEmail = 'owner@example.com';
+    const slug = 'test-farm';
+
+    await seedTestBreeder(slug, {
+      profile: { businessName: 'Test Farm', contactEmail: ownerEmail },
+      account: { ownerUid: null }
+    });
+
+    const ownerUser = await createTestUser(ownerEmail, 'Owner');
+    await signInWithEmailAndPassword(auth, ownerEmail, 'password123');
+
+    const claimRef = doc(db, 'claim_requests', slug);
+    const claimData = {
+      requesterUid: ownerUser.uid,
+      requesterEmail: ownerEmail,
+      requesterName: 'Owner',
+      requesterPhotoURL: null,
+      status: 'pending',
+      businessName: 'Test Farm',
+      businessSlug: slug,
+      createdAt: serverTimestamp()
+    };
+
+    await expect(setDoc(claimRef, claimData)).resolves.not.toThrow();
+  });
+
+  it('prevents strangers from reading someone else\'s claim request', async () => {
+    const ownerEmail = 'owner@example.com';
     const strangerEmail = 'stranger@example.com';
-    
-    const requester = await createTestUser(requesterEmail, 'Requester');
+    const slug = 'test-farm';
+
+    await seedTestBreeder(slug, {
+      profile: { businessName: 'Test Farm', contactEmail: ownerEmail },
+      account: { ownerUid: null }
+    });
+
+    const ownerUser = await createTestUser(ownerEmail, 'Owner');
     await createTestUser(strangerEmail, 'Stranger');
 
-    // 1. Create claim as requester
-    await signInWithEmailAndPassword(auth, requesterEmail, 'password123');
-    const claimRef = doc(db, 'claim_requests', 'farm-slug');
+    // 1. Create claim as owner
+    await signInWithEmailAndPassword(auth, ownerEmail, 'password123');
+    const claimRef = doc(db, 'claim_requests', slug);
     await setDoc(claimRef, {
-      requesterUid: requester.uid,
-      businessSlug: 'farm-slug',
-      status: 'pending'
+      requesterUid: ownerUser.uid,
+      requesterEmail: ownerEmail,
+      requesterName: 'Owner',
+      requesterPhotoURL: null,
+      status: 'pending',
+      businessName: 'Test Farm',
+      businessSlug: slug,
+      createdAt: serverTimestamp()
     });
 
     // 2. Try to read as stranger
