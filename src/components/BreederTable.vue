@@ -7,11 +7,14 @@
     import FoundingBreederBadge from './FoundingBreederBadge.vue';
     import ContactButton from './ContactButton.vue';
     import MoreInfoButton from './MoreInfoButton.vue';
+    import ViewProfileButton from './ViewProfileButton.vue';
     import VerifiedMemberLink from './VerifiedMemberLink.vue';
     import { useBreederUtils } from '../composables/useBreederUtils';
+    import { useSupport } from '../composables/useSupport';
 
     const store = useStore();
     const { splitBreederName } = useBreederUtils();
+    const { contactSupport } = useSupport();
     const filter = ref('');
     const selectedCategory = ref('');
     const showVerifiedOnly = ref(false);
@@ -46,6 +49,8 @@
         year: 'numeric', month: 'short', day: 'numeric' 
       });
     };
+
+    const handleContactSupport = () => contactSupport();
 
     // Automatically finds all unique categories from the loaded data
     const uniqueCategories = computed(() => {
@@ -252,8 +257,9 @@
                     <td class="d-none d-md-table-cell">{{ breeder.location }}</td>
                     <td class="text-md-end align-middle">
                       <div class="d-flex flex-row justify-content-end gap-2">
-                        <!-- Directory ONLY shows Secure Message -->
+                        <!-- Directory ONLY shows Secure Message & View Profile -->
                         <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
+                        <ViewProfileButton :breeder-name="breeder.name" />
                       </div>
                     </td>
                   </tr>
@@ -311,7 +317,7 @@
             Listings are provided by community members. Please contact breeders/suppliers directly to verify availability.
           </p>
           <p class="text-muted small text-center">
-            To update ratings or leave comments, please email us at <a href="mailto:marketing@ctchickens.com">marketing@ctchickens.com</a>.
+            If you need help, please <a href="#" @click.prevent="handleContactSupport">contact support</a>.
             To get listed, <router-link to="/get-listed">click here to start your listing</router-link>.
           </p>
           </div>

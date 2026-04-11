@@ -87,7 +87,7 @@
           <section class="mb-5">
             <h3>Contact</h3>
             <p>
-              Questions? Contact: <a href="mailto:admin@ctchickens.com">admin@ctchickens.com</a>.
+              Questions? Email <a href="mailto:admin@ctchickens.com">admin@ctchickens.com</a> or <a href="#" @click.prevent="contactSupport">message us</a>.
             </p>
           </section>
         </div>
@@ -97,7 +97,9 @@
 </template>
 
 <script setup lang="ts">
-// Static content
+import { useSupport } from '../composables/useSupport';
+
+const { contactSupport } = useSupport();
 </script>
 
 <style scoped>

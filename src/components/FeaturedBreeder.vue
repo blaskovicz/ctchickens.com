@@ -7,6 +7,7 @@ import VerifiedBadge from './VerifiedBadge.vue';
 import FoundingBreederBadge from './FoundingBreederBadge.vue';
 import ContactButton from './ContactButton.vue';
 import MoreInfoButton from './MoreInfoButton.vue';
+import ViewProfileButton from './ViewProfileButton.vue';
 import VerifiedMemberLink from './VerifiedMemberLink.vue';
 import { useBreederUtils } from '../composables/useBreederUtils';
 
@@ -83,13 +84,14 @@ const formatDate = (dateString: string) => {
           </div>
 
           <div class="d-flex gap-2 mt-auto align-items-center flex-wrap">
-            <!-- Directory ONLY shows Secure Message -->
+            <!-- Featured Breeder shows Secure Message & View Profile -->
             <ContactButton 
               :link="featured.contact_link" 
               :breeder="featured"
               :show-label-on-mobile="true" 
               :force-secure-only="true"
             />
+            <ViewProfileButton :breeder-name="featured.name" :show-label-on-mobile="true" />
             
             <div v-if="featured.reviews && featured.reviews.length > 0" class="ms-auto d-flex align-items-center gap-1">
                 <span 

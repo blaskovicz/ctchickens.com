@@ -129,27 +129,7 @@
 
     <InquiryModal />
 
-    <footer class="bg-dark text-light py-4 mt-5">
-      <div class="container">
-        <div class="row align-items-center">
-          <div class="col-md-8 offset-md-4 text-center text-md-end">
-            <div class="d-flex flex-column flex-md-row justify-content-md-end align-items-center gap-3">
-              <div class="text-light">
-                <i class="bi bi-envelope-fill me-1"></i>
-                Contact Admin:
-                <a href="mailto:admin@ctchickens.com" class="text-light">admin@ctchickens.com</a>
-              </div>
-              <span class="d-none d-md-inline text-secondary">|</span>
-              <div class="text-light">
-                <i class="bi bi-megaphone-fill me-1"></i>
-                Marketing:
-                <a href="mailto:marketing@ctchickens.com" class="text-light">marketing@ctchickens.com</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <hr class="my-3 bg-secondary">
+    <footer class="bg-dark text-light py-4 mt-3 mb-3">
       <div class="container">
         <div class="row">
           <div class="col text-center">

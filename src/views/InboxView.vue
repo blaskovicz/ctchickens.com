@@ -13,6 +13,7 @@ import {
   BFormTextarea, BButton, BSpinner, BBadge, useToast, BAlert
 } from 'bootstrap-vue-next';
 import { useBreederUtils } from '../composables/useBreederUtils';
+import { useSupport } from '../composables/useSupport';
 import type { InquiryThread, InquiryMessage } from '../types';
 
 const store = useStore();
@@ -20,6 +21,7 @@ const route = useRoute();
 const router = useRouter();
 const { create } = useToast();
 const { formatDisplayName } = useBreederUtils();
+const { contactSupport } = useSupport();
 
 const user = computed(() => store.state.user);
 const isAdmin = computed(() => store.getters.isAdmin);
@@ -89,6 +91,11 @@ const selectThread = (id: string) => {
   router.push({ name: 'inbox', params: { threadId: id } });
 };
 
+// Sync activeThreadId with route params
+watch(() => route.params.threadId, (newId) => {
+  activeThreadId.value = (newId as string) || null;
+});
+
 const scrollToBottom = async () => {
   await nextTick();
   if (messageContainer.value) {
@@ -109,31 +116,7 @@ const fetchBreederStatus = async (slug: string) => {
   }
 };
 
-const handleContactSupport = async () => {
-  if (!user.value) return;
-  const threadId = `support_${user.value.uid}`;
-  const threadRef = doc(db, 'inquiry_threads', threadId);
-
-  try {
-    const threadSnap = await getDoc(threadRef);
-    if (!threadSnap.exists()) {
-      await setDoc(threadRef, {
-        participants: [user.value.uid, 'admin'],
-        type: 'support',
-        userUid: user.value.uid,
-        userName: user.value.displayName || 'User',
-        breederSlug: 'support',
-        breederName: 'Site Support',
-        lastMessage: 'Started support chat',
-        updatedAt: serverTimestamp(),
-        unreadCount: { 'admin': 0 }
-      });
-    }
-    selectThread(threadId);
-  } catch (err: any) {
-    create?.({ body: `Could not start support chat: ${err.message}`, variant: 'danger' });
-  }
-};
+const handleContactSupport = () => contactSupport();
 
 const markAsRead = async (threadId: string) => {
   if (!user.value) return;

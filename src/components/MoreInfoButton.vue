@@ -45,7 +45,7 @@ const confirmProceed = () => {
       style="min-width: 36px;"
     >
       <i class="bi bi-info-circle text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
-      <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">More Info</span>
+      <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">View Website</span>
     </a>
 
     <!-- Warning Modal -->

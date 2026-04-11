@@ -26,7 +26,7 @@ const isVerified = computed(() => {
   const val = props.breeder.verified;
   if (val === null || val === undefined) return false;
   if (typeof val === 'string') {
-    const s = val.trim().toLowerCase();
+    const s = (val as string).trim().toLowerCase();
     return s !== '' && s !== 'false' && s !== '0' && s !== 'null' && s !== 'undefined';
   }
   return !!val;
@@ -60,12 +60,12 @@ const handleSecureMessage = () => {
       v-if="link && isVerified && !forceSecureOnly"
       target="_blank"
       :href="formatContactLink(link)!"
-      class="btn btn-sm btn-primary text-nowrap d-inline-flex align-items-center justify-content-center"
+      class="btn btn-sm btn-outline-dark text-nowrap d-inline-flex align-items-center justify-content-center"
       style="min-width: 36px;"
       title="Direct Contact"
     >
       <i class="bi bi-envelope-fill text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
-      <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">Contact</span>
+      <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">{{formatContactLink(link).startsWith('mailto:') ? 'Email' : 'Contact Me'}}</span>
     </a>
   </div>
 </template>
