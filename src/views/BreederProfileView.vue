@@ -228,6 +228,10 @@ const formatDate = (dateString: string) => {
                 <i class="bi bi-pencil-square me-1"></i> Update your profile
               </router-link>
               <span class="text-muted small d-none d-md-inline">|</span>
+              <router-link to="/inbox" class="fw-bold text-success text-decoration-none small">
+                <i class="bi bi-chat-right-text me-1"></i> Check inbox for leads
+              </router-link>
+              <span class="text-muted small d-none d-md-inline">|</span>
               <a href="#" @click.prevent="contactSupport" class="fw-bold text-success text-decoration-none small">
                 <i class="bi bi-headset me-1"></i> Contact support
               </a>
@@ -262,6 +266,12 @@ const formatDate = (dateString: string) => {
                   <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
                     <i class="bi bi-check2-square me-2"></i> 
                     Complete your profile
+                  </router-link>
+                </div>
+                <div class="mb-2">
+                  <router-link to="/inbox" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
+                    <i class="bi bi-check2-square me-2"></i> 
+                    Check chat inbox for leads
                   </router-link>
                 </div>
                 <div>
