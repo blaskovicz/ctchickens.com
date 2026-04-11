@@ -23,10 +23,10 @@ export default defineConfig({
     maxWorkers: 1,
     env: {
       VITE_APP_USE_EMULATOR: 'true',
-      VITE_FIREBASE_API_KEY: 'test-api-key',
-      VITE_FIREBASE_AUTH_DOMAIN: 'test.firebaseapp.com',
-      VITE_FIREBASE_PROJECT_ID: 'demo-unit-tests',
-      VITE_FIREBASE_STORAGE_BUCKET: 'test.appspot.com',
+      VITE_FIREBASE_PROJECT_ID: "demo-ct-chickens",
+      VITE_FIREBASE_API_KEY: "fake-key",
+      VITE_FIREBASE_AUTH_DOMAIN: "demo-ct-chickens.firebaseapp.com",
+      VITE_FIREBASE_STORAGE_BUCKET: "demo-ct-chickens.appspot.com",
       VITE_FIREBASE_MESSAGING_SENDER_ID: '123456789',
       VITE_FIREBASE_APP_ID: '1:123456789:web:abcdef'
     }
