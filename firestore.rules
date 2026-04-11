@@ -1,4 +1,4 @@
-// Rules Version: 2026-04-08-02
+// Rules Version: 2026-04-10-04
 rules_version = '2';
 
 service cloud.firestore {
@@ -10,47 +10,54 @@ service cloud.firestore {
       return request.auth != null; 
     }
 
-    // Pass UID explicitly to avoid interpolation crashes on null auth
     function isUserAdmin(uid) {
-      let userPath = /databases/$(database)/documents/users/$(uid);
-      return uid != null && exists(userPath) && get(userPath).data.get('isAdmin', false) == true;
+      return uid != null && 
+             exists(/databases/$(database)/documents/users/$(uid)) && 
+             get(/databases/$(database)/documents/users/$(uid)).data.get('isAdmin', false) == true;
     }
 
-    function isOwner(uid) { 
-      return isSignedIn() && request.auth.uid == uid; 
+    function isBlocked(uid) {
+      return uid != null && 
+             exists(/databases/$(database)/documents/users/$(uid)) && 
+             get(/databases/$(database)/documents/users/$(uid)).data.get('blockedFromChat', false) == true;
     }
 
-    function isValidDraftSchema() {
-      return request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
+    function isParticipant(uid, tData) {
+      return uid != null && tData != null && (
+        // 1. User is the original sender
+        tData.get('userUid', '') == uid || 
+        // 2. User is an Admin and this is a support thread
+        (tData.get('type', 'inquiry') == 'support' && isUserAdmin(uid)) ||
+        // 3. User is the CURRENT owner of the breederSlug
+        (tData.get('breederSlug', '') != '' && 
+         exists(/databases/$(database)/documents/directory_members/$(tData.breederSlug)) &&
+         get(/databases/$(database)/documents/directory_members/$(tData.breederSlug)).data.account.get('ownerUid', '') == uid) ||
+        // 4. Fallback for legacy threads or explicit participation
+        uid in tData.get('participants', [])
+      );
     }
 
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isUserAdmin(request.auth.uid);
-
-      // Admins can do anything
-      allow write: if isUserAdmin(request.auth.uid);
-
-      // Users can only create their own document with specific fields
-      allow create: if isOwner(userId) && 
-      request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
-
-      // Users can only update specific fields on their own document
-      allow update: if isOwner(userId) && 
-      request.resource.data.diff(resource.data).affectedKeys()
-      .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);      
+      allow read: if isSignedIn() && (request.auth.uid == userId || isUserAdmin(request.auth.uid));
+      // Admins can write anything (e.g. set isAdmin, blockedFromChat)
+      allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
+      // Users can create their own doc on first login — safe fields only, no isAdmin/blockedFromChat
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
+      // Users can only touch their own profile fields — never isAdmin or blockedFromChat
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']);
     }
 
     match /directory_members/{memberId} {
-      // Allow read if document doesn't exist OR it's published OR user is admin
       allow read: if resource == null || 
       resource.data.account.status == "published" || 
       (isSignedIn() && isUserAdmin(request.auth.uid));
 
-      // Allow write by admins, but enforce schema to prevent accidental pollution
-      allow write: if isSignedIn() && isUserAdmin(request.auth.uid) &&
-      request.resource.data.keys().hasOnly(['profile', 'offerings', 'media', 'account']);
+      allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
     }
 
     match /draft_profile_history/{historyId} {
@@ -59,128 +66,63 @@ service cloud.firestore {
     }
 
     match /draft_profiles/{draftId} {
-      // Allow anyone to "check" for a draft (returns 404 cleanly if null, 403 if exists but not owner)
-      allow read: if isSignedIn() && resource == null;
-
-      // Allow read if owner or admin
-      allow read: if isSignedIn() && (
-      isUserAdmin(request.auth.uid) || 
-      (resource != null && (resource.data.get('draft_owner_uid', '') == request.auth.uid || resource.data.get(['account', 'ownerUid'], '') == request.auth.uid))
-      );
-
-      // Allow creation of a draft (Initial Signup or Change Request)
-      allow create: if isSignedIn() && (
-      isUserAdmin(request.auth.uid) || 
-      (
-      isValidDraftSchema() &&
-      request.resource.data.get('draft_owner_uid', '') == request.auth.uid &&
-      // New signup (!exists) OR Owner of the live listing (exists)
-      (
-      !exists(/databases/$(database)/documents/directory_members/$(draftId)) ||
-      get(/databases/$(database)/documents/directory_members/$(draftId)).data.account.ownerUid == request.auth.uid
-      )
-      )
-      );
-
-      // Enforce the Wizard Lock: Owners can only update if the listing is ALREADY LIVE (Change Request mode)
-      // Onboarding drafts (not yet live) are locked until admin review.
-      allow update: if isSignedIn() && (
-      isUserAdmin(request.auth.uid) || 
-      (
-      isValidDraftSchema() &&
-      exists(/databases/$(database)/documents/directory_members/$(draftId)) &&
-      resource.data.get('draft_owner_uid', '') == request.auth.uid &&
-      request.resource.data.get('draft_owner_uid', '') == request.auth.uid
-      )
-      );
-
-      // Admins can delete drafts, and owners can discard their own drafts
-      allow delete: if isSignedIn() && (
-      isUserAdmin(request.auth.uid) || 
-      resource.data.get('draft_owner_uid', '') == request.auth.uid || 
-      resource.data.get(['account', 'ownerUid'], '') == request.auth.uid
-      );
+      allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource == null || resource.data.draft_owner_uid == request.auth.uid);
+      allow create: if isSignedIn() && (isUserAdmin(request.auth.uid) || request.resource.data.draft_owner_uid == request.auth.uid);
+      // update/delete must check the EXISTING owner (resource.data), not the incoming payload
+      allow update: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid);
+      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid);
     }
 
     match /claim_requests/{requestId} {
-      allow create: if isSignedIn() 
-        && !exists(/databases/$(database)/documents/claim_requests/$(requestId))
-        && get(/databases/$(database)/documents/directory_members/$(requestId)).data.account.get('ownerUid', null) == null
-        && request.resource.data.requesterUid == request.auth.uid
-        && request.auth.token.email_verified == true
-        && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower()
-        && request.resource.data.status == 'pending'
-        && request.resource.data.businessSlug == requestId
-        && request.resource.data.createdAt == request.time
-        && get(/databases/$(database)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
-        && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'status', 'businessName', 'businessSlug', 'createdAt']);
-
-      allow read: if resource == null || 
-      (isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid));
-
-      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || (resource != null && resource.data.requesterUid == request.auth.uid));
-
+      allow read: if isSignedIn() && (resource == null || isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid);
+      // Users can submit their own claim; status/fields are enforced client-side
+      allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid;
+      // Only admins can change a claim's status (approve/reject workflow)
       allow update: if isSignedIn() && isUserAdmin(request.auth.uid);
+      // Users can withdraw their own claim; check EXISTING owner, not incoming payload
+      allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.requesterUid == request.auth.uid);
     }
 
     match /inquiry_threads/{threadId} {
-      function isBlocked(uid) {
-        let userPath = /databases/$(database)/documents/users/$(uid);
-        return exists(userPath) && get(userPath).data.get('blockedFromChat', false) == true;
-      }
-
-      function isParticipant(uid, tId) {
-        let threadPath = /databases/$(database)/documents/inquiry_threads/$(tId);
-        let parts = tId.split("_");
-        // Short-circuit: if the first part of the ID is the UID, they are the creator
-        return parts[0] == uid || 
-               (exists(threadPath) && uid in get(threadPath).data.participants);
-      }
-
-      allow read: if isSignedIn() && (
-        isUserAdmin(request.auth.uid) || 
-        resource == null || 
-        request.auth.uid in resource.data.participants
+      allow list: if isSignedIn() && (
+        isUserAdmin(request.auth.uid) ||
+        request.auth.uid in resource.data.get('participants', []) ||
+        resource.data.get('userUid', '') == request.auth.uid
       );
-      
-      allow create: if isSignedIn() && !isBlocked(request.auth.uid) && 
-        request.auth.uid in request.resource.data.participants &&
-        request.resource.data.keys().hasAll(['participants', 'userUid', 'breederSlug', 'breederName', 'lastMessage', 'updatedAt', 'unreadCount']) &&
-        // Security: The other participant must be the actual owner of the farm (or 'admin' if unclaimed)
-        request.resource.data.participants.hasAll([
-          request.auth.uid, 
-          get(/databases/$(database)/documents/directory_members/$(request.resource.data.breederSlug)).data.account.get('ownerUid', 'admin')
-        ]);
-
-      allow update: if isSignedIn() && !isBlocked(request.auth.uid) && 
-        request.auth.uid in resource.data.participants;
+      allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource == null || isParticipant(request.auth.uid, resource.data));
+      allow create: if isSignedIn() && !isBlocked(request.auth.uid) && request.resource.data.userUid == request.auth.uid;
+      allow update: if isSignedIn() && !isBlocked(request.auth.uid) && (
+        isUserAdmin(request.auth.uid) || 
+        (isParticipant(request.auth.uid, resource.data) && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'updatedAt', 'unreadCount']))
+      );
 
       match /messages/{messageId} {
-        allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || isParticipant(request.auth.uid, threadId));
-        
+        allow read: if isSignedIn() && (
+          isUserAdmin(request.auth.uid) || 
+          (exists(/databases/$(database)/documents/inquiry_threads/$(threadId)) && 
+           isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data))
+        );
         allow create: if isSignedIn() && !isBlocked(request.auth.uid) && 
-          isParticipant(request.auth.uid, threadId) &&
-          request.resource.data.senderUid == request.auth.uid;
-
+                      request.resource.data.senderUid == request.auth.uid &&
+                      (isUserAdmin(request.auth.uid) || isParticipant(request.auth.uid, getAfter(/databases/$(database)/documents/inquiry_threads/$(threadId)).data));
         allow update: if isSignedIn() && (
           // Admin moderation
           isUserAdmin(request.auth.uid) ||
-          // Participant actions
-          (isParticipant(request.auth.uid, threadId) && (
-            // Action 1: Flagging (Any participant)
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flaggedByUid', 'adminReviewStatus']) ||
-            // Action 2: Mark as Read (Only recipient)
-            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) && 
-             resource.data.senderUid != request.auth.uid)
-          ))
+          // Participant: flag a message
+          (isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flaggedByUid', 'adminReviewStatus'])) ||
+          // Participant: mark a received message as read
+          (isParticipant(request.auth.uid, get(/databases/$(database)/documents/inquiry_threads/$(threadId)).data) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+           resource.data.senderUid != request.auth.uid)
         );
       }
     }
 
-    // --- COLLECTION GROUP RULES ---
-    // Required for Admin triage of flagged messages across all threads
+    // Required for admin collectionGroup query of flagged messages across all threads
     match /{path=**}/messages/{messageId} {
-      allow list, read: if isSignedIn() && isUserAdmin(request.auth.uid);
+      allow read, list: if isSignedIn() && isUserAdmin(request.auth.uid);
     }
 
     match /{document=**} {

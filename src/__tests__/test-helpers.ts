@@ -227,9 +227,6 @@ export async function seedDraftProfile(slug: string, data: any) {
   }
   }
 
-  /**
-  * Seeds an inquiry thread via REST API.
-  */
   export async function seedInquiryThread(threadId: string, data: any) {
   const projectId = PROJECT_ID();
   const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/inquiry_threads/${threadId}`;
@@ -237,6 +234,7 @@ export async function seedDraftProfile(slug: string, data: any) {
   const payload = {
     fields: {
       participants: { arrayValue: { values: data.participants.map((p: string) => ({ stringValue: p })) }},
+      type: { stringValue: data.type || 'inquiry' },
       userUid: { stringValue: data.userUid },
       breederSlug: { stringValue: data.breederSlug },
       breederName: { stringValue: data.breederName },

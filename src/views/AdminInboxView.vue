@@ -2,10 +2,10 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
-import { 
-  collection, getDocs, doc, deleteDoc, 
+import {
+  collection, getDocs, doc, deleteDoc,
   serverTimestamp, updateDoc, getDoc,
-  query, collectionGroup, where, orderBy
+  query, collectionGroup, where, orderBy, writeBatch
 } from 'firebase/firestore';
 import { 
   useToast, 
@@ -19,6 +19,7 @@ const { create } = useToast();
 const claims = ref<any[]>([]);
 const drafts = ref<any[]>([]);
 const flaggedMessages = ref<any[]>([]);
+const supportThreads = ref<any[]>([]);
 const liveSlugs = ref<Set<string>>(new Set()); // Track which drafts are already live
 const userProfiles = ref<Record<string, any>>({});
 const isLoading = ref(true);
@@ -37,6 +38,15 @@ const fetchData = async () => {
 
     const draftSnap = await getDocs(collection(db, 'draft_profiles'));
     drafts.value = draftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Fetch Support Threads
+    const supportQ = query(
+      collection(db, 'inquiry_threads'),
+      where('type', '==', 'support'),
+      orderBy('updatedAt', 'desc')
+    );
+    const supportSnap = await getDocs(supportQ);
+    supportThreads.value = supportSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     // Fetch Flagged Messages
     const flagQ = query(
@@ -60,7 +70,8 @@ const fetchData = async () => {
       ...claims.value.map(c => c.requesterUid),
       ...drafts.value.map(d => d.account?.ownerUid || d.draft_owner_uid),
       ...flaggedMessages.value.map(m => m.senderUid),
-      ...flaggedMessages.value.map(m => m.flaggedByUid)
+      ...flaggedMessages.value.map(m => m.flaggedByUid),
+      ...supportThreads.value.map(t => t.userUid)
     ].filter(uid => !!uid));
 
     for (const uid of uids) {
@@ -122,7 +133,30 @@ const handleApprove = async () => {
     });
 
     await deleteDoc(doc(db, 'claim_requests', selectedItem.value.id));
-    
+
+    // Hand off any threads that were routed to 'admin' while the farm was unclaimed
+    const threadsQ = query(
+      collection(db, 'inquiry_threads'),
+      where('breederSlug', '==', selectedItem.value.businessSlug),
+      where('participants', 'array-contains', 'admin')
+    );
+    const threadsSnap = await getDocs(threadsQ);
+    if (!threadsSnap.empty) {
+      const handoffBatch = writeBatch(db);
+      threadsSnap.forEach(t => {
+        const tData = t.data();
+        const updated = (tData.participants as string[])
+          .filter(p => p !== 'admin')
+          .concat(selectedItem.value.requesterUid);
+        handoffBatch.update(t.ref, {
+          participants: updated,
+          // Carry over the admin unread count so new owner sees pending messages
+          [`unreadCount.${selectedItem.value.requesterUid}`]: tData.unreadCount?.admin || 0
+        });
+      });
+      await handoffBatch.commit();
+    }
+
     create?.({ body: 'Claim Approved successfully!', variant: 'success' });
     showApproveModal.value = false;
     fetchData();
@@ -239,6 +273,39 @@ const handleRejectClaim = async (id: string) => {
                   <div class="d-flex gap-2">
                     <BButton :to="`/directory/${draft.id}/edit`" variant="outline-primary" size="sm">Review</BButton>
                   </div>
+                </div>
+              </BListGroupItem>
+            </BListGroup>
+          </BCard>
+        </div>
+
+        <!-- SECTION: Support Tickets -->
+        <div class="col-lg-6">
+          <BCard shadow class="border-0 h-100">
+            <template #header>
+              <div class="d-flex align-items-center gap-2 py-1">
+                <i class="bi bi-headset text-info"></i>
+                <h5 class="mb-0 fw-bold">Support Tickets ({{ supportThreads.length }})</h5>
+              </div>
+            </template>
+            
+            <BListGroup flush>
+              <BListGroupItem v-if="supportThreads.length === 0" class="text-center py-4 text-muted">
+                No active support tickets.
+              </BListGroupItem>
+              <BListGroupItem v-for="thread in supportThreads" :key="thread.id" class="p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="d-flex gap-3 align-items-center">
+                    <img v-if="userProfiles[thread.userUid]?.photoURL" :src="userProfiles[thread.userUid].photoURL" width="40" height="40" class="rounded-circle border">
+                    <div v-else class="bg-light rounded-circle border d-flex align-items-center justify-content-center shadow-sm" style="width: 40px; height: 40px;">
+                      <i class="bi bi-person text-muted"></i>
+                    </div>
+                    <div>
+                      <h6 class="mb-1 fw-bold">{{ userProfiles[thread.userUid]?.displayName || 'User' }}</h6>
+                      <p class="mb-0 small text-muted text-truncate" style="max-width: 150px;">{{ thread.lastMessage }}</p>
+                    </div>
+                  </div>
+                  <BButton :to="`/inbox/${thread.id}`" variant="primary" size="sm">Reply</BButton>
                 </div>
               </BListGroupItem>
             </BListGroup>

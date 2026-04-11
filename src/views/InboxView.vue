@@ -5,12 +5,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { db } from '../firebase';
 import { 
   collection, query, where, orderBy, onSnapshot, 
-  doc, updateDoc, serverTimestamp, runTransaction, getDoc,
-  writeBatch
+  doc, updateDoc, serverTimestamp, runTransaction, getDoc, setDoc,
+  writeBatch, or
 } from 'firebase/firestore';
 import { 
   BContainer, BRow, BCol, BListGroup, BListGroupItem, 
-  BFormTextarea, BButton, BSpinner, BBadge, useToast
+  BFormTextarea, BButton, BSpinner, BBadge, useToast, BAlert
 } from 'bootstrap-vue-next';
 import { useBreederUtils } from '../composables/useBreederUtils';
 import type { InquiryThread, InquiryMessage } from '../types';
@@ -22,11 +22,20 @@ const { create } = useToast();
 const { formatDisplayName } = useBreederUtils();
 
 const user = computed(() => store.state.user);
+const isAdmin = computed(() => store.getters.isAdmin);
+const ownedSlugs = computed(() => store.getters.ownedSlugs);
 
 const threads = ref<InquiryThread[]>([]);
 const messages = ref<InquiryMessage[]>([]);
 const activeThreadId = ref<string | null>((route.params.threadId as string) || null);
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
+
+const activeBreederOwnerUid = ref<string | null>(null);
+const isUnclaimed = computed(() => {
+  if (!activeThread.value || activeThread.value.type === 'support') return false;
+  // If the user is the sender, they want to know if it's unclaimed
+  return activeThread.value.userUid === user.value?.uid && activeBreederOwnerUid.value === null;
+});
 
 const activeDisplayName = computed(() => {
   if (!activeThread.value) return '';
@@ -39,9 +48,6 @@ const isLoadingThreads = ref(true);
 const isLoadingMessages = ref(false);
 const messageContainer = ref<HTMLElement | null>(null);
 
-// Profile Cache for display names
-const profileCache = ref<Record<string, any>>({});
-
 let threadsUnsubscribe: (() => void) | null = null;
 let messagesUnsubscribe: (() => void) | null = null;
 
@@ -49,9 +55,23 @@ const fetchThreads = () => {
   if (!user.value) return;
   isLoadingThreads.value = true;
   
+  if (threadsUnsubscribe) threadsUnsubscribe();
+
+  // Combine user's own threads and 'admin' threads if they are an admin
+  const conditions = [where('participants', 'array-contains', user.value.uid)];
+  
+  if (isAdmin.value) {
+    conditions.push(where('participants', 'array-contains', 'admin'));
+  }
+
+  if (ownedSlugs.value.length > 0) {
+    // Limit to 10 to avoid Firestore limits for 'in'
+    conditions.push(where('breederSlug', 'in', ownedSlugs.value.slice(0, 10)));
+  }
+
   const q = query(
     collection(db, 'inquiry_threads'),
-    where('participants', 'array-contains', user.value.uid),
+    or(...conditions),
     orderBy('updatedAt', 'desc')
   );
 
@@ -73,6 +93,45 @@ const scrollToBottom = async () => {
   await nextTick();
   if (messageContainer.value) {
     messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
+  }
+};
+
+const fetchBreederStatus = async (slug: string) => {
+  if (!slug || slug === 'support') return;
+  try {
+    const docRef = doc(db, 'directory_members', slug);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      activeBreederOwnerUid.value = snap.data().account?.ownerUid || null;
+    }
+  } catch (e) {
+    console.error("Error checking breeder status:", e);
+  }
+};
+
+const handleContactSupport = async () => {
+  if (!user.value) return;
+  const threadId = `support_${user.value.uid}`;
+  const threadRef = doc(db, 'inquiry_threads', threadId);
+
+  try {
+    const threadSnap = await getDoc(threadRef);
+    if (!threadSnap.exists()) {
+      await setDoc(threadRef, {
+        participants: [user.value.uid, 'admin'],
+        type: 'support',
+        userUid: user.value.uid,
+        userName: user.value.displayName || 'User',
+        breederSlug: 'support',
+        breederName: 'Site Support',
+        lastMessage: 'Started support chat',
+        updatedAt: serverTimestamp(),
+        unreadCount: { 'admin': 0 }
+      });
+    }
+    selectThread(threadId);
+  } catch (err: any) {
+    create?.({ body: `Could not start support chat: ${err.message}`, variant: 'danger' });
   }
 };
 
@@ -100,6 +159,7 @@ const markAsRead = async (threadId: string) => {
 watch(activeThreadId, (newId) => {
   if (messagesUnsubscribe) messagesUnsubscribe();
   messages.value = [];
+  activeBreederOwnerUid.value = null;
   
   if (newId) {
     isLoadingMessages.value = true;
@@ -114,6 +174,11 @@ watch(activeThreadId, (newId) => {
       scrollToBottom();
       markAsRead(newId);
     });
+
+    const thread = threads.value.find(t => t.id === newId);
+    if (thread && thread.type !== 'support' && thread.breederSlug !== 'support') {
+      fetchBreederStatus(thread.breederSlug);
+    }
   }
 }, { immediate: true });
 
@@ -127,16 +192,23 @@ const handleSend = async () => {
   try {
     const text = newMessage.value.trim();
     const lastMsgText = text.substring(0, 50) + (text.length > 50 ? '...' : '');
-    const otherParticipant = activeThread.value.participants.find(p => p !== user.value?.uid);
+    
+    // Recipient logic
+    let recipientUid = activeThread.value.participants.find(p => p !== user.value?.uid) || 'admin';
+    
+    // If we're the buyer and the farm is unclaimed, the recipient is admin
+    if (activeThread.value.type !== 'support' && activeThread.value.userUid === user.value.uid && !activeBreederOwnerUid.value) {
+      recipientUid = 'admin';
+    }
 
     await runTransaction(db, async (transaction) => {
       const threadDoc = await transaction.get(threadRef);
-      const currentUnread = threadDoc.data()?.unreadCount?.[otherParticipant!] || 0;
+      const currentUnread = threadDoc.data()?.unreadCount?.[recipientUid] || 0;
 
       transaction.update(threadRef, {
         lastMessage: lastMsgText,
         updatedAt: serverTimestamp(),
-        [`unreadCount.${otherParticipant}`]: currentUnread + 1
+        [`unreadCount.${recipientUid}`]: currentUnread + 1
       });
 
       const newMessageRef = doc(messagesCol);
@@ -171,6 +243,12 @@ const handleFlag = async (msg: InquiryMessage) => {
 };
 
 const getThreadDisplayName = (thread: InquiryThread) => {
+  if (thread.type === 'support') {
+    return user.value?.uid === thread.userUid 
+      ? 'Site Support' 
+      : formatDisplayName(thread.userName || 'User', false);
+  }
+
   // If the user is the original buyer (userUid), the other participant is the breeder
   const isBuyer = thread.userUid === user.value?.uid;
   if (isBuyer) return thread.breederName;
@@ -183,13 +261,15 @@ onMounted(() => {
   fetchThreads();
 });
 
+watch([user, isAdmin], ([newUser, newIsAdmin]) => {
+  if (newUser) {
+    fetchThreads();
+  }
+}, { immediate: true });
+
 onUnmounted(() => {
   if (threadsUnsubscribe) threadsUnsubscribe();
   if (messagesUnsubscribe) messagesUnsubscribe();
-});
-
-watch(user, (newVal) => {
-  if (newVal) fetchThreads();
 });
 </script>
 
@@ -201,9 +281,14 @@ watch(user, (newVal) => {
       <BCol md="4" class="border-end h-100 d-flex flex-column bg-light">
         <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
           <h5 class="mb-0 fw-bold">Messages</h5>
-          <BButton variant="link" size="sm" @click="fetchThreads" class="p-0">
-            <i class="bi bi-arrow-clockwise"></i>
-          </BButton>
+          <div class="d-flex gap-2">
+            <BButton variant="outline-primary" size="sm" @click="handleContactSupport" title="Contact Site Support">
+              <i class="bi bi-headset"></i>
+            </BButton>
+            <BButton variant="link" size="sm" @click="fetchThreads" class="p-0 text-muted">
+              <i class="bi bi-arrow-clockwise"></i>
+            </BButton>
+          </div>
         </div>
         
         <div class="flex-grow-1 overflow-auto">
@@ -256,14 +341,23 @@ watch(user, (newVal) => {
             </div>
             <div>
               <h6 class="mb-0 fw-bold">{{ activeDisplayName }}</h6>
-              <small class="text-muted">
+              <small class="text-muted" v-if="activeThread.type !== 'support'">
                 Inquiry for 
                 <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
                   {{ activeThread.breederName }}
                 </router-link>
               </small>
+              <small class="text-muted" v-else>
+                Site Support Ticket
+              </small>
             </div>
           </div>
+
+          <!-- Unclaimed Banner -->
+          <BAlert v-if="isUnclaimed" variant="warning" show class="mb-0 border-0 border-bottom rounded-0 py-2 small">
+            <i class="bi bi-info-circle me-2"></i>
+            This listing has not been claimed. Responses may be delayed until the owner logs in.
+          </BAlert>
 
           <!-- Messages -->
           <div ref="messageContainer" class="flex-grow-1 overflow-auto p-4 bg-light-subtle">
@@ -336,7 +430,7 @@ watch(user, (newVal) => {
 
         <!-- Empty State -->
         <div v-else class="h-100 d-flex flex-column align-items-center justify-content-center text-muted p-5 text-center">
-          <img src="/hen.png" width="80" class="opacity-25 mb-3" style="filter: grayscale(100%);">
+          <i class="bi bi-mailbox fs-1 opacity-25 mb-3"></i>
           <h5>Your Inbox</h5>
           <p>Select a conversation from the left to start messaging.</p>
         </div>

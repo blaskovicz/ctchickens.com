@@ -11,8 +11,8 @@ import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 import ContactButton from '../components/ContactButton.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
-import { useBreederUtils } from '../composables/useBreederUtils';
-import { BButton } from 'bootstrap-vue-next';
+import { useBreederUtils, formatRelativeTime } from '../composables/useBreederUtils';
+import { BButton, BBadge } from 'bootstrap-vue-next';
 
 const route = useRoute();
 const router = useRouter();
@@ -22,6 +22,7 @@ const { generateSlug, splitBreederName } = useBreederUtils();
 const user = computed(() => store.getters.currentUser);
 const isAdmin = computed(() => store.getters.isAdmin);
 const hasPendingDraft = ref(false);
+const ownerProfile = ref<any>(null);
 
 const isVerified = (val: any) => {
   if (val === null || val === undefined) return false;
@@ -57,6 +58,27 @@ const breeder = computed(() => {
   // No longer blocking unverified profiles from public view.
   return found;
 });
+
+const fetchOwnerProfile = async () => {
+  if (isAdmin.value && breeder.value?.ownerUid) {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', breeder.value.ownerUid));
+      if (userDoc.exists()) {
+        ownerProfile.value = userDoc.data();
+      }
+    } catch (e) {
+      console.warn("Could not fetch owner profile:", e);
+    }
+  }
+};
+
+watch([() => breeder.value?.ownerUid, isAdmin], () => {
+  if (isAdmin.value && breeder.value?.ownerUid) {
+    fetchOwnerProfile();
+  } else {
+    ownerProfile.value = null;
+  }
+}, { immediate: true });
 
 const isRealOwner = computed(() => {
   if (!user.value || !breeder.value) return false;
@@ -178,6 +200,19 @@ const goBack = () => {
               <div class="d-flex flex-wrap justify-content-center justify-content-md-start gap-2">
                 <VerifiedBadge :verified="breeder.verified" />
                 <FoundingBreederBadge :count="breeder.founding_breeder" />
+              </div>
+
+              <!-- Admin Owner Chip -->
+              <div v-if="isAdmin" class="mt-3 d-flex justify-content-center justify-content-md-start">
+                <div v-if="ownerProfile" class="admin-owner-chip d-flex align-items-center gap-2 px-2 py-1 rounded-pill bg-white bg-opacity-10 border border-white border-opacity-25 shadow-sm">
+                  <img :src="ownerProfile.photoURL || '/hen.png'" class="rounded-circle bg-white" width="24" height="24">
+                  <span class="small fw-bold">{{ ownerProfile.displayName }}</span>
+                  <span class="small opacity-75">| seen {{ formatRelativeTime(ownerProfile.lastLogin) }}</span>
+                </div>
+                <div v-else class="admin-owner-chip d-flex align-items-center gap-2 px-2 py-1 rounded-pill bg-white bg-opacity-10 border border-white border-opacity-25 shadow-sm opacity-75">
+                  <i class="bi bi-person-x"></i>
+                  <span class="small">Unclaimed</span>
+                </div>
               </div>
             </div>
           </div>

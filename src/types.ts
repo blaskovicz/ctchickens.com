@@ -61,6 +61,7 @@ export interface Review {
   export interface InquiryThread {
     id: string; // generated: `${userUid}_${breederSlug}`
     participants: string[]; // [userUid, breederOwnerUid]
+    type?: 'inquiry' | 'support' | 'direct';
     userUid: string;
     userName?: string;
     breederSlug: string;

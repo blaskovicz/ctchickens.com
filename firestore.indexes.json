@@ -16,6 +16,14 @@
         { "fieldPath": "slug", "order": "ASCENDING" },
         { "fieldPath": "draft_meta.archivedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "inquiry_threads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
