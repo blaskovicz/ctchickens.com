@@ -95,7 +95,19 @@ service cloud.firestore {
         resource.data.get('userUid', '') == request.auth.uid
       );
       allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource == null || isParticipant(request.auth.uid, resource.data));
-      allow create: if isSignedIn() && !isBlocked(request.auth.uid) && request.resource.data.userUid == request.auth.uid;
+      
+      allow create: if isSignedIn() && !isBlocked(request.auth.uid) && 
+                    request.resource.data.userUid == request.auth.uid &&
+                    (
+                      (request.resource.data.get('type', 'inquiry') == 'support' && 
+                       threadId == 'support_' + request.auth.uid && 
+                       request.resource.data.breederSlug == 'support') ||
+                      (request.resource.data.get('type', 'inquiry') == 'inquiry' && 
+                       threadId == request.auth.uid + '_' + request.resource.data.breederSlug &&
+                       request.resource.data.breederSlug != 'support' &&
+                       exists(/databases/$(database)/documents/directory_members/$(request.resource.data.breederSlug)))
+                    );
+
       allow update: if isSignedIn() && !isBlocked(request.auth.uid) && (
         isUserAdmin(request.auth.uid) || 
         (isParticipant(request.auth.uid, resource.data) && 
