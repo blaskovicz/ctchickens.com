@@ -37,6 +37,11 @@ service cloud.firestore {
       );
     }
 
+    function isValidDraftSchema(data) {
+      return data.keys().hasAll(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']) &&
+             data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
+    }
+
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
@@ -67,9 +72,9 @@ service cloud.firestore {
 
     match /draft_profiles/{draftId} {
       allow read: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource == null || resource.data.draft_owner_uid == request.auth.uid);
-      allow create: if isSignedIn() && (isUserAdmin(request.auth.uid) || request.resource.data.draft_owner_uid == request.auth.uid);
+      allow create: if isSignedIn() && (isUserAdmin(request.auth.uid) || request.resource.data.draft_owner_uid == request.auth.uid) && isValidDraftSchema(request.resource.data);
       // update/delete must check the EXISTING owner (resource.data), not the incoming payload
-      allow update: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid);
+      allow update: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid) && isValidDraftSchema(request.resource.data);
       allow delete: if isSignedIn() && (isUserAdmin(request.auth.uid) || resource.data.draft_owner_uid == request.auth.uid);
     }
 

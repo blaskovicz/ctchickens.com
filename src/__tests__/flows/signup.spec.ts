@@ -13,7 +13,7 @@ import {
   seedDraftProfile
 } from '../test-helpers';
 import { db } from '../../firebase';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, getDocs, collection } from 'firebase/firestore';
 import { BApp } from 'bootstrap-vue-next';
 
 // 1. Mock the image asset
@@ -54,6 +54,7 @@ describe('Self-Service Signup Flow', () => {
         { path: '/get-listed/:slug', component: BreederSignupView },
         { path: '/directory/:slug', component: { template: '<div>Profile Page</div>' } },
         { path: '/directory/:slug/edit', component: BreederEditView },
+        { path: '/admin/inbox', component: { template: '<div>Admin Inbox</div>' } }
       ]
     });
 
@@ -190,6 +191,59 @@ describe('Self-Service Signup Flow', () => {
     const liveDoc = await getDoc(doc(db, 'directory_members', farmSlug));
     expect(liveDoc.exists()).toBe(true);
     expect(router.currentRoute.value.path).toBe(`/directory/${farmSlug}`);
+  });
+
+  it('5. admin logs in -> rejects/discards draft -> draft is gone', async () => {
+    const farmerUid = 'farmer-uid-admin-5';
+    const farmSlug = 'rejected-flow-farm-5';
+    
+    await seedDraftProfile(farmSlug, {
+      profile: {
+        businessName: 'Rejected Flow Farm 5',
+        town: 'Hartford, CT',
+        memberType: 'farm'
+      },
+      draft_owner_uid: farmerUid
+    });
+
+    const admin = await createTestUser('admin-flow-5@ctchickens.com', 'Admin Five', true);
+    store.commit('SET_USER', admin);
+    store.commit('SET_USER_DATA', { isAdmin: true });
+    store.commit('SET_AUTH_READY', true);
+
+    await router.push(`/directory/${farmSlug}/edit`);
+    await router.isReady();
+
+    const wrapper = mount(EditWrapper, {
+      global: {
+        plugins: [store, router],
+        stubs: {
+          BreederGallery: true,
+          'img': true
+        }
+      }
+    });
+
+    await flushPromises();
+    await new Promise(r => setTimeout(r, 500));
+    await flushPromises();
+
+    // Trigger Discard directly on the component instance to avoid modal flakiness in tests
+    const editView = wrapper.findComponent(BreederEditView);
+    expect(editView.exists()).toBe(true);
+    await (editView.vm as any).handleDiscard();
+
+    await flushPromises();
+    await new Promise(r => setTimeout(r, 1500));
+    await flushPromises();
+
+    // Verify draft is gone from Firestore
+    const draftDoc = await getDoc(doc(db, 'draft_profiles', farmSlug));
+    expect(draftDoc.exists()).toBe(false);
+
+    // Verify history was created (optional but good)
+    const historySnap = await getDocs(collection(db, 'draft_profile_history'));
+    expect(historySnap.size).toBeGreaterThan(0);
   });
 
   it('4. user sees farm in directory after approval', async () => {
