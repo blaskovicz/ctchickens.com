@@ -63,7 +63,8 @@ const handleSend = async () => {
       if (!threadDoc.exists()) {
         // Create the thread header
         transaction.set(threadRef, {
-          participants: [user.value!.uid, breeder.value!.ownerUid].filter(Boolean),
+          participants: [user.value!.uid, breeder.value!.ownerUid || 'admin'].filter(Boolean),
+          type: 'inquiry',
           userUid: user.value!.uid,
           userName: user.value!.displayName || 'User',
           breederSlug: breeder.value!.id,

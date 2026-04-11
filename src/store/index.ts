@@ -364,6 +364,12 @@ export default createStore({
     allBreeders: (state: State) => state.breeders,
     isLoggedIn: (state: State) => !!state.user,
     isAdmin: (state: State) => state.userData?.isAdmin || false,
+    ownedSlugs: (state: State) => {
+      if (!state.user) return [];
+      return state.breeders
+        .filter(b => b.ownerUid === state.user?.uid)
+        .map(b => b.id);
+    },
     currentUser: (state: State) => state.user,
     authReady: (state: State) => state.authReady,
     
