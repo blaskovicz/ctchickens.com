@@ -28,6 +28,5 @@ const computedIconStyle = computed(() => props.iconStyle || defaultIconStyle);
     :class="computedLinkClass"
   >
     {{ displayName || name }}
-    <i v-if="verified" :class="computedIconClass" :style="computedIconStyle" title="View Profile Permalink"></i>
   </router-link>
 </template>

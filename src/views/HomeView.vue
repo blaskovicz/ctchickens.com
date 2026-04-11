@@ -1,7 +1,54 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
+import { db } from '../firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import FeaturedBreeder from '../components/FeaturedBreeder.vue';
 import BreederTable from '../components/BreederTable.vue';
 import FeaturedPartnerBanner from '../components/FeaturedPartnerBanner.vue';
+
+const store = useStore();
+const router = useRouter();
+const user = computed(() => store.state.user);
+
+const handleContactSupport = async () => {
+  if (!user.value) {
+    store.commit('PUSH_TOAST', {
+      title: 'Authentication Required',
+      message: 'Please log in to contact support.',
+      variant: 'warning'
+    });
+    return;
+  }
+  
+  const threadId = `support_${user.value.uid}`;
+  const threadRef = doc(db, 'inquiry_threads', threadId);
+
+  try {
+    const threadSnap = await getDoc(threadRef);
+    if (!threadSnap.exists()) {
+      await setDoc(threadRef, {
+        participants: [user.value.uid, 'admin'],
+        type: 'support',
+        userUid: user.value.uid,
+        userName: user.value.displayName || 'User',
+        breederSlug: 'support',
+        breederName: 'Site Support',
+        lastMessage: 'Started support chat',
+        updatedAt: serverTimestamp(),
+        unreadCount: { 'admin': 0 }
+      });
+    }
+    router.push({ name: 'inbox', params: { threadId } });
+  } catch (err: any) {
+    store.commit('PUSH_TOAST', {
+      title: 'Error',
+      message: `Could not start support chat: ${err.message}`,
+      variant: 'danger'
+    });
+  }
+};
 </script>
 
 <template>
@@ -396,9 +443,14 @@ import FeaturedPartnerBanner from '../components/FeaturedPartnerBanner.vue';
                 Have More Questions?
               </h4>
               <p class="mb-3">Join our Facebook group to ask questions and get advice from experienced chicken keepers in your area!</p>
-              <a href="https://www.facebook.com/groups/1465813350383274" target="_blank" class="btn btn-primary btn-lg">
-                <i class="bi bi-facebook"></i> Join Connecticut Backyard Chickens
-              </a>
+              <div class="d-flex flex-wrap justify-content-center gap-3">
+                <a href="https://www.facebook.com/groups/1465813350383274" target="_blank" class="btn btn-primary btn-lg">
+                  <i class="bi bi-facebook"></i> Join the Facebook Group
+                </a>
+                <button @click="handleContactSupport" class="btn btn-outline-primary btn-lg">
+                  <i class="bi bi-headset"></i> Contact Support
+                </button>
+              </div>
             </div>
           </div>
         </div>

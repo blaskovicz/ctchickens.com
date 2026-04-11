@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -12,10 +12,9 @@ import ContactButton from '../components/ContactButton.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
 import { useBreederUtils, formatRelativeTime } from '../composables/useBreederUtils';
-import { BButton, BBadge } from 'bootstrap-vue-next';
+import { BButton } from 'bootstrap-vue-next';
 
 const route = useRoute();
-const router = useRouter();
 const store = useStore();
 const { generateSlug, splitBreederName } = useBreederUtils();
 
@@ -127,18 +126,11 @@ const formatDate = (dateString: string) => {
   });
 };
 
-const goBack = () => {
-  router.push('/directory');
-};
 </script>
 
 <template>
   <div class="container py-3">
     <div class="d-flex justify-content-between align-items-center mb-4">
-      <button class="btn btn-outline-secondary" @click="goBack">
-        <i class="bi bi-arrow-left me-2"></i>Back to Directory
-      </button>
-      
       <div class="d-flex align-items-center gap-3">
         <!-- Draft Badge -->
         <div v-if="isOwner && hasPendingDraft" class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
@@ -160,7 +152,7 @@ const goBack = () => {
     
     <div v-if="!breeder && store.getters.allBreeders.length > 0" class="text-center py-5">
       <h2 class="display-6 fw-bold">Member Not Found</h2>
-      <p class="lead">The verified member you're looking for doesn't exist or is no longer listed.</p>
+      <p class="lead">The member you're looking for doesn't exist or is no longer listed.</p>
     </div>
     
     <div v-else-if="breeder" class="card shadow-web border-0 overflow-hidden profile-card">
