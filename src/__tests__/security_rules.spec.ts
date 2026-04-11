@@ -157,7 +157,7 @@ describe('Security Rules: Claim Requests', () => {
     const strangerEmail = 'stranger@example.com';
     
     const requester = await createTestUser(requesterEmail, 'Requester');
-    const stranger = await createTestUser(strangerEmail, 'Stranger');
+    await createTestUser(strangerEmail, 'Stranger');
 
     // 1. Create claim as requester
     await signInWithEmailAndPassword(auth, requesterEmail, 'password123');

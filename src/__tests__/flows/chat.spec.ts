@@ -1,5 +1,5 @@
 import { mount, flushPromises } from '@vue/test-utils';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth } from '../../firebase';
 import { 
   signInWithEmailAndPassword
@@ -19,10 +19,8 @@ import {
   logout
 } from '../test-helpers';
 import store from '../../store';
-import InquiryModal from '../../components/InquiryModal.vue';
 import InboxView from '../../views/InboxView.vue';
 import { createRouter, createWebHistory } from 'vue-router';
-import { defineComponent, h } from 'vue';
 
 // Mock Router
 const router = createRouter({
@@ -50,7 +48,7 @@ describe('Chat System Integration', () => {
     // 1. Setup Users
     const buyerEmail = 'buyer@example.com';
     const sellerEmail = 'seller@example.com';
-    const buyerUser = await createTestUser(buyerEmail, 'Buyer Bob');
+    await createTestUser(buyerEmail, 'Buyer Bob');
     const sellerUser = await createTestUser(sellerEmail, 'Seller Sue');
     const slug = 'test-farm';
     
@@ -148,7 +146,7 @@ describe('Chat System Integration', () => {
   // ---------------------------------------------------------------------------
   it('Unclaimed Farm: buyer sends via transaction → admin sees & replies → buyer sees reply', async () => {
     const buyerUser  = await createTestUser('buyer-unc@test.com', 'Buyer Alice');
-    const adminUser  = await createTestUser('admin-unc@test.com', 'Admin Zach', true);
+    await createTestUser('admin-unc@test.com', 'Admin Zach', true);
     const slug = 'goose-creek-farm';
 
     await seedTestBreeder(slug, {
@@ -188,7 +186,7 @@ describe('Chat System Integration', () => {
 
     // 2. Admin queries threads — should find it via 'admin' in participants
     await logout();
-    await signInWithEmailAndPassword(auth, 'admin-unc@test.com', 'password123');
+    const admin = (await signInWithEmailAndPassword(auth, 'admin-unc@test.com', 'password123')).user;
 
     const adminQ    = query(collection(db, 'inquiry_threads'), where('participants', 'array-contains', 'admin'));
     const adminSnap = await getDocs(adminQ);
@@ -196,7 +194,7 @@ describe('Chat System Integration', () => {
 
     const msgsSnap = await getDocs(collection(db, 'inquiry_threads', threadId, 'messages'));
     expect(msgsSnap.size).toBe(1);
-    expect(msgsSnap.docs[0].data().text).toBe('Do you have chicks available?');
+    expect(msgsSnap.docs[0]!.data().text).toBe('Do you have chicks available?');
 
     // 3. Admin replies
     await runTransaction(db, async (tx) => {
@@ -208,7 +206,7 @@ describe('Chat System Integration', () => {
         [`unreadCount.${buyerUser.uid}`]:     currentUnread + 1
       });
       tx.set(doc(msgsCol), {
-        senderUid:  adminUser.uid,
+        senderUid:  admin.uid,
         text:       'Yes, pullets ready in 3 weeks.',
         createdAt:  serverTimestamp(),
         read:       false
@@ -229,7 +227,7 @@ describe('Chat System Integration', () => {
   // ---------------------------------------------------------------------------
   it('Claim Handoff: admin loses thread visibility, new owner inherits and can reply', async () => {
     const buyerUser = await createTestUser('buyer-ho@test.com', 'Buyer Beth');
-    const adminUser = await createTestUser('admin-ho@test.com', 'Admin Zach', true);
+    await createTestUser('admin-ho@test.com', 'Admin Zach', true);
     const ownerUser = await createTestUser('owner-ho@test.com', 'New Owner');
     const slug = 'sunny-ridge-farm';
 
@@ -284,12 +282,12 @@ describe('Chat System Integration', () => {
     const ownerQ    = query(collection(db, 'inquiry_threads'), where('participants', 'array-contains', ownerUser.uid));
     const ownerSnap = await getDocs(ownerQ);
     expect(ownerSnap.size).toBe(1);
-    expect(ownerSnap.docs[0].data().lastMessage).toBe('Is this farm active?');
+    expect(ownerSnap.docs[0]!.data().lastMessage).toBe('Is this farm active?');
 
     // Owner can read the original message
     const ownerMsgs = await getDocs(msgsCol);
     expect(ownerMsgs.size).toBe(1);
-    expect(ownerMsgs.docs[0].data().text).toBe('Is this farm active?');
+    expect(ownerMsgs.docs[0]!.data().text).toBe('Is this farm active?');
 
     // 6. Owner replies
     await runTransaction(db, async (tx) => {
@@ -369,7 +367,7 @@ describe('Chat System Integration', () => {
 
     const ownerMsgs = await getDocs(msgsCol);
     expect(ownerMsgs.size).toBe(1);
-    expect(ownerMsgs.docs[0].data().text).toBe('Any Silkies available?');
+    expect(ownerMsgs.docs[0]!.data().text).toBe('Any Silkies available?');
 
     // 3. Owner replies
     await runTransaction(db, async (tx) => {
@@ -403,7 +401,7 @@ describe('Chat System Integration', () => {
   it('Flagging: participant flags message → admin marks hidden → sender sees hidden status', async () => {
     const buyerUser = await createTestUser('buyer-flag@test.com', 'Buyer Flag');
     const ownerUser = await createTestUser('owner-flag@test.com', 'Owner Flag');
-    const adminUser = await createTestUser('admin-flag@test.com', 'Admin Flag', true);
+    await createTestUser('admin-flag@test.com', 'Admin Flag', true);
     const slug = 'flag-test-farm';
 
     await seedTestBreeder(slug, {
@@ -497,7 +495,7 @@ describe('Chat System Integration', () => {
   it('Claiming Persistence: History is visible to new owner after claiming', async () => {
     const buyerEmail = 'buyer2@example.com';
     const newOwnerEmail = 'owner2@example.com';
-    const buyerUser = await createTestUser(buyerEmail, 'Buyer Two');
+    await createTestUser(buyerEmail, 'Buyer Two');
     const newOwnerUser = await createTestUser(newOwnerEmail, 'New Owner');
     const slug = 'unclaimed-farm';
 

@@ -12,11 +12,13 @@ import ContactButton from '../components/ContactButton.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
 import { useBreederUtils, formatRelativeTime } from '../composables/useBreederUtils';
+import { useSupport } from '../composables/useSupport';
 import { BButton } from 'bootstrap-vue-next';
 
 const route = useRoute();
 const store = useStore();
 const { generateSlug, splitBreederName } = useBreederUtils();
+const { contactSupport } = useSupport();
 
 const user = computed(() => store.getters.currentUser);
 const isAdmin = computed(() => store.getters.isAdmin);
@@ -152,7 +154,7 @@ const formatDate = (dateString: string) => {
     
     <div v-if="!breeder && store.getters.allBreeders.length > 0" class="text-center py-5">
       <h2 class="display-6 fw-bold">Member Not Found</h2>
-      <p class="lead">The member you're looking for doesn't exist or is no longer listed.</p>
+      <p class="lead">The verified member you're looking for doesn't exist or is no longer listed.</p>
     </div>
     
     <div v-else-if="breeder" class="card shadow-web border-0 overflow-hidden profile-card">
@@ -213,22 +215,63 @@ const formatDate = (dateString: string) => {
 
       <div class="card-body p-4 bg-white">
         
-        <!-- Verification Perks Banner (Visible only to unverified owner) -->
-        <div v-if="isRealOwner && !isVerified(breeder.verified)" class="alert alert-info border-0 shadow-sm d-flex align-items-center gap-3 mb-4 py-3">
-          <i class="bi bi-patch-check-fill fs-2 text-primary"></i>
+        <!-- Verified Member Welcome Banner (Visible only to verified owner) -->
+        <div v-if="isAdmin || (isRealOwner && isVerified(breeder.verified))" class="alert alert-success border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
+          <i class="bi bi-heart-fill fs-2 text-success mt-1"></i>
           <div>
-            <h6 class="alert-heading fw-bold mb-1 text-primary">Unlock Your Professional Profile</h6>
-            <p class="mb-0 small text-dark">
-              Your profile is currently visible, but restricted. Once verified, you'll unlock:
-              <span class="d-block mt-1">
-                <i class="bi bi-check2-circle me-1"></i> Public Photo Gallery & Trust Badges
-                <i class="bi bi-check2-circle me-1 ms-2"></i> Direct Website & Email links
-                <i class="bi bi-check2-circle me-1 ms-2"></i> Featured Listing status
-              </span>
-              <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-primary text-decoration-none d-inline-block mt-2">
-                Complete your profile to get started &rarr;
-              </router-link>
+            <h6 class="alert-heading fw-bold mb-2 text-success">Thank you for being a Verified Member!</h6>
+            <p class="mb-2 small text-dark">
+              Your support helps maintain and grow our community. This is your public profile page where you can showcase your farm to the world!
             </p>
+            <div class="d-flex flex-wrap align-items-center gap-2 gap-md-3 mt-2">
+              <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-success text-decoration-none small">
+                <i class="bi bi-pencil-square me-1"></i> Update your profile
+              </router-link>
+              <span class="text-muted small d-none d-md-inline">|</span>
+              <a href="#" @click.prevent="contactSupport" class="fw-bold text-success text-decoration-none small">
+                <i class="bi bi-headset me-1"></i> Contact support
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Verification Perks Banner (Visible only to unverified owner) -->
+        <div v-if="isAdmin || (isRealOwner && !isVerified(breeder.verified))" class="alert alert-primary border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
+          <i class="bi bi-patch-check-fill fs-2 text-primary mt-1"></i>
+          <div>
+            <h6 class="alert-heading fw-bold mb-2 text-primary">Unlock Your Professional Profile</h6>
+            <p class="mb-2 small text-dark">
+              Your profile is currently visible to everyone, but hasn't reached its full potential.
+              Once verified, you'll unlock:
+            </p>
+            <div class="d-flex flex-column gap-2 small text-dark">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-check2-circle me-2 text-primary"></i> 
+                Public Photo Gallery & Trust Badges
+              </div>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-check2-circle me-2 text-primary"></i> 
+                Direct Website & Email links
+              </div>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-check2-circle me-2 text-primary"></i> 
+                Featured Listing status
+              </div>
+              <div class="mt-1 pt-2 border-top">
+                <div class="mb-2">
+                  <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
+                    <i class="bi bi-check2-square me-2"></i> 
+                    Complete your profile
+                  </router-link>
+                </div>
+                <div>
+                  <a href="#" @click.prevent="contactSupport" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
+                    <i class="bi bi-check2-square me-2"></i> 
+                    Contact support to get verified
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

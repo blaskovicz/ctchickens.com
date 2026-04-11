@@ -5,8 +5,8 @@ import { BButton } from 'bootstrap-vue-next';
 const props = defineProps<{
   breederName: string;
   showLabelOnMobile?: boolean;
-  variant?: string;
-  size?: string;
+  variant?: any;
+  size?: any;
 }>();
 
 const { generateSlug } = useBreederUtils();

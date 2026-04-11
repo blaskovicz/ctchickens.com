@@ -6,7 +6,6 @@
     import VerifiedBadge from './VerifiedBadge.vue';
     import FoundingBreederBadge from './FoundingBreederBadge.vue';
     import ContactButton from './ContactButton.vue';
-    import MoreInfoButton from './MoreInfoButton.vue';
     import ViewProfileButton from './ViewProfileButton.vue';
     import VerifiedMemberLink from './VerifiedMemberLink.vue';
     import { useBreederUtils } from '../composables/useBreederUtils';
