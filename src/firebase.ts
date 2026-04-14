@@ -38,9 +38,13 @@ facebookProvider.addScope('email');
 // Analytics is not available in emulator mode or non-browser environments
 let analytics: Analytics | null = null;
 if (!USE_EMULATOR) {
-  isSupported().then((supported) => {
-    if (supported) analytics = getAnalytics(app);
-  });
+  isSupported()
+    .then((supported) => {
+      if (supported) analytics = getAnalytics(app);
+    })
+    .catch(() => {
+      // Analytics unavailable (blocked API, ad blocker, etc.) — fail silently
+    });
 }
 
 function trackEvent(name: string, params?: Record<string, unknown>) {
