@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useBreederUtils } from '../composables/useBreederUtils';
+import { trackEvent } from '../firebase';
 import type { Breeder } from '../types';
 
 const props = defineProps<{
@@ -35,7 +36,14 @@ const isVerified = computed(() => {
 const handleSecureMessage = () => {
   if (isBlocked.value) return;
   if (props.breeder) {
+    trackEvent('contact_breeder', { method: 'secure_message', breeder_id: props.breeder.id });
     store.dispatch('toggleInquiryModal', { show: true, breeder: props.breeder });
+  }
+};
+
+const handleDirectContact = () => {
+  if (props.breeder) {
+    trackEvent('contact_breeder', { method: 'direct_contact', breeder_id: props.breeder.id });
   }
 };
 </script>
@@ -60,6 +68,7 @@ const handleSecureMessage = () => {
       v-if="link && isVerified && !forceSecureOnly"
       target="_blank"
       :href="formatContactLink(link)!"
+      @click="handleDirectContact"
       class="btn btn-sm btn-outline-dark text-nowrap d-inline-flex align-items-center justify-content-center"
       style="min-width: 36px;"
       title="Direct Contact"

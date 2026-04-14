@@ -216,7 +216,7 @@ const formatDate = (dateString: string) => {
       <div class="card-body p-4 bg-white">
         
         <!-- Verified Member Welcome Banner (Visible only to verified owner) -->
-        <div v-if="isAdmin || (isRealOwner && isVerified(breeder.verified))" class="alert alert-success border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
+        <div v-if="(isAdmin || isRealOwner) && isVerified(breeder.verified)" class="alert alert-success border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
           <i class="bi bi-heart-fill fs-2 text-success mt-1"></i>
           <div>
             <h6 class="alert-heading fw-bold mb-2 text-success">Thank you for being a Verified Member!</h6>
@@ -240,7 +240,7 @@ const formatDate = (dateString: string) => {
         </div>
 
         <!-- Verification Perks Banner (Visible only to unverified owner) -->
-        <div v-if="isAdmin || (isRealOwner && !isVerified(breeder.verified))" class="alert alert-primary border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
+        <div v-if="(isAdmin || isRealOwner) && !isVerified(breeder.verified)" class="alert alert-primary border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
           <i class="bi bi-patch-check-fill fs-2 text-primary mt-1"></i>
           <div>
             <h6 class="alert-heading fw-bold mb-2 text-primary">Unlock Your Professional Profile</h6>

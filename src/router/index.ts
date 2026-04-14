@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
+import { trackEvent } from '../firebase';
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -77,6 +78,13 @@ const router = createRouter({
     }
     return { top: 0 };
   }
+});
+
+router.afterEach((to) => {
+  trackEvent('page_view', {
+    page_path: to.fullPath,
+    page_title: to.name?.toString() ?? to.path,
+  });
 });
 
 export default router;

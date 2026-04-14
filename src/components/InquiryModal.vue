@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
-import { db } from '../firebase';
+import { db, trackEvent } from '../firebase';
 import { 
   doc, collection, serverTimestamp, runTransaction 
 } from 'firebase/firestore';
@@ -94,6 +94,7 @@ const handleSend = async () => {
       });
     });
 
+    trackEvent('inquiry_sent', { breeder_id: breeder.value.id });
     create?.({ title: 'Success', body: 'Your inquiry has been sent!', variant: 'success' });
     messageText.value = '';
     showModal.value = false;

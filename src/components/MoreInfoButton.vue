@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { BModal } from 'bootstrap-vue-next';
+import { trackEvent } from '../firebase';
 
 const props = defineProps<{
   link: string | null;
@@ -22,14 +23,17 @@ const isVerified = (val: any) => {
 
 const handleClick = () => {
   if (isVerified(props.verified)) {
+    trackEvent('view_breeder_website', { breeder_name: props.name, verified: true });
     window.open(props.link!, '_blank');
   } else {
+    trackEvent('view_breeder_website_warning_shown', { breeder_name: props.name, verified: false });
     showWarningModal.value = true;
   }
 };
 
 const confirmProceed = () => {
   if (props.link) {
+    trackEvent('view_breeder_website', { breeder_name: props.name, verified: false });
     window.open(props.link, '_blank');
   }
   showWarningModal.value = false;
