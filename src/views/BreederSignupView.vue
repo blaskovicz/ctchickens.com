@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
+import { trackEvent } from '../firebase';
 import { BButton, BFormGroup, BFormInput, BFormSelect, BSpinner, BCard } from 'bootstrap-vue-next';
 
 const store = useStore();
@@ -83,6 +84,7 @@ const handleSubmit = async () => {
 
   try {
     const newSlug = await store.dispatch('createDraftListing', { ...form.value });
+    trackEvent('get_listed_submitted', { member_type: form.value.memberType, breeder_id: newSlug, breeder_name: form.value.businessName });
     router.push(`/get-listed/${newSlug}`);
   } catch (e: any) {
     store.commit('PUSH_TOAST', {

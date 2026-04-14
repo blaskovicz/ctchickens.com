@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
-import { db } from '../firebase';
+import { db, trackEvent } from '../firebase';
 import { 
   collection, query, where, orderBy, onSnapshot, 
   doc, updateDoc, serverTimestamp, runTransaction, getDoc,
@@ -203,6 +203,7 @@ const handleSend = async () => {
       });
     });
 
+    trackEvent('chat_message_sent', { thread_id: activeThreadId.value });
     newMessage.value = '';
   } catch (err: any) {
     create?.({ body: `Send failed: ${err.message}`, variant: 'danger' });

@@ -2,6 +2,8 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator, FacebookAuthProvider } from "firebase/auth";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getAnalytics, logEvent, isSupported } from "firebase/analytics";
+import type { Analytics } from "firebase/analytics";
 
 const USE_EMULATOR = import.meta.env.VITE_APP_USE_EMULATOR === 'true';
 
@@ -11,7 +13,8 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -32,4 +35,20 @@ if (USE_EMULATOR) {
 const facebookProvider = new FacebookAuthProvider();
 facebookProvider.addScope('email');
 
-export { db, auth, storage, facebookProvider };
+// Analytics is not available in emulator mode or non-browser environments
+let analytics: Analytics | null = null;
+if (!USE_EMULATOR) {
+  isSupported().then((supported) => {
+    if (supported) analytics = getAnalytics(app);
+  });
+}
+
+function trackEvent(name: string, params?: Record<string, unknown>) {
+  if (analytics) {
+    logEvent(analytics, name, params);
+  } else if (import.meta.env.DEV) {
+    console.log('[analytics]', name, params);
+  }
+}
+
+export { db, auth, storage, facebookProvider, trackEvent };

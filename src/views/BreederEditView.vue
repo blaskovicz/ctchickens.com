@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import { db } from '../firebase';
+import { db, trackEvent } from '../firebase';
 import BreederGallery from '../components/BreederGallery.vue';
 import { 
   doc, getDoc, setDoc, deleteDoc, serverTimestamp,
@@ -527,6 +527,7 @@ const handleSave = async (): Promise<boolean> => {
       };
       const { account, ...draftPayloadWithoutAccount } = draftPayload;
       await setDoc(doc(db, 'draft_profiles', slug), draftPayloadWithoutAccount);
+      trackEvent('profile_draft_submitted', { breeder_id: slug });
       create?.({ body: "Draft submitted for admin approval!", variant: 'success' });
     }
     router.push(`/directory/${slug}`);
