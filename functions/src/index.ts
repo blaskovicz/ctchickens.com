@@ -14,7 +14,7 @@ const resendApiKey = defineSecret('RESEND_API_KEY');
 const layoutSource = fs.readFileSync(path.join(__dirname, '../templates/_layout.html'), 'utf-8');
 const layoutTemplate = Handlebars.compile(layoutSource);
 
-function renderTemplate(bodyName: string, vars: Record<string, string> & { subject: string }): string {
+function renderTemplate(bodyName: string, vars: Record<string, unknown> & { subject: string }): string {
   const bodySource = fs.readFileSync(path.join(__dirname, '../templates', bodyName), 'utf-8');
   const body = Handlebars.compile(bodySource)(vars);
   return layoutTemplate({ ...vars, body });
@@ -88,14 +88,37 @@ export const onDraftProfilePublished = onDocumentCreated(
     const firstName = displayName?.split(' ')[0] || 'there';
     const businessName = (data.snapshot?.profile?.businessName as string) || 'Your farm';
     const profileUrl = `https://ctchickens.com/#/directory/${slug}`;
+
+    // Check verified status from the live listing
+    let isVerified = false;
+    try {
+      const liveDoc = await db.collection('directory_members').doc(slug).get();
+      isVerified = liveDoc.data()?.account?.isVerified === true;
+    } catch (err) {
+      console.error('Failed to fetch live doc for verified status:', err);
+    }
+
+    // Count prior published history docs to distinguish first publish from edits
+    let isFirstPublish = true;
+    try {
+      const historySnap = await db.collection('draft_profile_history')
+        .where('slug', '==', slug)
+        .where('draft_meta.status', '==', 'published')
+        .get();
+      isFirstPublish = historySnap.size <= 1;
+    } catch (err) {
+      console.error('Failed to fetch history count:', err);
+    }
+
+    const subject = isFirstPublish ? 'Your farm is live on CT Chickens!' : 'Your updates are live on CT Chickens!';
     const resend = new Resend(resendApiKey.value());
 
     try {
       await resend.emails.send({
         from: 'CT Chickens <noreply@ctchickens.com>',
         to: userEmail,
-        subject: 'Your farm is live on CT Chickens!',
-        html: renderTemplate('approval-body.html', { subject: 'Your CT Chickens profile is live!', firstName, businessName, profileUrl }),
+        subject,
+        html: renderTemplate('approval-body.html', { subject, firstName, businessName, profileUrl, isVerified, isFirstPublish }),
       });
       console.log(`Approval email sent to ${userEmail} for slug ${slug}`);
     } catch (err) {

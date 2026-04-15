@@ -1,13 +1,34 @@
 <h2 style="color:#1e3a8a;margin:0 0 16px;font-size:22px;font-weight:700;">
-  Your profile is live, {{firstName}}!
+  {{#if isFirstPublish}}Your profile is live, {{firstName}}!{{else}}Your updates are live, {{firstName}}!{{/if}}
 </h2>
 <p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
-  <strong>{{businessName}}</strong> is now published in the CT Chickens directory
-  and visible to the whole community.
+  {{#if isFirstPublish}}
+    <strong>{{businessName}}</strong> is now published in the CT Chickens directory
+    and visible to the whole community.
+  {{else}}
+    Your changes to <strong>{{businessName}}</strong> have been reviewed and are now live
+    in the CT Chickens directory.
+  {{/if}}
 </p>
-<p style="color:#374151;line-height:1.7;margin:0 0 28px;font-size:15px;">
+<p style="word-break:break-all;font-size:15px;color:#1e40af;margin:0 0 16px;font-weight:bold;">{{profileUrl}}</p>
+<p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
   Share your profile link with anyone — no account needed to view it.
 </p>
+
+<!-- Facebook group callout -->
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 28px;">
+  <tr>
+    <td style="background:#eff6ff;border-left:4px solid #1e3a8a;border-radius:4px;padding:14px 16px;">
+      <p style="color:#1e3a8a;font-size:14px;font-weight:700;margin:0 0 6px;">Include your profile link when posting sales in the Facebook group</p>
+      <p style="color:#374151;font-size:14px;line-height:1.6;margin:0 0 10px;">
+        Starting <strong>June 11th, 2026</strong>, all &ldquo;For Sale&rdquo; posts in the Connecticut Backyard Chickens
+        Facebook group must include a link to your CT Chickens profile. You&rsquo;re already ahead of
+        the deadline — just copy your link and include it whenever you post.
+        <a href="https://www.facebook.com/groups/1465813350383274/permalink/4021664304798153" target="_blank" style="color:#1e40af;">See this Facebook post for details.</a>
+      </p>
+    </td>
+  </tr>
+</table>
 
 <!-- Primary CTA -->
 <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 28px;">
@@ -15,12 +36,13 @@
     <td style="background:linear-gradient(135deg,#1e3a8a 0%,#1e40af 100%);border-radius:8px;">
       <a href="{{profileUrl}}" target="_blank"
         style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;">
-        View Your Profile &rarr;
+        View or Edit Your Profile &rarr;
       </a>
     </td>
   </tr>
 </table>
 
+{{#unless isVerified}}
 <!-- Divider -->
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 28px;">
   <tr>
@@ -44,4 +66,4 @@
     </td>
   </tr>
 </table>
-
+{{/unless}}
