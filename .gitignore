@@ -25,3 +25,9 @@ dist-ssr
 .env
 production-backup.json
 firebase-export*
+functions/lib/
+functions/preview-*.html
+functions/.secret.local
+functions/test-send.js
+functions/generate-sample-emails.js
+
