@@ -496,18 +496,16 @@ const handleSave = async (): Promise<boolean> => {
       delete (livePayload as any).draft_owner_uid;
       delete (livePayload as any).updatedAt;
       await setDoc(doc(db, 'directory_members', slug), livePayload, { merge: true });
+      try {
+        await recordDraftProfileHistory(slug, draftSnapshotForHistory ?? livePayload, { status: 'published' });
+      } catch (histErr: any) {
+        console.error(histErr);
+        create?.({
+          body: `Published live, but history archive failed: ${histErr.message}`,
+          variant: 'warning'
+        });
+      }
       if (hasPendingDraft.value) {
-        if (draftSnapshotForHistory) {
-          try {
-            await recordDraftProfileHistory(slug, draftSnapshotForHistory, { status: 'published' });
-          } catch (histErr: any) {
-            console.error(histErr);
-            create?.({
-              body: `Published live, but history archive failed: ${histErr.message}`,
-              variant: 'warning'
-            });
-          }
-        }
         await deleteDoc(doc(db, 'draft_profiles', slug));
       }
 
