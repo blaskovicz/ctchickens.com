@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as Handlebars from 'handlebars';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { Resend } from 'resend';
@@ -14,11 +15,52 @@ const resendApiKey = defineSecret('RESEND_API_KEY');
 const layoutSource = fs.readFileSync(path.join(__dirname, '../templates/_layout.html'), 'utf-8');
 const layoutTemplate = Handlebars.compile(layoutSource);
 
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === 'true';
+
 function renderTemplate(bodyName: string, vars: Record<string, unknown> & { subject: string }): string {
   const bodySource = fs.readFileSync(path.join(__dirname, '../templates', bodyName), 'utf-8');
   const body = Handlebars.compile(bodySource)(vars);
   return layoutTemplate({ ...vars, body });
 }
+
+// Self-heals a missing users doc when a draft_profiles document is created.
+// Guards against getRedirectResult failing silently on the client.
+export const onDraftProfileCreated = onDocumentCreated(
+  { document: 'draft_profiles/{slug}' },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const ownerUid = data.draft_owner_uid as string | undefined;
+    if (!ownerUid) {
+      console.error('[onDraftProfileCreated] Missing draft_owner_uid', { slug: event.params.slug });
+      return;
+    }
+
+    const userRef = db.collection('users').doc(ownerUid);
+    const userSnap = await userRef.get();
+    if (userSnap.exists) return; // users doc already exists, nothing to do
+
+    // users doc is missing — pull data from Auth and create it
+    console.error('[onDraftProfileCreated] Missing users doc detected', {
+      slug: event.params.slug,
+      ownerUid,
+    });
+
+    try {
+      const authUser = await getAuth().getUser(ownerUid);
+      await userRef.set({
+        displayName: authUser.displayName ?? null,
+        email: authUser.email ?? null,
+        photoURL: authUser.photoURL ?? null,
+        lastLogin: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      console.log('[onDraftProfileCreated] users doc created for uid', ownerUid);
+    } catch (e) {
+      console.error('[onDraftProfileCreated] Failed to create users doc', { ownerUid, error: e });
+    }
+  }
+);
 
 // Sends a welcome email when a new user document is created (first FB OAuth login)
 export const onUserCreated = onDocumentCreated(
@@ -31,6 +73,12 @@ export const onUserCreated = onDocumentCreated(
     }
 
     const firstName = (data.displayName as string)?.split(' ')[0] || 'there';
+
+    if (IS_EMULATOR) {
+      console.log(`[emulator] Skipping welcome email to ${data.email}`);
+      return;
+    }
+
     const resend = new Resend(resendApiKey.value());
 
     try {
@@ -111,6 +159,12 @@ export const onDraftProfilePublished = onDocumentCreated(
     }
 
     const subject = isFirstPublish ? 'Your farm is live on CT Chickens!' : 'Your updates are live on CT Chickens!';
+
+    if (IS_EMULATOR) {
+      console.log(`[emulator] Skipping approval email to ${userEmail} for slug ${slug}`);
+      return;
+    }
+
     const resend = new Resend(resendApiKey.value());
 
     try {

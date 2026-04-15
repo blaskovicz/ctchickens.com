@@ -215,6 +215,18 @@ const formatDate = (dateString: string) => {
 
       <div class="card-body p-4 bg-white">
         
+        <!-- No Email Warning Banner (Visible only to owner with no email on their account) -->
+        <div v-if="(isAdmin || isRealOwner) && !user?.email" class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
+          <i class="bi bi-envelope-exclamation-fill fs-2 text-warning mt-1"></i>
+          <div>
+            <h6 class="alert-heading fw-bold mb-2 text-warning">No email address on your account</h6>
+            <p class="mb-0 small text-dark">
+              Your Facebook account has no email address. We won't be able to notify you when your profile is approved or updated.
+              Add an email to your Facebook account and log in again to fix this.
+            </p>
+          </div>
+        </div>
+
         <!-- Verified Member Welcome Banner (Visible only to verified owner) -->
         <div v-if="(isAdmin || isRealOwner) && isVerified(breeder.verified)" class="alert alert-success border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
           <i class="bi bi-heart-fill fs-2 text-success mt-1"></i>

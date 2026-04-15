@@ -1,7 +1,7 @@
 import { createStore } from 'vuex';
 import type { ActionContext } from 'vuex';
 import type { Breeder, FirestoreMember } from '../types';
-import { db, auth, facebookProvider } from '../firebase';
+import { db, auth, facebookProvider, trackEvent } from '../firebase';
 import router from '../router';
 import { 
   collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction 
@@ -116,7 +116,7 @@ export default createStore({
     toggleInquiryModal({ commit }: ActionContext<State, State>, payload: { show: boolean; breeder?: Breeder }) {
       commit('TOGGLE_INQUIRY_MODAL', payload);
     },
-    async initAuth({ commit, dispatch, getters }: ActionContext<State, State>) {
+    async initAuth({ commit, dispatch, getters, state }: ActionContext<State, State>) {
       console.log("Auth: Initializing...");
       const url = window.location.href;
       const hasRedirectParams = url.includes('__firebase_request_key') || url.includes('code=') || url.includes('state=');
@@ -128,9 +128,9 @@ export default createStore({
           const user = result.user;
 
           await setDoc(doc(db, 'users', user.uid), {
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
+            displayName: user.displayName ?? null,
+            email: user.email ?? null,
+            photoURL: user.photoURL ?? null,
             lastLogin: serverTimestamp()
           }, { merge: true });
           
@@ -161,13 +161,31 @@ export default createStore({
 
         onAuthStateChanged(auth, async (user) => {
           commit('SET_USER', user);
-          
+
           if (user) {
             await Promise.all([
               dispatch('fetchUserData', user.uid),
               dispatch('fetchActiveClaims', user.uid),
               dispatch('fetchMyDrafts', user.uid)
             ]);
+
+            // Fallback: if no users doc exists after fetching, upsert one from the
+            // Auth user object. Guards against getRedirectResult returning null
+            // (e.g. redirect interrupted) while the session was already persisted.
+            if (!state.userData) {
+              try {
+                await setDoc(doc(db, 'users', user.uid), {
+                  displayName: user.displayName ?? null,
+                  email: user.email ?? null,
+                  photoURL: user.photoURL ?? null,
+                  lastLogin: serverTimestamp()
+                }, { merge: true });
+                await dispatch('fetchUserData', user.uid);
+                trackEvent('auth_users_doc_missing', { uid: user.uid });
+              } catch (e) {
+                console.error('Auth: fallback users doc upsert failed:', e);
+              }
+            }
             if (!isResolved) {
               isResolved = true;
               clearTimeout(timeout);
