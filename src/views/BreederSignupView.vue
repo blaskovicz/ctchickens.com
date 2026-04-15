@@ -195,6 +195,10 @@ const handleSubmit = async () => {
                     <BButton variant="primary" @click="handleLogin" class="btn-facebook px-4 py-3 fw-bold shadow-sm w-100">
                       <i class="bi bi-facebook me-2"></i>Login with Facebook
                     </BButton>
+                    <p class="text-muted small mt-3">
+                      <i class="bi bi-envelope me-1"></i>
+                      Make sure your Facebook account has a verified email address — we use it to send you important notifications about your listing.
+                    </p>
                   </div>
 
                   <form v-else @submit.prevent="handleSubmit" class="signup-form">
