@@ -97,7 +97,7 @@
       <div class="container">
         <router-link class="navbar-brand fw-bold d-flex align-items-center" to="/">
           <img src="/hen.png" alt="Logo" width="32" height="32" class="me-2">
-          <span class="d-inline d-sm-none">CT Backyard Chickens</span>
+          <span class="d-inline d-sm-none">CT Chickens</span>
           <span class="d-none d-sm-inline">Connecticut Backyard Chickens</span>
         </router-link>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
