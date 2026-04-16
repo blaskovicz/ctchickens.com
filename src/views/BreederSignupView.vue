@@ -4,6 +4,7 @@ import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
 import { trackEvent } from '../firebase';
 import { BButton, BFormGroup, BFormInput, BFormSelect, BSpinner, BCard } from 'bootstrap-vue-next';
+import { useSupport } from '../composables/useSupport';
 
 const store = useStore();
 const route = useRoute();
@@ -36,6 +37,8 @@ const breederTypeOptions = [
   { value: 'rescue', text: 'Rescue' },
   { value: 'other', text: 'Other' }
 ];
+
+const { contactSupport } = useSupport();
 
 const handleLogin = () => {
   store.dispatch('loginWithFacebook');
@@ -158,13 +161,34 @@ const handleSubmit = async () => {
                     </p>
                   </div>
 
-                  <div class="alert alert-warning border-0 shadow-sm text-start mb-4 py-3">
-                    <h6 class="fw-bold mb-2"><i class="bi bi-info-circle-fill me-2"></i>What's next?</h6>
-                    <ul class="small mb-0 ps-3">
-                      <li class="mb-1">Our team will review your basic details within 24-48 hours.</li>
-                      <li class="mb-1">Once approved, you'll receive a notification to complete your full profile.</li>
-                      <li>You can then add your gallery, inventory, and contact links.</li>
-                    </ul>
+                  <div class="alert alert-primary border-0 shadow-sm text-start mb-4 py-3">
+                    <h6 class="fw-bold mb-2 text-primary"><i class="bi bi-patch-check-fill me-2"></i>What's next?</h6>
+                    <div class="d-flex flex-column gap-2 small text-dark">
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-check2-circle me-2 text-primary"></i>
+                        Our team will review your basic details within 24-48 hours.
+                      </div>
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-check2-circle me-2 text-primary"></i>
+                        Once approved, your listing will go live on the directory.
+                      </div>
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-check2-circle me-2 text-primary"></i>
+                        Log back in to complete your profile — description, contact info, tags.
+                      </div>
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-check2-circle me-2 text-primary"></i>
+                        Contact support to get verified and unlock more features.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="!store.getters.currentUser?.email" class="alert alert-warning border-0 shadow-sm text-start mb-4 py-3 d-flex align-items-start gap-3">
+                    <i class="bi bi-envelope-exclamation-fill fs-4 text-warning mt-1 flex-shrink-0"></i>
+                    <div>
+                      <h6 class="fw-bold mb-1 text-warning">No email address on your account</h6>
+                      <p class="small mb-0">Your Facebook account has no email address. We won't be able to notify you when your profile is approved or updated. Add an email to your Facebook account and log in again to fix this.</p>
+                    </div>
                   </div>
 
                   <div class="d-grid gap-2">
@@ -175,6 +199,10 @@ const handleSubmit = async () => {
                       Go Back
                     </BButton>
                   </div>
+
+                  <p class="text-muted small mt-4 mb-0">
+                    Need help? <a href="#" class="text-primary fw-bold text-decoration-none" @click.prevent="contactSupport">Contact us.</a>
+                  </p>
                 </div>
 
                 <!-- SIGNUP FORM -->
@@ -256,6 +284,10 @@ const handleSubmit = async () => {
                         <i v-if="!isSaving" class="bi bi-arrow-right ms-2"></i>
                       </BButton>
                     </div>
+
+                    <p class="text-muted small mt-4 mb-0 text-center">
+                      Need help? <a href="#" class="text-primary fw-bold text-decoration-none" @click.prevent="contactSupport">Contact us.</a>
+                    </p>
                   </form>
                 </div>
 
