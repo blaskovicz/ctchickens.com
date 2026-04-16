@@ -130,7 +130,7 @@ describe('initAuth Integration Test', () => {
     expect(signOut).toHaveBeenCalledWith(auth);
     expect(store.state.user).toBeNull();
     expect(store.state.authReady).toBe(true);
-    expect(store.state.toasts.some(t => t.variant === 'warning')).toBe(true);
+    expect(store.state.toasts.some(t => t.variant === 'danger')).toBe(true);
     console.log('✅ initAuth cleaned up stale redirect state and showed warning toast');
 
     sessionStorage.removeItem(pendingKey);
