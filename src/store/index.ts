@@ -202,7 +202,6 @@ export default createStore({
           commit('SET_USER', user);
 
           if (user) {
-            sessionStorage.removeItem('ctc:loginMode');
             await Promise.all([
               dispatch('fetchUserData', user.uid),
               dispatch('fetchActiveClaims', user.uid),
@@ -294,6 +293,7 @@ export default createStore({
       try {
         if (sessionStorage.getItem('ctc:loginMode') === 'popup') {
           console.log("[auth] redirect previously failed — retrying with popup");
+          sessionStorage.removeItem('ctc:loginMode');
           await signInWithPopup(auth, facebookProvider);
         } else {
           await signInWithRedirect(auth, facebookProvider);
