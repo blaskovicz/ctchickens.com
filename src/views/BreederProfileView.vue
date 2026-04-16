@@ -91,6 +91,16 @@ const isOwner = computed(() => {
   return isAdmin.value || isRealOwner.value;
 });
 
+// True when the farm owner has no email — used to show the warning banner.
+// When the real owner is viewing: check their own Auth email.
+// When admin is viewing: check the owner's users-doc email (ownerProfile is already fetched).
+// Only evaluates to true once ownerProfile has loaded (not null) to avoid a flash.
+const ownerEmailMissing = computed(() => {
+  if (isRealOwner.value) return !user.value?.email;
+  if (isAdmin.value) return ownerProfile.value !== null && !ownerProfile.value?.email;
+  return false;
+});
+
 // Check for pending draft in Firestore
 const checkDraftStatus = async () => {
   hasPendingDraft.value = false;
@@ -216,7 +226,7 @@ const formatDate = (dateString: string) => {
       <div class="card-body p-4 bg-white">
         
         <!-- No Email Warning Banner (Visible only to owner with no email on their account) -->
-        <div v-if="(isAdmin || isRealOwner) && !user?.email" class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
+        <div v-if="(isAdmin || isRealOwner) && ownerEmailMissing" class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 mb-4 py-3">
           <i class="bi bi-envelope-exclamation-fill fs-2 text-warning mt-1"></i>
           <div>
             <h6 class="alert-heading fw-bold mb-2 text-warning">No email address on your account</h6>
@@ -235,7 +245,8 @@ const formatDate = (dateString: string) => {
             <p class="mb-2 small text-dark">
               Your support helps maintain and grow our community. This is your public profile page where you can showcase your farm to the world!
             </p>
-            <div class="d-flex flex-wrap align-items-center gap-2 gap-md-3 mt-2">
+            <hr class="my-2 opacity-25">
+            <div class="d-flex flex-wrap align-items-center gap-2 gap-md-3">
               <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-success text-decoration-none small">
                 <i class="bi bi-pencil-square me-1"></i> Update your profile
               </router-link>
@@ -262,37 +273,31 @@ const formatDate = (dateString: string) => {
             </p>
             <div class="d-flex flex-column gap-2 small text-dark">
               <div class="d-flex align-items-center">
-                <i class="bi bi-check2-circle me-2 text-primary"></i> 
+                <i class="bi bi-unlock-fill me-2 text-primary"></i>
                 Public Photo Gallery & Trust Badges
               </div>
               <div class="d-flex align-items-center">
-                <i class="bi bi-check2-circle me-2 text-primary"></i> 
+                <i class="bi bi-unlock-fill me-2 text-primary"></i>
                 Direct Website & Email links
               </div>
               <div class="d-flex align-items-center">
-                <i class="bi bi-check2-circle me-2 text-primary"></i> 
+                <i class="bi bi-unlock-fill me-2 text-primary"></i>
                 Featured Listing status
               </div>
-              <div class="mt-1 pt-2 border-top">
-                <div class="mb-2">
-                  <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
-                    <i class="bi bi-check2-square me-2"></i> 
-                    Complete your profile
-                  </router-link>
-                </div>
-                <div class="mb-2">
-                  <router-link to="/inbox" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
-                    <i class="bi bi-check2-square me-2"></i> 
-                    Check chat inbox for leads
-                  </router-link>
-                </div>
-                <div>
-                  <a href="#" @click.prevent="contactSupport" class="fw-bold text-primary text-decoration-none d-flex align-items-center">
-                    <i class="bi bi-check2-square me-2"></i> 
-                    Contact support to get verified
-                  </a>
-                </div>
-              </div>
+            </div>
+            <hr class="my-2 opacity-25">
+            <div class="d-flex flex-wrap align-items-center gap-2 gap-md-3">
+              <router-link :to="`/directory/${generateSlug(breeder.name)}/edit`" class="fw-bold text-primary text-decoration-none small">
+                <i class="bi bi-pencil-square me-1"></i> Complete your profile
+              </router-link>
+              <span class="text-muted small d-none d-md-inline">|</span>
+              <router-link to="/inbox" class="fw-bold text-primary text-decoration-none small">
+                <i class="bi bi-chat-right-text me-1"></i> Check inbox for leads
+              </router-link>
+              <span class="text-muted small d-none d-md-inline">|</span>
+              <a href="#" @click.prevent="contactSupport" class="fw-bold text-primary text-decoration-none small">
+                <i class="bi bi-headset me-1"></i> Contact support to get verified
+              </a>
             </div>
           </div>
         </div>

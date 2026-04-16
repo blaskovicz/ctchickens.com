@@ -289,11 +289,7 @@ export default createStore({
 
     async fetchBreeder({ commit, state, getters }: ActionContext<State, State>, slug: string) {
       try {
-        // 1. Check local directory first
-        const local = state.breeders.find(b => b.id === slug);
-        if (local) return local;
-
-        // 2. Try live Firestore
+        // 1. Try live Firestore
         const docRef = doc(db, 'directory_members', slug);
         const docSnap = await getDoc(docRef);
         
