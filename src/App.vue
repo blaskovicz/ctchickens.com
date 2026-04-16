@@ -45,7 +45,8 @@
           body: t.message,
           title: t.title,
           variant: t.variant || 'info',
-          pos: 'top-center'
+          pos: 'top-center',
+          ...(t.duration ? { modelValue: t.duration } : {})
         });
       });
       store.commit('CLEAR_TOASTS');
