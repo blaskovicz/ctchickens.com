@@ -79,6 +79,14 @@ Breeders go through a draft → published flow:
 - `verified` — admin-verified badge
 - `founding_breeder` — week number for rotating featured breeder algorithm
 
+### Known Issue: Facebook Login on Android
+
+Android's App Links feature hands off `m.facebook.com` OAuth URLs to the Facebook native app, which silently fails — the redirect returns no user and auth never completes.
+
+**Device-level fix (the only reliable workaround):** In the Facebook app, go to Settings → Media & Contacts (or Browser) → disable "Open links in Facebook" / "Links open externally". This forces OAuth through the system browser where it completes normally.
+
+There is no code-level fix. `signInWithPopup` has the same problem (popup tab also gets intercepted). Chrome 137+ Custom Tabs may eventually resolve this at the browser level.
+
 ### Firebase / Emulator Setup
 
 `src/firebase.ts` reads `VITE_*` env vars. Set `VITE_APP_USE_EMULATOR=true` in `.env` to connect to local emulators instead of production Firebase. See `.env.sample` for all required vars.
