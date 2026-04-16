@@ -117,15 +117,23 @@ export default createStore({
       commit('TOGGLE_INQUIRY_MODAL', payload);
     },
     async initAuth({ commit, dispatch, getters, state }: ActionContext<State, State>) {
-      console.log("Auth: Initializing...");
-      const url = window.location.href;
-      const hasRedirectParams = url.includes('__firebase_request_key') || url.includes('code=') || url.includes('state=');
-      
+      console.log("[auth] initializing...");
+
+      // Check sessionStorage for Firebase's pending redirect flag BEFORE calling
+      // getRedirectResult() — the SDK clears it during that call, so this is the
+      // only reliable window to know a redirect was actively in flight.
+      // Key format confirmed from Firebase SDK source: _persistenceKeyName()
+      const pendingRedirectKey = `firebase:pendingRedirect:${import.meta.env.VITE_FIREBASE_API_KEY}:[DEFAULT]`;
+      const useEmulator = import.meta.env.VITE_APP_USE_EMULATOR === 'true';
+      const hadPendingRedirect = !useEmulator && sessionStorage.getItem(pendingRedirectKey) === 'true';
+      console.log("[auth] redirect signals — sessionStorage pendingRedirect:", hadPendingRedirect);
+
       try {
         // 1. Handle redirect result FIRST
         const result = await getRedirectResult(auth);
         if (result?.user) {
           const user = result.user;
+          console.log("[auth] redirect sign-in succeeded", user.uid);
 
           await setDoc(doc(db, 'users', user.uid), {
             displayName: user.displayName ?? null,
@@ -133,15 +141,28 @@ export default createStore({
             photoURL: user.photoURL ?? null,
             lastLogin: serverTimestamp()
           }, { merge: true });
-          
+
           await Promise.all([
             dispatch('fetchUserData', user.uid),
             dispatch('fetchActiveClaims', user.uid),
             dispatch('fetchMyDrafts', user.uid)
           ]);
+        } else if (hadPendingRedirect) {
+          // A redirect was in flight but returned no user — stale auth state
+          // (e.g. cookies cleared mid-flow). Call signOut() to flush the orphaned
+          // redirectUser from IndexedDB so the user isn't stuck in a broken loop.
+          console.warn("[auth] redirect returned no user — clearing stale redirect state.");
+          trackEvent('auth_stale_redirect_cleared');
+          await signOut(auth);
+          commit('PUSH_TOAST', {
+            title: 'Sign-in incomplete',
+            message: 'Something interrupted your login. Please try again.',
+            variant: 'warning'
+          });
         }
       } catch (error: any) {
-        console.error("Auth: Redirect error detail:", error);
+        console.error("[auth] redirect error:", error?.code ?? error);
+        trackEvent('auth_redirect_error', { error_code: error?.code ?? 'unknown' });
         commit('PUSH_TOAST', {
           title: 'Authentication Error',
           message: error.message || 'Login failed during redirect',
@@ -160,6 +181,7 @@ export default createStore({
         }, 5000);
 
         onAuthStateChanged(auth, async (user) => {
+          console.log("[auth] state changed —", user ? `signed in as ${user.uid}` : "signed out");
           commit('SET_USER', user);
 
           if (user) {
@@ -183,7 +205,7 @@ export default createStore({
                 await dispatch('fetchUserData', user.uid);
                 trackEvent('auth_users_doc_missing', { uid: user.uid });
               } catch (e) {
-                console.error('Auth: fallback users doc upsert failed:', e);
+                console.error('[auth] fallback users doc upsert failed:', e);
               }
             }
             if (!isResolved) {
@@ -191,7 +213,7 @@ export default createStore({
               clearTimeout(timeout);
               resolve();
             }
-          } else if (!hasRedirectParams) {
+          } else {
             if (!isResolved) {
               isResolved = true;
               clearTimeout(timeout);
@@ -205,7 +227,7 @@ export default createStore({
       try {
         await dispatch('fetchDirectory');
       } catch (e) {
-        console.error("Auth: fetchDirectory failed", e);
+        console.error("[auth] fetchDirectory failed", e);
       }
       
       if (getters.isLoggedIn && getters.myBreeders.length > 0 && router.currentRoute.value.path === '/') {
