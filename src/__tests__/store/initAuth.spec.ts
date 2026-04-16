@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import store from '../../store';
 import { auth } from '../../firebase';
-import { getRedirectResult, onAuthStateChanged } from 'firebase/auth';
+import { getRedirectResult, onAuthStateChanged, signOut } from 'firebase/auth';
 
 // Mock firebase/auth
 vi.mock('firebase/auth', async (importOriginal) => {
@@ -10,6 +10,7 @@ vi.mock('firebase/auth', async (importOriginal) => {
     ...actual,
     getRedirectResult: vi.fn(),
     onAuthStateChanged: vi.fn(),
+    signOut: vi.fn(() => Promise.resolve()),
   };
 });
 
@@ -109,34 +110,30 @@ describe('initAuth Integration Test', () => {
     console.log('✅ initAuth settled correctly for anonymous cold start');
   });
 
-  it('waits for session to settle if redirect params are present but user is initially null', async () => {
-    const redirectUrl = 'http://localhost/?code=abc';
-    // @ts-ignore
-    window.location.href = redirectUrl;
+  it('cleans up stale redirect state when sessionStorage flag is set but getRedirectResult returns no user', async () => {
+    // Disable emulator mode so the stale-redirect detection runs
+    vi.stubEnv('VITE_APP_USE_EMULATOR', 'false');
 
-    (getRedirectResult as any).mockResolvedValueOnce({ user: null }); // Result might be null initially
+    const pendingKey = `firebase:pendingRedirect:${import.meta.env.VITE_FIREBASE_API_KEY}:[DEFAULT]`;
+    sessionStorage.setItem(pendingKey, 'true');
 
-    let callbackCount = 0;
+    (getRedirectResult as any).mockResolvedValueOnce(null);
+
     (onAuthStateChanged as any).mockImplementation((_auth: any, callback: any) => {
-      // First call: null (SDK still initializing)
-      setTimeout(() => {
-        callbackCount++;
-        callback(null);
-        
-        // Second call: user (SDK finally processed the redirect or recovered session)
-        setTimeout(() => {
-          callbackCount++;
-          callback({ uid: 'late-uid' });
-        }, 100);
-      }, 50);
+      setTimeout(() => callback(null), 50);
       return () => {};
     });
 
+    store.commit('CLEAR_TOASTS');
     await store.dispatch('initAuth');
 
-    expect(store.state.user).not.toBeNull();
-    expect(store.state.user?.uid).toBe('late-uid');
+    expect(signOut).toHaveBeenCalledWith(auth);
+    expect(store.state.user).toBeNull();
     expect(store.state.authReady).toBe(true);
-    console.log('✅ initAuth waited for delayed session recovery during redirect');
+    expect(store.state.toasts.some(t => t.variant === 'warning')).toBe(true);
+    console.log('✅ initAuth cleaned up stale redirect state and showed warning toast');
+
+    sessionStorage.removeItem(pendingKey);
+    vi.unstubAllEnvs();
   });
 });
