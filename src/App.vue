@@ -61,15 +61,31 @@
     }
   });
 
+  function onPageShow(event: PageTransitionEvent) {
+    if (event.persisted) {
+      const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+      const pendingKey = `firebase:pendingRedirect:${apiKey}:[DEFAULT]`;
+      if (sessionStorage.getItem(pendingKey) !== null) {
+        store.dispatch('initAuth');
+      }
+    }
+  }
+
   onMounted(async () => {
     await store.dispatch('initAuth');
     if (user.value) {
       setupUnreadListener(user.value.uid);
     }
+
+    // When the browser restores this page from bfcache (back/forward cache),
+    // Vue does not re-mount — treat it like a fresh mount if a Firebase redirect
+    // was in flight so getRedirectResult() can process the auth result.
+    window.addEventListener('pageshow', onPageShow);
   });
 
   onUnmounted(() => {
     if (unreadUnsubscribe) unreadUnsubscribe();
+    window.removeEventListener('pageshow', onPageShow);
   });
 </script>
   

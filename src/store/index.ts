@@ -125,7 +125,7 @@ export default createStore({
       // Key format confirmed from Firebase SDK source: _persistenceKeyName()
       const pendingRedirectKey = `firebase:pendingRedirect:${import.meta.env.VITE_FIREBASE_API_KEY}:[DEFAULT]`;
       const useEmulator = import.meta.env.VITE_APP_USE_EMULATOR === 'true';
-      const hadPendingRedirect = !useEmulator && sessionStorage.getItem(pendingRedirectKey) === 'true';
+      const hadPendingRedirect = !useEmulator && sessionStorage.getItem(pendingRedirectKey) !== null;
       console.log("[auth] redirect signals — sessionStorage pendingRedirect:", hadPendingRedirect);
 
       try {
