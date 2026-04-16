@@ -15,6 +15,18 @@ import {
 import type { User } from 'firebase/auth';
 import { generateSlug } from '../composables/useBreederUtils';
 
+const AUTH_TOAST_SUFFIX = 'Please try again. If it keeps failing, clear your site data in browser settings. If this persists, contact admin@ctchickens.com';
+
+async function fullSignOut() {
+  await signOut(auth);
+  // signOut() flushes the redirectUser from IndexedDB but leaves Firebase's
+  // sessionStorage keys (oauthHelperState, sessionId, pendingRedirect) behind.
+  // These stale keys poison subsequent login attempts, so clear them explicitly.
+  for (const key of Object.keys(sessionStorage)) {
+    if (key.startsWith('firebase:')) sessionStorage.removeItem(key);
+  }
+}
+
 interface State {
   breeders: Breeder[];
   myDrafts: Breeder[]; // List of drafts owned by the current user
@@ -23,7 +35,7 @@ interface State {
   userData: any | null; 
   activeClaims: string[]; // List of businessSlugs currently being claimed
   authReady: boolean;
-  toasts: { message: string; title?: string; variant: string }[];
+  toasts: { message: string; title?: string; variant: string; duration?: number }[];
   showInquiryModal: { show: boolean; breeder?: Breeder };
 }
 
@@ -150,14 +162,16 @@ export default createStore({
         } else if (hadPendingRedirect) {
           // A redirect was in flight but returned no user — stale auth state
           // (e.g. cookies cleared mid-flow). Call signOut() to flush the orphaned
-          // redirectUser from IndexedDB so the user isn't stuck in a broken loop.
+          // redirectUser from IndexedDB, and clear the Firebase OAuth sessionStorage
+          // keys so the next login attempt starts clean.
           console.warn("[auth] redirect returned no user — clearing stale redirect state.");
           trackEvent('auth_stale_redirect_cleared');
-          await signOut(auth);
+          await fullSignOut();
           commit('PUSH_TOAST', {
             title: 'Sign-in incomplete',
-            message: 'Something interrupted your login. Please try again.',
-            variant: 'warning'
+            message: `Something interrupted your login. ${AUTH_TOAST_SUFFIX}`,
+            variant: 'danger',
+            duration: 30000
           });
         }
       } catch (error: any) {
@@ -165,8 +179,9 @@ export default createStore({
         trackEvent('auth_redirect_error', { error_code: error?.code ?? 'unknown' });
         commit('PUSH_TOAST', {
           title: 'Authentication Error',
-          message: error.message || 'Login failed during redirect',
-          variant: 'danger'
+          message: `${error.message || 'Login failed during redirect.'} ${AUTH_TOAST_SUFFIX}`,
+          variant: 'danger',
+          duration: 30000
         });
       }
 
@@ -278,14 +293,15 @@ export default createStore({
       } catch (error: any) {
         commit('PUSH_TOAST', {
           title: 'Authentication Error',
-          message: error.message || 'Failed to start login flow',
-          variant: 'danger'
+          message: `${error.message || 'Failed to start login flow.'} ${AUTH_TOAST_SUFFIX}`,
+          variant: 'danger',
+          duration: 30000
         });
       }
     },
 
     async logout({ commit }: ActionContext<State, State>) {
-      await signOut(auth);
+      await fullSignOut();
       commit('SET_USER', null);
       commit('SET_USER_DATA', null);
       commit('SET_ACTIVE_CLAIMS', []);
