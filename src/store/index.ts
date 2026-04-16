@@ -15,7 +15,7 @@ import {
 import type { User } from 'firebase/auth';
 import { generateSlug } from '../composables/useBreederUtils';
 
-const AUTH_TOAST_SUFFIX = 'Please try again. If it keeps failing, clear your site data in browser settings. If this persists, contact admin@ctchickens.com';
+const AUTH_TOAST_SUFFIX = 'Please try again. On Android, try disabling "Open links in Facebook" in Facebook app settings. If it keeps failing, clear your site data in browser settings or contact admin@ctchickens.com';
 
 async function fullSignOut() {
   await signOut(auth);
