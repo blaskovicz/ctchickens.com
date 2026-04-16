@@ -1,16 +1,17 @@
 import { createStore } from 'vuex';
 import type { ActionContext } from 'vuex';
 import type { Breeder, FirestoreMember } from '../types';
-import { db, auth, facebookProvider, trackEvent } from '../firebase';
+import { db, auth, trackEvent } from '../firebase';
 import router from '../router';
 import { 
   collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction 
 } from 'firebase/firestore';
-import { 
-  onAuthStateChanged, 
+import {
+  onAuthStateChanged,
   signInWithRedirect,
   getRedirectResult,
-  signOut
+  signOut,
+  FacebookAuthProvider
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { generateSlug } from '../composables/useBreederUtils';
@@ -146,6 +147,7 @@ export default createStore({
         if (result?.user) {
           const user = result.user;
           console.log("[auth] redirect sign-in succeeded", user.uid);
+          sessionStorage.removeItem('ctc:loginMode');
 
           await setDoc(doc(db, 'users', user.uid), {
             displayName: user.displayName ?? null,
@@ -167,6 +169,7 @@ export default createStore({
           console.warn("[auth] redirect returned no user — clearing stale redirect state.");
           trackEvent('auth_stale_redirect_cleared');
           await fullSignOut();
+          sessionStorage.setItem('ctc:loginMode', 'reauthenticate');
           commit('PUSH_TOAST', {
             title: 'Sign-in incomplete',
             message: `Something interrupted your login. ${AUTH_TOAST_SUFFIX}`,
@@ -289,7 +292,14 @@ export default createStore({
 
     async loginWithFacebook({ commit }: ActionContext<State, State>) {
       try {
-        await signInWithRedirect(auth, facebookProvider);
+        const provider = new FacebookAuthProvider();
+        provider.addScope('email');
+        if (sessionStorage.getItem('ctc:loginMode') === 'reauthenticate') {
+          console.log("[auth] retrying with reauthenticate");
+          provider.setCustomParameters({ auth_type: 'reauthenticate' });
+          sessionStorage.removeItem('ctc:loginMode');
+        }
+        await signInWithRedirect(auth, provider);
       } catch (error: any) {
         commit('PUSH_TOAST', {
           title: 'Authentication Error',
