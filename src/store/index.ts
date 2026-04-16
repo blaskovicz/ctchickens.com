@@ -9,7 +9,6 @@ import {
 import {
   onAuthStateChanged,
   signInWithRedirect,
-  signInWithPopup,
   getRedirectResult,
   signOut
 } from 'firebase/auth';
@@ -168,7 +167,6 @@ export default createStore({
           console.warn("[auth] redirect returned no user — clearing stale redirect state.");
           trackEvent('auth_stale_redirect_cleared');
           await fullSignOut();
-          sessionStorage.setItem('ctc:loginMode', 'popup');
           commit('PUSH_TOAST', {
             title: 'Sign-in incomplete',
             message: `Something interrupted your login. ${AUTH_TOAST_SUFFIX}`,
@@ -291,13 +289,7 @@ export default createStore({
 
     async loginWithFacebook({ commit }: ActionContext<State, State>) {
       try {
-        if (sessionStorage.getItem('ctc:loginMode') === 'popup') {
-          console.log("[auth] redirect previously failed — retrying with popup");
-          sessionStorage.removeItem('ctc:loginMode');
-          await signInWithPopup(auth, facebookProvider);
-        } else {
-          await signInWithRedirect(auth, facebookProvider);
-        }
+        await signInWithRedirect(auth, facebookProvider);
       } catch (error: any) {
         console.error("[auth] login error:", error?.code ?? error);
         commit('PUSH_TOAST', {
