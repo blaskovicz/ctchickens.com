@@ -1,6 +1,4 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as Handlebars from 'handlebars';
+import * as crypto from 'crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -14,22 +12,19 @@ import {
   sendClaimReminderEmail,
   sendVerificationNudgeEmail,
   sendAnnouncementEmail,
+  sendVerificationEmail,
 } from './emailHelpers';
 
 initializeApp();
 const db = getFirestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
+const hmacSecret = defineSecret('HMAC_SECRET');
 
-const layoutSource = fs.readFileSync(path.join(__dirname, '../templates/_layout.html'), 'utf-8');
-const layoutTemplate = Handlebars.compile(layoutSource);
-
-const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === 'true';
-
-function renderTemplate(bodyName: string, vars: Record<string, unknown> & { subject: string }): string {
-  const bodySource = fs.readFileSync(path.join(__dirname, '../templates', bodyName), 'utf-8');
-  const body = Handlebars.compile(bodySource)(vars);
-  return layoutTemplate({ ...vars, body });
+function resolveEmail(userData: FirebaseFirestore.DocumentData): string | null {
+  if (userData.localEmail) return userData.localEmail;
+  return userData.email ?? null;
 }
+
 
 // Self-heals a missing users doc when a draft_profiles document is created.
 // Guards against getRedirectResult failing silently on the client.
@@ -75,23 +70,23 @@ export const onUserCreated = onDocumentCreated(
   { document: 'users/{uid}', secrets: [resendApiKey] },
   async (event) => {
     const data = event.data?.data();
-    if (!data?.email) {
-      console.log('No email on user doc, skipping welcome email');
+    if (!data) {
+      console.log('No data on user doc, skipping welcome email');
       return;
     }
 
     const displayName = (data.displayName as string) || '';
+    const effectiveEmail = resolveEmail(data);
 
-    if (IS_EMULATOR) {
-      console.log(`[emulator] Skipping welcome email to ${data.email}`);
+    if (!effectiveEmail) {
+      console.log('No effective email on user doc, skipping welcome email');
       return;
     }
 
     const resend = new Resend(resendApiKey.value());
-
     try {
-      await sendWelcomeEmail(data.email as string, displayName, resend);
-      console.log(`Welcome email sent to ${data.email}`);
+      await sendWelcomeEmail(effectiveEmail, displayName, resend);
+      console.log(`Welcome email sent to ${effectiveEmail}`);
     } catch (err) {
       console.error('Failed to send welcome email:', err);
     }
@@ -116,7 +111,7 @@ export const onDraftProfilePublished = onDocumentCreated(
 
     const slug = data.slug as string;
 
-    let userEmail: string | undefined;
+    let userEmail: string | null = null;
     let displayName: string | undefined;
     try {
       const userDoc = await db.collection('users').doc(ownerUid).get();
@@ -124,7 +119,7 @@ export const onDraftProfilePublished = onDocumentCreated(
         console.log(`User doc not found for uid ${ownerUid}`);
         return;
       }
-      userEmail = userDoc.data()?.email as string | undefined;
+      userEmail = resolveEmail(userDoc.data()!);
       displayName = userDoc.data()?.displayName as string | undefined;
     } catch (err) {
       console.error('Failed to fetch user doc:', err);
@@ -161,13 +156,7 @@ export const onDraftProfilePublished = onDocumentCreated(
       console.error('Failed to fetch history count:', err);
     }
 
-    if (IS_EMULATOR) {
-      console.log(`[emulator] Skipping approval email to ${userEmail} for slug ${slug}`);
-      return;
-    }
-
     const resend = new Resend(resendApiKey.value());
-
     try {
       await sendApprovalEmail(userEmail, { firstName, businessName, profileUrl, isVerified, isFirstPublish }, resend);
       console.log(`Approval email sent to ${userEmail} for slug ${slug}`);
@@ -234,7 +223,7 @@ export const adminSendEmail = onCall(
             continue;
           }
           const userData = userDoc.data()!;
-          email = userData.email as string | undefined;
+          email = resolveEmail(userData) ?? undefined;
           const displayName = (userData.displayName as string) || '';
           firstName = displayName.split(' ')[0] || 'there';
           businessName = displayName;
@@ -254,7 +243,7 @@ export const adminSendEmail = onCall(
             const ownerDoc = await db.collection('users').doc(ownerUid).get();
             if (ownerDoc.exists) {
               const ownerData = ownerDoc.data()!;
-              email = ownerData.email as string | undefined;
+              email = resolveEmail(ownerData) ?? undefined;
               const displayName = (ownerData.displayName as string) || '';
               firstName = displayName.split(' ')[0] || firstName;
             }
@@ -271,20 +260,14 @@ export const adminSendEmail = onCall(
           continue;
         }
 
-        if (IS_EMULATOR) {
-          console.log(`[emulator] Would send ${template} email to ${email} (${firstName} / ${businessName})`);
-          sent++;
-          continue;
-        }
+        const farmSlug = recipient.type === 'farm' ? recipient.slug : '';
 
         if (template === 'welcome') {
           await sendWelcomeEmail(email, firstName, resend);
         } else if (template === 'claim-reminder') {
-          const slug = recipient.type === 'farm' ? recipient.slug : '';
-          await sendClaimReminderEmail(email, { firstName, businessName, slug }, resend);
+          await sendClaimReminderEmail(email, { firstName, businessName, slug: farmSlug }, resend);
         } else if (template === 'verification-nudge') {
-          const slug = recipient.type === 'farm' ? recipient.slug : '';
-          await sendVerificationNudgeEmail(email, { firstName, businessName, slug }, resend);
+          await sendVerificationNudgeEmail(email, { firstName, businessName, slug: farmSlug }, resend);
         } else if (template === 'announcement') {
           await sendAnnouncementEmail(email, {
             firstName,
@@ -306,5 +289,107 @@ export const adminSendEmail = onCall(
   }
 );
 
-// Keep renderTemplate exported for any future use (not currently used directly here after refactor)
-export { renderTemplate };
+// Sets or clears a user's local notification email.
+// Empty string → clears both pendingLocalEmail and localEmail.
+// Valid email → writes pendingLocalEmail and sends a verification email.
+export const setLocalEmail = onCall(
+  { secrets: [resendApiKey, hmacSecret] },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { email } = request.data as { email: string };
+
+    if (email !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new HttpsError('invalid-argument', 'Invalid email address.');
+    }
+
+    const uid = request.auth.uid;
+    const userRef = db.collection('users').doc(uid);
+
+    if (!email) {
+      await userRef.update({
+        pendingLocalEmail: FieldValue.delete(),
+        localEmail: FieldValue.delete(),
+      });
+      console.log(`localEmail cleared for uid ${uid}`);
+      return { ok: true, action: 'cleared' };
+    }
+
+    const userDoc = await userRef.get();
+    const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+
+    const ts = String(Date.now());
+    const token = crypto
+      .createHmac('sha256', hmacSecret.value())
+      .update(`${uid}:${email}:${ts}`)
+      .digest('hex');
+
+    const verifyUrl = `https://ctchickens.com/#/verify-email?uid=${uid}&email=${encodeURIComponent(email)}&ts=${ts}&token=${token}`;
+
+    const resend = new Resend(resendApiKey.value());
+    await sendVerificationEmail(email, { firstName, verifyUrl }, resend);
+
+    await userRef.update({ pendingLocalEmail: email });
+    console.log(`Verification email sent to ${email} for uid ${uid}`);
+
+    return { ok: true, action: 'verification_sent' };
+  }
+);
+
+// Verifies the token from the email link and marks localEmailVerified = true.
+// Does NOT require auth — uid comes from the URL params.
+export const verifyLocalEmail = onCall(
+  { secrets: [hmacSecret] },
+  async (request) => {
+    const { uid, email, ts, token } = request.data as {
+      uid: string;
+      email: string;
+      ts: string;
+      token: string;
+    };
+
+    if (!uid || !email || !ts || !token) {
+      throw new HttpsError('invalid-argument', 'uid, email, ts, and token are all required.');
+    }
+
+    // Reject tokens older than 24 hours
+    if (Date.now() - parseInt(ts, 10) > 86_400_000) {
+      throw new HttpsError('deadline-exceeded', 'Verification link has expired. Please request a new one.');
+    }
+
+    // Re-derive and constant-time compare
+    const expected = crypto
+      .createHmac('sha256', hmacSecret.value())
+      .update(`${uid}:${email}:${ts}`)
+      .digest('hex');
+
+    const expectedBuf = Buffer.from(expected);
+    const providedBuf = Buffer.from(token);
+    if (
+      expectedBuf.length !== providedBuf.length ||
+      !crypto.timingSafeEqual(expectedBuf, providedBuf)
+    ) {
+      throw new HttpsError('unauthenticated', 'Invalid or tampered verification token.');
+    }
+
+    // Confirm the email matches what we stored
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      throw new HttpsError('not-found', 'User not found.');
+    }
+
+    const pending = userSnap.data()?.pendingLocalEmail as string | undefined;
+    if (pending !== email) {
+      throw new HttpsError('failed-precondition', 'Email address does not match the pending verification.');
+    }
+
+    await userRef.update({ localEmail: email, pendingLocalEmail: FieldValue.delete() });
+    console.log(`localEmail verified for uid ${uid}: ${email}`);
+
+    return { ok: true };
+  }
+);
+
