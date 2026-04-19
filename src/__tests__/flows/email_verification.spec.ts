@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createHmac } from 'crypto';
 import { httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -8,8 +7,15 @@ import { clearFirestoreEmulator, clearAuthEmulator, createTestUser } from '../te
 
 const HMAC_SECRET = 'local-dev-secret';
 
-function makeToken(uid: string, email: string, ts: string): string {
-  return createHmac('sha256', HMAC_SECRET).update(`${uid}:${email}:${ts}`).digest('hex');
+async function makeToken(uid: string, email: string, ts: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(HMAC_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(`${uid}:${email}:${ts}`));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function seedUserFields(uid: string, fields: Record<string, string | null>) {
@@ -91,7 +97,7 @@ describe('verifyLocalEmail callable', () => {
     await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
 
     const ts = String(Date.now());
-    const token = makeToken(user.uid, 'notify@example.com', ts);
+    const token = await makeToken(user.uid, 'notify@example.com', ts);
 
     const result = await httpsCallable(functions, 'verifyLocalEmail')({ uid: user.uid, email: 'notify@example.com', ts, token });
     expect((result.data as any).ok).toBe(true);
@@ -107,7 +113,7 @@ describe('verifyLocalEmail callable', () => {
     await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
 
     const expiredTs = String(Date.now() - 25 * 60 * 60 * 1000);
-    const token = makeToken(user.uid, 'notify@example.com', expiredTs);
+    const token = await makeToken(user.uid, 'notify@example.com', expiredTs);
 
     await expect(httpsCallable(functions, 'verifyLocalEmail')({ uid: user.uid, email: 'notify@example.com', ts: expiredTs, token }))
       .rejects.toThrow(/expired/i);
@@ -137,7 +143,7 @@ describe('verifyLocalEmail callable', () => {
     const user = await createTestUser(fbEmail, 'Test User');
 
     const ts = String(Date.now());
-    const token = makeToken(user.uid, 'notify@example.com', ts);
+    const token = await makeToken(user.uid, 'notify@example.com', ts);
 
     // User changed their mind — pending is now a different address
     await seedUserFields(user.uid, { pendingLocalEmail: 'different@example.com' });
