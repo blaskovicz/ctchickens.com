@@ -64,6 +64,16 @@ const router = createRouter({
       path: '/admin/email',
       name: 'admin-email',
       component: () => import('../views/AdminEmailView.vue')
+    },
+    {
+      path: '/profile',
+      name: 'user-profile',
+      component: () => import('../views/UserProfileView.vue')
+    },
+    {
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('../views/VerifyEmailView.vue')
     }
   ],
   scrollBehavior(to, _from, savedPosition) {

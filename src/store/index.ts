@@ -1,11 +1,12 @@
 import { createStore } from 'vuex';
 import type { ActionContext } from 'vuex';
 import type { Breeder, FirestoreMember } from '../types';
-import { db, auth, facebookProvider, trackEvent } from '../firebase';
+import { db, auth, functions, facebookProvider, trackEvent } from '../firebase';
 import router from '../router';
-import { 
-  collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction 
+import {
+  collection, getDocs, query, where, orderBy, doc, setDoc, updateDoc, getDoc, serverTimestamp, runTransaction
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import {
   onAuthStateChanged,
   signInWithRedirect,
@@ -354,6 +355,22 @@ export default createStore({
         console.error(`Error fetching breeder [${slug}]:`, err);
       }
       return null;
+    },
+
+    async updateLocalEmail({ state, commit }: ActionContext<State, State>, email: string) {
+      if (!state.user) throw new Error('Must be logged in.');
+      const fn = httpsCallable(functions, 'setLocalEmail');
+      const result = await fn({ email });
+      const action = (result.data as any).action as string;
+      if (!email) {
+        const updated = { ...state.userData };
+        delete updated.pendingLocalEmail;
+        delete updated.localEmail;
+        commit('SET_USER_DATA', updated);
+      } else {
+        commit('SET_USER_DATA', { ...state.userData, pendingLocalEmail: email });
+      }
+      return action;
     },
 
     async createDraftListing({ state, dispatch }: ActionContext<State, State>, payload: { businessName: string; town: string; memberType: string }) {

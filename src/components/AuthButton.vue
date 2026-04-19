@@ -57,6 +57,11 @@ const GROUP_URL = "https://www.facebook.com/groups/1465813350383274";
             <i class="bi bi-facebook"></i> Visit FB Group
           </a>
         </li>
+        <li>
+          <router-link to="/profile" class="dropdown-item d-flex align-items-center gap-2">
+            <i class="bi bi-person-gear"></i> My Profile
+          </router-link>
+        </li>
 
         <!-- Admin Tools Section -->
         <li v-if="userData?.isAdmin">

@@ -22,6 +22,7 @@ interface UserRow {
   uid: string;
   displayName: string;
   email: string | null;
+  facebookEmail: string | null;
   lastLogin: Date | null;
 }
 
@@ -178,15 +179,17 @@ const fetchData = async () => {
     const usersMap: Record<string, { email: string | null; displayName: string }> = {};
     allUsers.value = usersSnap.docs.map(d => {
       const data = d.data();
+      const effectiveEmail = (data.localEmail as string) || (data.email as string) || null;
       usersMap[d.id] = {
-        email: (data.email as string) || null,
+        email: effectiveEmail,
         displayName: (data.displayName as string) || d.id,
       };
       return {
         kind: 'user' as const,
         uid: d.id,
         displayName: (data.displayName as string) || d.id,
-        email: (data.email as string) || null,
+        email: effectiveEmail,
+        facebookEmail: (data.email as string) || null,
         lastLogin: data.lastLogin?.toDate?.() ?? null,
       };
     });
@@ -378,7 +381,12 @@ const handleSend = async () => {
                     {{ row.kind === 'user' ? row.displayName : row.businessName }}
                   </div>
                   <div class="text-truncate" style="font-size: 0.78rem;">
-                    <span v-if="rowEmail(row)" class="text-muted">{{ rowEmail(row) }}</span>
+                    <template v-if="row.kind === 'user' && (row as UserRow).facebookEmail && (row as UserRow).facebookEmail !== (row as UserRow).email">
+                      <span class="text-muted text-decoration-line-through">{{ (row as UserRow).facebookEmail }}</span>
+                      <span class="text-muted mx-1">→</span>
+                      <span class="text-success">{{ (row as UserRow).email }}</span>
+                    </template>
+                    <span v-else-if="rowEmail(row)" class="text-muted">{{ rowEmail(row) }}</span>
                     <BBadge v-else variant="danger" style="font-size: 0.65rem;">no email</BBadge>
                   </div>
                   <div v-if="row.kind === 'user' && (row as UserRow).lastLogin" class="text-muted" style="font-size: 0.72rem;">
