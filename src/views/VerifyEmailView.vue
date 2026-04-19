@@ -29,6 +29,9 @@ onMounted(async () => {
     const functions = getFunctions();
     const verifyLocalEmail = httpsCallable(functions, 'verifyLocalEmail');
     await verifyLocalEmail({ uid, email, ts, token });
+    if (isLoggedIn.value) {
+      await store.dispatch('fetchUserData', store.state.user!.uid);
+    }
     status.value = 'success';
   } catch (err: any) {
     errorMessage.value =
