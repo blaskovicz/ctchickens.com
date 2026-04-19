@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getAuth, connectAuthEmulator, FacebookAuthProvider } from "firebase/auth";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { getAnalytics, logEvent, isSupported } from "firebase/analytics";
 import type { Analytics } from "firebase/analytics";
 
@@ -21,6 +22,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+const functions = getFunctions(app);
 
 if (USE_EMULATOR) {
   // Using 'localhost' instead of '127.0.0.1' to prevent origin mismatch in redirects
@@ -30,6 +32,7 @@ if (USE_EMULATOR) {
   connectFirestoreEmulator(db, 'localhost', 8080);
   connectAuthEmulator(auth, 'http://localhost:9099');
   connectStorageEmulator(storage, 'localhost', 9199);
+  connectFunctionsEmulator(functions, 'localhost', 5001);
 }
 
 const facebookProvider = new FacebookAuthProvider();
@@ -55,4 +58,4 @@ function trackEvent(name: string, params?: Record<string, unknown>) {
   }
 }
 
-export { db, auth, storage, facebookProvider, trackEvent };
+export { db, auth, storage, functions, facebookProvider, trackEvent };
