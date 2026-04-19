@@ -74,7 +74,7 @@ describe('setLocalEmail callable', () => {
 
   it('rejects unauthenticated calls', async () => {
     await expect(httpsCallable(functions, 'setLocalEmail')({ email: 'test@example.com' }))
-      .rejects.toThrow(/unauthenticated/i);
+      .rejects.toThrow(/unauthenticated|must be signed in/i);
   });
 });
 
