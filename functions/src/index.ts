@@ -354,8 +354,8 @@ export const verifyLocalEmail = onCall(
       throw new HttpsError('invalid-argument', 'uid, email, ts, and token are all required.');
     }
 
-    // Reject tokens older than 24 hours
-    if (Date.now() - parseInt(ts, 10) > 86_400_000) {
+    const tsNum = parseInt(ts, 10);
+    if (!Number.isFinite(tsNum) || tsNum <= 0 || Date.now() - tsNum > 3_600_000) {
       throw new HttpsError('deadline-exceeded', 'Verification link has expired. Please request a new one.');
     }
 
