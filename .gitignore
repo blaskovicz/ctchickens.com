@@ -30,4 +30,5 @@ functions/preview-*.html
 functions/.secret.local
 functions/test-send.js
 functions/generate-sample-emails.js
-
+*PLAN*.md
+email-previews/

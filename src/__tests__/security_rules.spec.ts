@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth } from '../firebase';
-import { doc, setDoc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { 
   clearFirestoreEmulator, 
@@ -246,5 +246,31 @@ describe('Security Rules: Claim Requests', () => {
     await signOut(auth);
     await signInWithEmailAndPassword(auth, strangerEmail, 'password123');
     await expect(getDoc(claimRef)).rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error/i);
+  });
+});
+
+describe('Security Rules: User Email Fields', () => {
+  beforeEach(async () => {
+    await clearFirestoreEmulator();
+    await clearAuthEmulator();
+    await signOut(auth);
+  });
+
+  it('prevents client from directly writing pendingLocalEmail', async () => {
+    const email = 'user@example.com';
+    const user = await createTestUser(email, 'Test User');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    await expect(updateDoc(doc(db, 'users', user.uid), { pendingLocalEmail: 'hack@example.com' }))
+      .rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+
+  it('prevents client from directly writing localEmail', async () => {
+    const email = 'user@example.com';
+    const user = await createTestUser(email, 'Test User');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    await expect(updateDoc(doc(db, 'users', user.uid), { localEmail: 'hack@example.com' }))
+      .rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
   });
 });

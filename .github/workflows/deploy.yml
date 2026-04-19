@@ -45,6 +45,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Write emulator secrets
+        run: |
+          echo "RESEND_API_KEY=re_emulator_dummy" > functions/.secret.local
+          echo "HMAC_SECRET=local-dev-secret" >> functions/.secret.local
+
       - name: Run tests with Emulator
         env:
           VITE_APP_USE_EMULATOR: "true"
