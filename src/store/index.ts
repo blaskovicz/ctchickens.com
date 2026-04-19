@@ -4,7 +4,7 @@ import type { Breeder, FirestoreMember } from '../types';
 import { db, auth, functions, facebookProvider, trackEvent } from '../firebase';
 import router from '../router';
 import {
-  collection, getDocs, query, where, orderBy, doc, setDoc, updateDoc, getDoc, serverTimestamp, runTransaction
+  collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
