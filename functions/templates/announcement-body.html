@@ -1,0 +1,30 @@
+<h2 style="color:#1e3a8a;margin:0 0 16px;font-size:22px;font-weight:700;">
+  {{subject}}
+</h2>
+
+{{#if businessName}}
+<p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
+  Hi {{firstName}},
+</p>
+{{else}}
+<p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
+  Hi {{firstName}},
+</p>
+{{/if}}
+
+<!-- Custom body (pre-rendered HTML from markdown) -->
+<div style="color:#374151;line-height:1.7;font-size:15px;margin:0 0 28px;">
+  {{{customBody}}}
+</div>
+
+<!-- Divider -->
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 24px;">
+  <tr>
+    <td style="border-top:1px solid #e2e8f0;"></td>
+  </tr>
+</table>
+
+<p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">
+  You&rsquo;re receiving this because you have an account or listing on
+  <a href="https://ctchickens.com" target="_blank" style="color:#1e3a8a;text-decoration:underline;">CT Chickens</a>.
+</p>

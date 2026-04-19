@@ -59,6 +59,11 @@ const router = createRouter({
       path: '/admin/inbox',
       name: 'admin-inbox',
       component: () => import('../views/AdminInboxView.vue')
+    },
+    {
+      path: '/admin/email',
+      name: 'admin-email',
+      component: () => import('../views/AdminEmailView.vue')
     }
   ],
   scrollBehavior(to, _from, savedPosition) {
