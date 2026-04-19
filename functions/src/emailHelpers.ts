@@ -117,6 +117,20 @@ export async function sendVerificationEmail(
   });
 }
 
+export async function sendLocalEmailSetNotification(
+  to: string,
+  vars: { firstName: string; localEmail: string },
+  resend: Resend
+): Promise<void> {
+  const subject = 'Notification email added to your CT Chickens account';
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('local-email-set-body.html', { subject, ...vars }),
+  });
+}
+
 export async function sendAnnouncementEmail(
   to: string,
   vars: {
