@@ -5,8 +5,16 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { Resend } from 'resend';
+import {
+  sendWelcomeEmail,
+  sendApprovalEmail,
+  sendClaimReminderEmail,
+  sendVerificationNudgeEmail,
+  sendAnnouncementEmail,
+} from './emailHelpers';
 
 initializeApp();
 const db = getFirestore();
@@ -72,7 +80,7 @@ export const onUserCreated = onDocumentCreated(
       return;
     }
 
-    const firstName = (data.displayName as string)?.split(' ')[0] || 'there';
+    const displayName = (data.displayName as string) || '';
 
     if (IS_EMULATOR) {
       console.log(`[emulator] Skipping welcome email to ${data.email}`);
@@ -82,12 +90,7 @@ export const onUserCreated = onDocumentCreated(
     const resend = new Resend(resendApiKey.value());
 
     try {
-      await resend.emails.send({
-        from: 'CT Chickens <noreply@ctchickens.com>',
-        to: data.email as string,
-        subject: `Welcome to CT Chickens, ${firstName}!`,
-        html: renderTemplate('welcome-body.html', { subject: `Welcome to CT Chickens, ${firstName}!`, firstName }),
-      });
+      await sendWelcomeEmail(data.email as string, displayName, resend);
       console.log(`Welcome email sent to ${data.email}`);
     } catch (err) {
       console.error('Failed to send welcome email:', err);
@@ -158,8 +161,6 @@ export const onDraftProfilePublished = onDocumentCreated(
       console.error('Failed to fetch history count:', err);
     }
 
-    const subject = isFirstPublish ? 'Your farm is live on CT Chickens!' : 'Your updates are live on CT Chickens!';
-
     if (IS_EMULATOR) {
       console.log(`[emulator] Skipping approval email to ${userEmail} for slug ${slug}`);
       return;
@@ -168,15 +169,142 @@ export const onDraftProfilePublished = onDocumentCreated(
     const resend = new Resend(resendApiKey.value());
 
     try {
-      await resend.emails.send({
-        from: 'CT Chickens <noreply@ctchickens.com>',
-        to: userEmail,
-        subject,
-        html: renderTemplate('approval-body.html', { subject, firstName, businessName, profileUrl, isVerified, isFirstPublish }),
-      });
+      await sendApprovalEmail(userEmail, { firstName, businessName, profileUrl, isVerified, isFirstPublish }, resend);
       console.log(`Approval email sent to ${userEmail} for slug ${slug}`);
     } catch (err) {
       console.error('Failed to send approval email:', err);
     }
   }
 );
+
+// Admin callable: send bulk emails to users and/or farms
+type Recipient =
+  | { type: 'user'; uid: string }
+  | { type: 'farm'; slug: string };
+
+interface AdminSendEmailPayload {
+  recipients: Recipient[];
+  template: 'welcome' | 'claim-reminder' | 'verification-nudge' | 'announcement';
+  subject: string;
+  customBodyHtml?: string;
+}
+
+export const adminSendEmail = onCall(
+  { secrets: [resendApiKey] },
+  async (request) => {
+    // Verify caller is authenticated
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    // Verify caller is admin
+    const callerDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (callerDoc.data()?.isAdmin !== true) {
+      throw new HttpsError('permission-denied', 'Admin access required.');
+    }
+
+    const { recipients, template, subject, customBodyHtml } = request.data as AdminSendEmailPayload;
+
+    if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+      throw new HttpsError('invalid-argument', 'recipients must be a non-empty array.');
+    }
+    if (!template) {
+      throw new HttpsError('invalid-argument', 'template is required.');
+    }
+    if (!subject) {
+      throw new HttpsError('invalid-argument', 'subject is required.');
+    }
+
+    let sent = 0;
+    let skipped = 0;
+
+    const resend = new Resend(resendApiKey.value());
+
+    for (const recipient of recipients) {
+      let email: string | undefined;
+      let firstName = 'there';
+      let businessName = '';
+
+      try {
+        if (recipient.type === 'user') {
+          const userDoc = await db.collection('users').doc(recipient.uid).get();
+          if (!userDoc.exists) {
+            console.log(`[adminSendEmail] Skipping user ${recipient.uid}: doc not found`);
+            skipped++;
+            continue;
+          }
+          const userData = userDoc.data()!;
+          email = userData.email as string | undefined;
+          const displayName = (userData.displayName as string) || '';
+          firstName = displayName.split(' ')[0] || 'there';
+          businessName = displayName;
+        } else if (recipient.type === 'farm') {
+          const farmDoc = await db.collection('directory_members').doc(recipient.slug).get();
+          if (!farmDoc.exists) {
+            console.log(`[adminSendEmail] Skipping farm ${recipient.slug}: doc not found`);
+            skipped++;
+            continue;
+          }
+          const farmData = farmDoc.data()!;
+          businessName = farmData.profile?.businessName || recipient.slug;
+          firstName = businessName.split(' ')[0] || 'there';
+
+          const ownerUid = farmData.account?.ownerUid as string | null;
+          if (ownerUid) {
+            const ownerDoc = await db.collection('users').doc(ownerUid).get();
+            if (ownerDoc.exists) {
+              const ownerData = ownerDoc.data()!;
+              email = ownerData.email as string | undefined;
+              const displayName = (ownerData.displayName as string) || '';
+              firstName = displayName.split(' ')[0] || firstName;
+            }
+          }
+          // Fall back to contactEmail if no owner email
+          if (!email) {
+            email = farmData.profile?.contactEmail as string | undefined;
+          }
+        }
+
+        if (!email) {
+          console.log(`[adminSendEmail] Skipping recipient: no email resolved`, recipient);
+          skipped++;
+          continue;
+        }
+
+        if (IS_EMULATOR) {
+          console.log(`[emulator] Would send ${template} email to ${email} (${firstName} / ${businessName})`);
+          sent++;
+          continue;
+        }
+
+        if (template === 'welcome') {
+          await sendWelcomeEmail(email, firstName, resend);
+        } else if (template === 'claim-reminder') {
+          const slug = recipient.type === 'farm' ? recipient.slug : '';
+          await sendClaimReminderEmail(email, { firstName, businessName, slug }, resend);
+        } else if (template === 'verification-nudge') {
+          const slug = recipient.type === 'farm' ? recipient.slug : '';
+          await sendVerificationNudgeEmail(email, { firstName, businessName, slug }, resend);
+        } else if (template === 'announcement') {
+          await sendAnnouncementEmail(email, {
+            firstName,
+            businessName,
+            subject,
+            customBody: customBodyHtml || '',
+          }, resend);
+        }
+
+        console.log(`[adminSendEmail] Sent ${template} to ${email}`);
+        sent++;
+      } catch (err) {
+        console.error(`[adminSendEmail] Failed to send to recipient`, { recipient, err });
+        skipped++;
+      }
+    }
+
+    return { sent, skipped };
+  }
+);
+
+// Keep renderTemplate exported for any future use (not currently used directly here after refactor)
+export { renderTemplate };
