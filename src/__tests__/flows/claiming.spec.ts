@@ -91,10 +91,64 @@ describe('Claiming Flow', () => {
     const claimButton = wrapper.find('button.claim-btn');
     expect(claimButton.exists()).toBe(true);
     await claimButton.trigger('click');
-    
+
     await flushPromises();
 
     // 6. Assert Firestore Request exists
+    const claimDoc = await getDoc(doc(db, 'claim_requests', businessSlug));
+    expect(claimDoc.exists()).toBe(true);
+    expect(claimDoc.data()?.requesterUid).toBe(user.uid);
+  }, 15000);
+
+  it('user with matching localEmail (not oauth email) sees claim banner and can submit a claim', async () => {
+    const oauthEmail = `oauth-${Date.now()}@example.com`;
+    const localEmail = `local-${Date.now()}@example.com`;
+    const businessName = 'Local Email Farm';
+    const businessSlug = 'local-email-farm';
+
+    // 1. Seed farm whose contactEmail matches localEmail, not oauth email
+    await seedTestBreeder(businessSlug, {
+      profile: { businessName, contactEmail: localEmail },
+      account: { ownerUid: null }
+    });
+
+    // 2. Create user whose OAuth email does NOT match the farm
+    const user = await createTestUser(oauthEmail, 'Local Email Owner');
+
+    // 3. Patch the user doc to add a verified localEmail
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
+    const patchUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/users/${user.uid}?updateMask.fieldPaths=localEmail`;
+    await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+      body: JSON.stringify({ fields: { localEmail: { stringValue: localEmail } } })
+    });
+
+    store.commit('SET_USER', user);
+    store.commit('SET_USER_DATA', { localEmail });
+
+    await store.dispatch('fetchDirectory');
+    await flushPromises();
+
+    // 4. Mount and assert banner appears
+    const wrapper = mount(TestApp, {
+      global: { plugins: [store, router] }
+    });
+
+    await flushPromises();
+    await new Promise(r => setTimeout(r, 500));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Is this your business?');
+    expect(wrapper.text()).toContain(businessName);
+
+    // 5. Submit claim
+    const claimButton = wrapper.find('button.claim-btn');
+    expect(claimButton.exists()).toBe(true);
+    await claimButton.trigger('click');
+    await flushPromises();
+
+    // 6. Assert claim doc created
     const claimDoc = await getDoc(doc(db, 'claim_requests', businessSlug));
     expect(claimDoc.exists()).toBe(true);
     expect(claimDoc.data()?.requesterUid).toBe(user.uid);

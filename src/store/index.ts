@@ -401,7 +401,7 @@ export default createStore({
               businessName: payload.businessName,
               town: payload.town,
               memberType: payload.memberType,
-              contactEmail: state.user!.email || '',
+              contactEmail: (state.userData?.localEmail as string | undefined) || state.user!.email || '',
               website: ''
             },
             offerings: {
@@ -457,11 +457,13 @@ export default createStore({
     },
 
     suggestedClaim: (state: State) => {
-      if (!state.user || !state.user.email) return null;
-      const userEmail = state.user.email.toLowerCase();
-      
+      if (!state.user) return null;
+      const oauthEmail = state.user.email?.toLowerCase();
+      const localEmail = (state.userData?.localEmail as string | undefined)?.toLowerCase();
+
       return state.breeders.find(b => {
-        return b.contact_link?.toLowerCase() === userEmail && !b.ownerUid;
+        const ce = b.contact_link?.toLowerCase();
+        return !b.ownerUid && ce && (ce === oauthEmail || ce === localEmail);
       }) || null;
     },
 
