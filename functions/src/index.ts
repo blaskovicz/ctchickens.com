@@ -13,6 +13,7 @@ import {
   sendVerificationNudgeEmail,
   sendAnnouncementEmail,
   sendVerificationEmail,
+  sendLocalEmailSetNotification,
 } from './emailHelpers';
 
 initializeApp();
@@ -338,10 +339,32 @@ export const setLocalEmail = onCall(
   }
 );
 
+async function notifyLocalEmailUpdated(
+  uid: string,
+  newEmail: string,
+  userData: FirebaseFirestore.DocumentData | undefined
+): Promise<void> {
+  try {
+    const firstName = (userData?.displayName as string | undefined)?.split(' ')[0] || 'there';
+    const resend = new Resend(resendApiKey.value());
+
+    await sendLocalEmailSetNotification(newEmail, { firstName, localEmail: newEmail }, resend);
+
+    const oldLocalEmail = userData?.localEmail as string | undefined;
+    const authUser = await getAuth().getUser(uid);
+    const previousEmail = oldLocalEmail || authUser.email;
+    if (previousEmail && previousEmail !== newEmail) {
+      await sendLocalEmailSetNotification(previousEmail, { firstName, localEmail: newEmail }, resend);
+    }
+  } catch (err) {
+    console.error('Failed to send localEmail set notification:', err);
+  }
+}
+
 // Verifies the token from the email link and marks localEmailVerified = true.
 // Does NOT require auth — uid comes from the URL params.
 export const verifyLocalEmail = onCall(
-  { secrets: [hmacSecret] },
+  { secrets: [hmacSecret, resendApiKey] },
   async (request) => {
     const { uid, email, ts, token } = request.data as {
       uid: string;
@@ -388,6 +411,8 @@ export const verifyLocalEmail = onCall(
 
     await userRef.update({ localEmail: email, pendingLocalEmail: FieldValue.delete() });
     console.log(`localEmail verified for uid ${uid}: ${email}`);
+
+    await notifyLocalEmailUpdated(uid, email, userSnap.data());
 
     return { ok: true };
   }
