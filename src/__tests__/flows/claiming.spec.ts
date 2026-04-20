@@ -12,7 +12,7 @@ import {
   createTestUser 
 } from '../test-helpers';
 import { db } from '../../firebase';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { BApp } from 'bootstrap-vue-next';
 
 const router = createRouter({
@@ -94,10 +94,12 @@ describe('Claiming Flow', () => {
 
     await flushPromises();
 
-    // 6. Assert Firestore Request exists
+    // 6. Assert Firestore claim doc has the correct fields
     const claimDoc = await getDoc(doc(db, 'claim_requests', businessSlug));
     expect(claimDoc.exists()).toBe(true);
     expect(claimDoc.data()?.requesterUid).toBe(user.uid);
+    // OAuth email user — requesterEmail must be the OAuth email, not something else
+    expect(claimDoc.data()?.requesterEmail).toBe(testEmail);
   }, 15000);
 
   it('user with matching localEmail (not oauth email) sees claim banner and can submit a claim', async () => {
@@ -148,9 +150,55 @@ describe('Claiming Flow', () => {
     await claimButton.trigger('click');
     await flushPromises();
 
-    // 6. Assert claim doc created
+    // 6. Assert claim doc was created with localEmail, not the OAuth email
     const claimDoc = await getDoc(doc(db, 'claim_requests', businessSlug));
     expect(claimDoc.exists()).toBe(true);
     expect(claimDoc.data()?.requesterUid).toBe(user.uid);
+    expect(claimDoc.data()?.requesterEmail).toBe(localEmail);
+    expect(claimDoc.data()?.requesterEmail).not.toBe(oauthEmail);
+  }, 15000);
+
+  it('rejects a claim where requesterEmail is the OAuth email but user has a localEmail set', async () => {
+    const oauthEmail = `oauth-${Date.now()}@example.com`;
+    const localEmail = `local-${Date.now()}@example.com`;
+    const businessName = 'Tamper Test Farm';
+    const businessSlug = 'tamper-test-farm';
+
+    // 1. Seed farm whose contactEmail matches the localEmail
+    await seedTestBreeder(businessSlug, {
+      profile: { businessName, contactEmail: localEmail },
+      account: { ownerUid: null }
+    });
+
+    // 2. Create user and give them a verified localEmail
+    const user = await createTestUser(oauthEmail, 'Tamper Tester');
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
+    const patchUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/users/${user.uid}?updateMask.fieldPaths=localEmail`;
+    await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+      body: JSON.stringify({ fields: { localEmail: { stringValue: localEmail } } })
+    });
+
+    store.commit('SET_USER', user);
+    store.commit('SET_USER_DATA', { localEmail });
+
+    // 3. Attempt to write a claim with the OAuth email instead of localEmail — rules must reject this
+    await expect(
+      setDoc(doc(db, 'claim_requests', businessSlug), {
+        businessName,
+        businessSlug,
+        requesterUid: user.uid,
+        requesterEmail: oauthEmail, // wrong — should be localEmail since localEmail is set
+        requesterName: user.displayName,
+        requesterPhotoURL: user.photoURL,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+
+    // 4. Confirm nothing was written
+    const claimDoc = await getDoc(doc(db, 'claim_requests', businessSlug));
+    expect(claimDoc.exists()).toBe(false);
   }, 15000);
 });

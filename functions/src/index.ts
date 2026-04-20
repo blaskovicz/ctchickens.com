@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { Resend } from 'resend';
@@ -14,6 +14,14 @@ import {
   sendAnnouncementEmail,
   sendVerificationEmail,
   sendLocalEmailSetNotification,
+  sendAdminDraftReviewEmail,
+  sendClaimApprovedEmail,
+  sendInquiryBuyerEmail,
+  sendInquirySellerEmail,
+  sendInquiryAdminUnclaimedEmail,
+  sendSupportThreadUserEmail,
+  sendSupportThreadAdminEmail,
+  formatDisplayName,
 } from './emailHelpers';
 
 initializeApp();
@@ -29,40 +37,73 @@ function resolveEmail(userData: FirebaseFirestore.DocumentData): string | null {
 
 // Self-heals a missing users doc when a draft_profiles document is created.
 // Guards against getRedirectResult failing silently on the client.
+async function healUserProfileIfRequired(
+  slug: string,
+  ownerUid: string
+): Promise<FirebaseFirestore.DocumentSnapshot | null> {
+  const userRef = db.collection('users').doc(ownerUid);
+  const userSnap = await userRef.get();
+  if (userSnap.exists) return userSnap;
+
+  // users doc is missing — pull data from Auth and create it
+  console.error('[healUserProfileIfRequired] Missing users doc detected', { slug, ownerUid });
+  try {
+    const authUser = await getAuth().getUser(ownerUid);
+    await userRef.set({
+      displayName: authUser.displayName ?? null,
+      email: authUser.email ?? null,
+      photoURL: authUser.photoURL ?? null,
+      lastLogin: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log('[healUserProfileIfRequired] users doc created for uid', ownerUid);
+    return await userRef.get();
+  } catch (e) {
+    console.error('[healUserProfileIfRequired] Failed to create users doc', { ownerUid, error: e });
+    return null;
+  }
+}
+
+// Emails admins when a new draft profile is submitted for review.
+async function emailAdminsNewDraftIfRequired(
+  slug: string,
+  draftData: FirebaseFirestore.DocumentData,
+  userSnap: FirebaseFirestore.DocumentSnapshot | null,
+  resend: InstanceType<typeof Resend>
+): Promise<void> {
+  const businessName = (draftData.profile?.businessName as string) || slug;
+  const town = (draftData.profile?.town as string) || 'Unknown';
+  const memberType = (draftData.profile?.memberType as string) || 'breeder';
+  const ownerName = (userSnap?.data()?.displayName as string) || 'Unknown';
+  const reviewUrl = `https://ctchickens.com/#/directory/${slug}/edit`;
+
+  try {
+    await sendAdminDraftReviewEmail(
+      'admins@ctchickens.com',
+      { businessName, ownerName, town, memberType, reviewUrl },
+      resend
+    );
+    console.log(`[emailAdminsNewDraftIfRequired] Admin review email sent for slug ${slug}`);
+  } catch (err) {
+    console.error('[emailAdminsNewDraftIfRequired] Failed to send admin review email', { slug, err });
+  }
+}
+
 export const onDraftProfileCreated = onDocumentCreated(
-  { document: 'draft_profiles/{slug}' },
+  { document: 'draft_profiles/{slug}', secrets: [resendApiKey] },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
 
+    const slug = event.params.slug;
     const ownerUid = data.draft_owner_uid as string | undefined;
     if (!ownerUid) {
-      console.error('[onDraftProfileCreated] Missing draft_owner_uid', { slug: event.params.slug });
+      console.error('[onDraftProfileCreated] Missing draft_owner_uid', { slug });
       return;
     }
 
-    const userRef = db.collection('users').doc(ownerUid);
-    const userSnap = await userRef.get();
-    if (userSnap.exists) return; // users doc already exists, nothing to do
-
-    // users doc is missing — pull data from Auth and create it
-    console.error('[onDraftProfileCreated] Missing users doc detected', {
-      slug: event.params.slug,
-      ownerUid,
-    });
-
-    try {
-      const authUser = await getAuth().getUser(ownerUid);
-      await userRef.set({
-        displayName: authUser.displayName ?? null,
-        email: authUser.email ?? null,
-        photoURL: authUser.photoURL ?? null,
-        lastLogin: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      console.log('[onDraftProfileCreated] users doc created for uid', ownerUid);
-    } catch (e) {
-      console.error('[onDraftProfileCreated] Failed to create users doc', { ownerUid, error: e });
-    }
+    const resend = new Resend(resendApiKey.value());
+    const userSnap = await healUserProfileIfRequired(slug, ownerUid);
+    await emailAdminsNewDraftIfRequired(slug, data, userSnap, resend);
   }
 );
 
@@ -415,6 +456,194 @@ export const verifyLocalEmail = onCall(
     await notifyLocalEmailUpdated(uid, email, userSnap.data());
 
     return { ok: true };
+  }
+);
+
+// Fires when a directory_members doc is updated. Detects the moment a claim is approved
+// by checking if ownerUid just changed from null/missing to a real UID, then emails the
+// new owner. Ignores all other updates (profile edits, status changes, etc.).
+export const onDirectoryMemberUpdated = onDocumentUpdated(
+  { document: 'directory_members/{slug}', secrets: [resendApiKey] },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const ownerBefore = before.account?.ownerUid as string | null | undefined;
+    const ownerAfter = after.account?.ownerUid as string | null | undefined;
+
+    // Only proceed if this update is a claim approval: null → real UID
+    if (ownerBefore || !ownerAfter) return;
+
+    const slug = event.params.slug;
+    const businessName = (after.profile?.businessName as string) || slug;
+    const profileUrl = `https://ctchickens.com/#/directory/${slug}`;
+    const editUrl = `https://ctchickens.com/#/directory/${slug}/edit`;
+
+    let ownerEmail: string | null = null;
+    let firstName = 'there';
+    try {
+      const ownerDoc = await db.collection('users').doc(ownerAfter).get();
+      if (ownerDoc.exists) {
+        ownerEmail = resolveEmail(ownerDoc.data()!);
+        firstName = (ownerDoc.data()?.displayName as string || '').split(' ')[0] || firstName;
+      }
+    } catch (err) {
+      console.error('[onDirectoryMemberUpdated] Failed to fetch new owner doc', { ownerAfter, err });
+    }
+
+    if (!ownerEmail) {
+      console.log(`[onDirectoryMemberUpdated] No email for new owner ${ownerAfter}, skipping claim approval email`);
+      return;
+    }
+
+    const resend = new Resend(resendApiKey.value());
+    try {
+      await sendClaimApprovedEmail(ownerEmail, { firstName, businessName, profileUrl, editUrl }, resend);
+      console.log(`[onDirectoryMemberUpdated] Claim approved email sent to ${ownerEmail} for slug ${slug}`);
+    } catch (err) {
+      console.error('[onDirectoryMemberUpdated] Failed to send claim approved email', { ownerEmail, slug, err });
+    }
+  }
+);
+
+// Sends email notifications when an inquiry_thread is created for the first time.
+// onDocumentCreated fires exactly once per document, so this naturally handles "first contact only".
+//
+// inquiry type  → email buyer + email seller (or admins if listing is unclaimed)
+// support type  → email the user + email admins@ctchickens.com
+export const onInquiryThreadCreated = onDocumentCreated(
+  { document: 'inquiry_threads/{threadId}', secrets: [resendApiKey] },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const threadId = event.params.threadId;
+    const type = data.type as string | undefined;
+    const userUid = data.userUid as string;
+    const userName = (data.userName as string) || '';
+    const inboxUrl = `https://ctchickens.com/#/inbox/${threadId}`;
+    const resend = new Resend(resendApiKey.value());
+
+    if (type === 'support') {
+      const senderName = formatDisplayName(userName);
+
+      // Look up user's email and first name
+      let userEmail: string | null = null;
+      let firstName = userName.split(' ')[0] || 'there';
+      try {
+        const userDoc = await db.collection('users').doc(userUid).get();
+        if (userDoc.exists) {
+          userEmail = resolveEmail(userDoc.data()!);
+          firstName = (userDoc.data()?.displayName as string || userName).split(' ')[0] || firstName;
+        }
+      } catch (err) {
+        console.error('[onInquiryThreadCreated] Failed to fetch user doc for support thread', { userUid, err });
+      }
+
+      if (userEmail) {
+        try {
+          await sendSupportThreadUserEmail(userEmail, { firstName, inboxUrl }, resend);
+          console.log(`[onInquiryThreadCreated] Support user email sent to ${userEmail}`);
+        } catch (err) {
+          console.error('[onInquiryThreadCreated] Failed to send support user email', { userEmail, err });
+        }
+      } else {
+        console.log(`[onInquiryThreadCreated] No email for support user ${userUid}, skipping user notification`);
+      }
+
+      try {
+        await sendSupportThreadAdminEmail(
+          'admins@ctchickens.com',
+          { senderName, inboxUrl, adminInboxUrl: 'https://ctchickens.com/#/admin/inbox' },
+          resend
+        );
+        console.log(`[onInquiryThreadCreated] Support admin email sent for thread ${threadId}`);
+      } catch (err) {
+        console.error('[onInquiryThreadCreated] Failed to send support admin email', { threadId, err });
+      }
+
+    } else if (type === 'inquiry') {
+      const breederName = data.breederName as string;
+      const participants = data.participants as string[];
+      const senderName = formatDisplayName(userName);
+
+      // Email the buyer
+      let buyerEmail: string | null = null;
+      let buyerFirstName = userName.split(' ')[0] || 'there';
+      try {
+        const buyerDoc = await db.collection('users').doc(userUid).get();
+        if (buyerDoc.exists) {
+          buyerEmail = resolveEmail(buyerDoc.data()!);
+          buyerFirstName = (buyerDoc.data()?.displayName as string || userName).split(' ')[0] || buyerFirstName;
+        }
+      } catch (err) {
+        console.error('[onInquiryThreadCreated] Failed to fetch buyer doc', { userUid, err });
+      }
+
+      if (buyerEmail) {
+        try {
+          await sendInquiryBuyerEmail(buyerEmail, { firstName: buyerFirstName, breederName, inboxUrl }, resend);
+          console.log(`[onInquiryThreadCreated] Inquiry buyer email sent to ${buyerEmail}`);
+        } catch (err) {
+          console.error('[onInquiryThreadCreated] Failed to send inquiry buyer email', { buyerEmail, err });
+        }
+      } else {
+        console.log(`[onInquiryThreadCreated] No email for buyer ${userUid}, skipping buyer notification`);
+      }
+
+      // Determine if listing is claimed by inspecting participants.
+      // InquiryModal sets participants to [userUid, ownerUid || 'admin'], so any non-buyer
+      // participant that isn't the literal string 'admin' is the real owner UID.
+      const sellerUid = participants.find(p => p !== userUid && p !== 'admin') ?? null;
+
+      if (sellerUid) {
+        // Claimed — email the seller
+        let sellerEmail: string | null = null;
+        try {
+          const sellerDoc = await db.collection('users').doc(sellerUid).get();
+          if (sellerDoc.exists) {
+            sellerEmail = resolveEmail(sellerDoc.data()!);
+          }
+        } catch (err) {
+          console.error('[onInquiryThreadCreated] Failed to fetch seller doc', { sellerUid, err });
+        }
+
+        if (sellerEmail) {
+          try {
+            await sendInquirySellerEmail(sellerEmail, { senderName, breederName, inboxUrl }, resend);
+            console.log(`[onInquiryThreadCreated] Inquiry seller email sent to ${sellerEmail}`);
+          } catch (err) {
+            console.error('[onInquiryThreadCreated] Failed to send inquiry seller email', { sellerEmail, err });
+          }
+        } else {
+          console.log(`[onInquiryThreadCreated] No email for seller ${sellerUid}, skipping seller notification`);
+        }
+      } else {
+        // Unclaimed listing — notify admins and the farm's contact email if one exists
+        const recipients: string[] = ['admins@ctchickens.com'];
+        try {
+          const listingDoc = await db.collection('directory_members').doc(data.breederSlug as string).get();
+          const contactEmail = listingDoc.data()?.profile?.contactEmail as string | undefined;
+          if (contactEmail && contactEmail !== 'admins@ctchickens.com') {
+            recipients.push(contactEmail);
+          }
+        } catch (err) {
+          console.error('[onInquiryThreadCreated] Failed to fetch listing contact email', { threadId, err });
+        }
+
+        for (const to of recipients) {
+          try {
+            await sendInquiryAdminUnclaimedEmail(to, { senderName, breederName, inboxUrl }, resend);
+            console.log(`[onInquiryThreadCreated] Unclaimed listing email sent to ${to} for thread ${threadId}`);
+          } catch (err) {
+            console.error('[onInquiryThreadCreated] Failed to send unclaimed email', { to, threadId, err });
+          }
+        }
+      }
+    } else {
+      console.log(`[onInquiryThreadCreated] Unknown thread type "${type}" for ${threadId}, skipping`);
+    }
   }
 );
 

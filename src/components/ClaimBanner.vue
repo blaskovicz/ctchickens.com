@@ -12,7 +12,13 @@ const { generateSlug } = useBreederUtils();
 
 const suggested = computed(() => store.getters.suggestedClaim);
 const user = computed(() => store.getters.currentUser);
+const userData = computed(() => store.state.userData);
 const activeClaims = computed(() => store.state.activeClaims);
+
+// Mirrors resolveEmail in Cloud Functions: prefer localEmail, fall back to OAuth email
+const effectiveEmail = computed(() =>
+  userData.value?.localEmail || userData.value?.email || user.value?.email || null
+);
 
 const isSubmitting = ref(false);
 const isSuccess = ref(false);
@@ -36,7 +42,7 @@ const submitClaim = async () => {
       businessName: suggested.value.name,
       businessSlug: businessSlug,
       requesterUid: user.value.uid,
-      requesterEmail: user.value.email,
+      requesterEmail: effectiveEmail.value,
       requesterName: user.value.displayName,
       requesterPhotoURL: user.value.photoURL,
       status: 'pending',

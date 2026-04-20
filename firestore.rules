@@ -37,6 +37,14 @@ service cloud.firestore {
       );
     }
 
+    function userLocalEmail(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.get('localEmail', '');
+    }
+
+    function farmContactEmail(slug) {
+      return get(/databases/$(database)/documents/directory_members/$(slug)).data.profile.contactEmail;
+    }
+
     function isValidDraftSchema(data) {
       return data.keys().hasAll(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']) &&
       data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
@@ -123,18 +131,23 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/directory_members/$(requestId))
         && get(/databases/$(database)/documents/directory_members/$(requestId)).data.account.get('ownerUid', null) == null
         && request.resource.data.requesterUid == request.auth.uid
-        && request.auth.token.email_verified == true
-        && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower()
+        // Anti-tampering: the email written to the doc must be one of the user's own verified
+        // emails. The two paths are mutually exclusive — if a localEmail is set, it must be
+        // used. email_verified only guards the OAuth path; localEmail has its own HMAC
+        // verification flow, so its presence in the users doc is proof enough.
+        && (
+          (userLocalEmail(request.auth.uid) == ''
+           && request.auth.token.email_verified == true
+           && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower())
+          || (userLocalEmail(request.auth.uid) != ''
+              && request.resource.data.requesterEmail.lower() == userLocalEmail(request.auth.uid).lower())
+        )
         && request.resource.data.status == 'pending'
         && request.resource.data.businessSlug == requestId
         && request.resource.data.createdAt == request.time
-        && (
-          get(/databases/$(database)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower() == request.auth.token.email.lower()
-          || (
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('localEmail', '') != ''
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('localEmail', '').lower() == get(/databases/$(database)/documents/directory_members/$(requestId)).data.profile.contactEmail.lower()
-          )
-        )
+        // Authorization: requesterEmail is already proven to be the user's own verified email
+        // above, so we just need it to match the farm's contact email.
+        && farmContactEmail(requestId).lower() == request.resource.data.requesterEmail.lower()
         && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'status', 'businessName', 'businessSlug', 'createdAt']);
 
       // Only admins can change a claim's status (approve/reject workflow)

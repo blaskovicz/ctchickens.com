@@ -131,6 +131,115 @@ export async function sendLocalEmailSetNotification(
   });
 }
 
+// Mirrors the client-side formatDisplayName in src/composables/useBreederUtils.ts
+export function formatDisplayName(fullName: string): string {
+  if (!fullName) return 'User';
+  const parts = fullName.trim().split(' ');
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const lastPart = parts[parts.length - 1];
+  const lastInitial = lastPart ? lastPart.substring(0, 1).toUpperCase() : '';
+  return `${first} ${lastInitial}.`;
+}
+
+export async function sendInquiryBuyerEmail(
+  to: string,
+  vars: { firstName: string; breederName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `You messaged ${vars.breederName} on CT Chickens`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('inquiry-first-contact-buyer-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendInquirySellerEmail(
+  to: string,
+  vars: { senderName: string; breederName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `${vars.senderName} sent you a message on CT Chickens`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('inquiry-first-contact-seller-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendInquiryAdminUnclaimedEmail(
+  to: string,
+  vars: { senderName: string; breederName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `New message sent to unclaimed listing: ${vars.breederName}`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('inquiry-first-contact-admin-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendSupportThreadUserEmail(
+  to: string,
+  vars: { firstName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = 'Your support thread — CT Chickens';
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('support-thread-user-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendSupportThreadAdminEmail(
+  to: string,
+  vars: { senderName: string; inboxUrl: string; adminInboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `${vars.senderName} opened a support thread`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('support-thread-admin-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendAdminDraftReviewEmail(
+  to: string,
+  vars: { businessName: string; ownerName: string; town: string; memberType: string; reviewUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `New draft profile needs review: ${vars.businessName}`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('admin-draft-review-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendClaimApprovedEmail(
+  to: string,
+  vars: { firstName: string; businessName: string; profileUrl: string; editUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `Your claim was approved — ${vars.businessName} is now yours to manage`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('claim-approved-body.html', { subject, ...vars }),
+  });
+}
+
 export async function sendAnnouncementEmail(
   to: string,
   vars: {
