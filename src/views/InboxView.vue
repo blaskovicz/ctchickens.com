@@ -329,7 +329,7 @@ onUnmounted(() => {
         <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
           <h5 class="mb-0 fw-bold">Messages</h5>
           <div class="d-flex gap-2">
-            <BButton v-if="!isAdmin" variant="outline-primary" size="sm" @click="handleContactSupport">
+            <BButton v-if="!isAdmin" variant="outline-primary" size="sm" @click="handleContactSupport" data-testid="support-btn">
               <i class="bi bi-headset me-1"></i>Support
             </BButton>
             <BButton variant="outline-primary" size="sm" @click="handleRefresh">

@@ -103,28 +103,39 @@ describe('Chat System Integration', () => {
     await createTestUser(userEmail, 'Normal User');
     await createTestUser(adminEmail, 'Admin Zach', true);
 
-    // 1. User starts support chat
+    // 1. User opens inbox and clicks Support — routes to support_new (no thread created yet)
     const user = (await signInWithEmailAndPassword(auth, userEmail, 'password123')).user;
     store.commit('SET_USER', user);
     store.commit('SET_USER_DATA', { isAdmin: false });
-    
+
     const userInbox = mount(InboxView, {
       global: { plugins: [store, router] }
     });
     await flushPromises();
     await new Promise(r => setTimeout(r, 1000));
-    
-    const supportBtn = userInbox.find('button[title="Contact Site Support"]');
+
+    const supportBtn = userInbox.find('[data-testid="support-btn"]');
     await supportBtn.trigger('click');
-    
+    await flushPromises();
+
+    // Thread must NOT exist yet — creation is deferred to first message
+    const threadId = `support_${user.uid}`;
+    const beforeDoc = await getDoc(doc(db, 'inquiry_threads', threadId));
+    expect(beforeDoc.exists()).toBe(false);
+
+    // 2. User types and sends their first message — this creates the thread atomically
+    await new Promise(r => setTimeout(r, 500));
+    const textarea = userInbox.find('textarea');
+    await textarea.setValue('Hello, I need help with my listing.');
+    await textarea.trigger('keyup.enter');
     await flushPromises();
     await new Promise(r => setTimeout(r, 2000));
 
-    const threadId = `support_${user.uid}`;
     const threadDoc = await getDoc(doc(db, 'inquiry_threads', threadId));
     expect(threadDoc.exists()).toBe(true);
+    expect(threadDoc.data()?.lastMessage).toContain('Hello, I need help');
 
-    // 2. Admin logs in and sees it
+    // 3. Admin logs in and sees the thread with the actual message
     await logout();
     const admin = (await signInWithEmailAndPassword(auth, adminEmail, 'password123')).user;
     store.commit('SET_USER', admin);
@@ -136,9 +147,9 @@ describe('Chat System Integration', () => {
     await flushPromises();
     await new Promise(r => setTimeout(r, 2000));
     await flushPromises();
-    
+
     expect(adminInbox.text()).toContain('Normal U.');
-    expect(adminInbox.text()).toContain('Started support chat');
+    expect(adminInbox.text()).toContain('Hello, I need help with my listing.');
   }, 40000);
 
   // ---------------------------------------------------------------------------
