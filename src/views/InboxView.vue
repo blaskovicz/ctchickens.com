@@ -31,6 +31,7 @@ const threads = ref<InquiryThread[]>([]);
 const messages = ref<InquiryMessage[]>([]);
 const activeThreadId = ref<string | null>((route.params.threadId as string) || null);
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
+const isPendingSupportThread = computed(() => activeThreadId.value === 'support_new');
 
 // undefined = still resolving, null = confirmed unclaimed, string = has owner
 const activeBreederOwnerUid = ref<string | null | undefined>(undefined);
@@ -160,31 +161,75 @@ watch(activeThreadId, (newId) => {
   messages.value = [];
   activeBreederOwnerUid.value = undefined;
 
-  if (newId) {
-    isLoadingMessages.value = true;
-    const q = query(
-      collection(db, 'inquiry_threads', newId, 'messages'),
-      orderBy('createdAt', 'asc')
-    );
+  if (!newId || newId === 'support_new') {
+    isLoadingMessages.value = false;
+    activeBreederOwnerUid.value = null;
+    return;
+  }
 
-    messagesUnsubscribe = onSnapshot(q, (snapshot) => {
-      messages.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InquiryMessage));
-      isLoadingMessages.value = false;
-      scrollToBottom();
-      markAsRead(newId);
-    });
+  isLoadingMessages.value = true;
+  const q = query(
+    collection(db, 'inquiry_threads', newId, 'messages'),
+    orderBy('createdAt', 'asc')
+  );
 
-    const thread = threads.value.find(t => t.id === newId);
-    if (thread && thread.type !== 'support' && thread.breederSlug !== 'support') {
-      fetchBreederStatus(thread.breederSlug);
-    } else {
-      activeBreederOwnerUid.value = null;
-    }
+  messagesUnsubscribe = onSnapshot(q, (snapshot) => {
+    messages.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InquiryMessage));
+    isLoadingMessages.value = false;
+    scrollToBottom();
+    markAsRead(newId);
+  });
+
+  const thread = threads.value.find(t => t.id === newId);
+  if (thread && thread.type !== 'support' && thread.breederSlug !== 'support') {
+    fetchBreederStatus(thread.breederSlug);
+  } else {
+    activeBreederOwnerUid.value = null;
   }
 }, { immediate: true });
 
 const handleSend = async () => {
-  if (!newMessage.value.trim() || !activeThreadId.value || !user.value || !activeThread.value) return;
+  if (!newMessage.value.trim() || !user.value) return;
+
+  // First message in a new support thread — create thread + message atomically
+  if (isPendingSupportThread.value) {
+    isSending.value = true;
+    const threadId = `support_${user.value.uid}`;
+    const threadRef = doc(db, 'inquiry_threads', threadId);
+    const messagesCol = collection(db, 'inquiry_threads', threadId, 'messages');
+    try {
+      const text = newMessage.value.trim();
+      await runTransaction(db, async (transaction) => {
+        transaction.set(threadRef, {
+          participants: [user.value!.uid, 'admin'],
+          type: 'support',
+          userUid: user.value!.uid,
+          userName: user.value!.displayName || 'User',
+          breederSlug: 'support',
+          breederName: 'Site Support',
+          lastMessage: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+          updatedAt: serverTimestamp(),
+          unreadCount: { admin: 1 }
+        });
+        transaction.set(doc(messagesCol), {
+          senderUid: user.value!.uid,
+          text,
+          createdAt: serverTimestamp(),
+          read: false
+        });
+      });
+      newMessage.value = '';
+      trackEvent('support_thread_created', { thread_id: threadId });
+      router.replace({ name: 'inbox', params: { threadId } });
+    } catch (err: any) {
+      create?.({ body: `Send failed: ${err.message}`, variant: 'danger' });
+    } finally {
+      isSending.value = false;
+    }
+    return;
+  }
+
+  if (!activeThreadId.value || !activeThread.value) return;
 
   isSending.value = true;
   const threadRef = doc(db, 'inquiry_threads', activeThreadId.value);
@@ -335,16 +380,16 @@ onUnmounted(() => {
 
       <!-- Message Window -->
       <BCol md="8" class="h-100 d-flex flex-column bg-white position-relative">
-        <div v-if="activeThread" class="h-100 d-flex flex-column">
+        <div v-if="activeThread || isPendingSupportThread" class="h-100 d-flex flex-column">
           <!-- Header -->
           <div class="p-3 border-bottom bg-white d-flex align-items-center gap-3">
             <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-              {{ activeDisplayName?.substring(0, 1) || '?' }}
+              {{ isPendingSupportThread ? 'S' : (activeDisplayName?.substring(0, 1) || '?') }}
             </div>
             <div>
-              <h6 class="mb-0 fw-bold">{{ activeDisplayName }}</h6>
-              <small class="text-muted" v-if="activeThread.type !== 'support'">
-                <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
+              <h6 class="mb-0 fw-bold">{{ isPendingSupportThread ? 'Site Support' : activeDisplayName }}</h6>
+              <small class="text-muted" v-if="!isPendingSupportThread && activeThread?.type !== 'support'">
+                <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread!.breederSlug } }" class="text-decoration-none">
                   <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
                 </router-link>
               </small>
@@ -367,6 +412,11 @@ onUnmounted(() => {
             </div>
 
             <template v-else>
+              <div v-if="isPendingSupportThread" class="h-100 d-flex flex-column align-items-center justify-content-center text-muted text-center py-5">
+                <i class="bi bi-headset fs-1 opacity-25 mb-3"></i>
+                <p class="mb-0">Describe your issue below and we'll get back to you shortly.</p>
+              </div>
+
               <div v-for="msg in messages" :key="msg.id" class="d-flex mb-3" :class="msg.senderUid === user?.uid ? 'justify-content-end' : 'justify-content-start'">
                 <div 
                   class="message-bubble p-3 rounded-4 shadow-sm position-relative group"
@@ -408,7 +458,7 @@ onUnmounted(() => {
             <div class="input-group">
               <BFormTextarea 
                 v-model="newMessage"
-                placeholder="Write a reply..."
+                :placeholder="isPendingSupportThread ? 'Describe your issue...' : 'Write a reply...'"
                 rows="1"
                 class="border-0 bg-light rounded-4 no-focus-ring"
                 @keyup.enter.exact="handleSend"
