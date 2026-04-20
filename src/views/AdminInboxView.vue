@@ -223,7 +223,11 @@ const handleRejectClaim = async (id: string) => {
                       <h6 class="mb-1 fw-bold">{{ claim.businessName }}</h6>
                       <p class="mb-0 small text-muted">By: <strong>{{ claim.requesterName }}</strong> on {{ claim.createdAt?.toDate()?.toLocaleDateString() }}</p>
                       <div class="d-flex align-items-center gap-2 mt-1">
-                        <code class="small text-primary">{{ claim.requesterEmail }}</code>
+                        <code class="small text-primary">{{
+                          userProfiles[claim.requesterUid]?.localEmail ||
+                          userProfiles[claim.requesterUid]?.email ||
+                          claim.requesterEmail
+                        }}</code>
                       </div>
                     </div>
                   </div>
