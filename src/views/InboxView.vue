@@ -177,7 +177,7 @@ watch(activeThreadId, (newId) => {
     messages.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as InquiryMessage));
     isLoadingMessages.value = false;
     scrollToBottom();
-    markAsRead(newId);
+    markAsRead(newId).catch(() => {}); // suppress background write errors (e.g. after logout)
   });
 
   const thread = threads.value.find(t => t.id === newId);
