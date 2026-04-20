@@ -90,10 +90,12 @@ describe('Chat System Integration', () => {
     await flushPromises();
     await new Promise(r => setTimeout(r, 2000));
     await flushPromises();
-    
+
     // Formatting helper makes "Buyer Bob" -> "Buyer B."
     expect(inboxWrapper.text()).toContain('Buyer B.');
     expect(inboxWrapper.text()).toContain('Hi seller!');
+
+    inboxWrapper.unmount();
   }, 40000);
 
   it('Support Chat: User can contact support and Admin can see/reply', async () => {
@@ -149,6 +151,9 @@ describe('Chat System Integration', () => {
 
     expect(adminInbox.text()).toContain('Normal U.');
     expect(adminInbox.text()).toContain('Hello, I need help with my listing.');
+
+    userInbox.unmount();
+    adminInbox.unmount();
   }, 40000);
 
   // ---------------------------------------------------------------------------
@@ -552,5 +557,7 @@ describe('Chat System Integration', () => {
 
     expect(ownerInbox.text()).toContain('Buyer T.');
     expect(ownerInbox.text()).toContain('Hello legacy');
+
+    ownerInbox.unmount();
   }, 40000);
 });
