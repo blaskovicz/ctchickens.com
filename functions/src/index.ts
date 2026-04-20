@@ -78,7 +78,7 @@ async function emailAdminsNewDraftIfRequired(
 
   try {
     await sendAdminDraftReviewEmail(
-      'admins@ctchickens.com',
+      'admin@ctchickens.com',
       { businessName, ownerName, town, memberType, reviewUrl },
       resend
     );
@@ -511,7 +511,7 @@ export const onDirectoryMemberUpdated = onDocumentUpdated(
 // onDocumentCreated fires exactly once per document, so this naturally handles "first contact only".
 //
 // inquiry type  → email buyer + email seller (or admins if listing is unclaimed)
-// support type  → email the user + email admins@ctchickens.com
+// support type  → email the user + email admin@ctchickens.com
 export const onInquiryThreadCreated = onDocumentCreated(
   { document: 'inquiry_threads/{threadId}', secrets: [resendApiKey] },
   async (event) => {
@@ -554,7 +554,7 @@ export const onInquiryThreadCreated = onDocumentCreated(
 
       try {
         await sendSupportThreadAdminEmail(
-          'admins@ctchickens.com',
+          'admin@ctchickens.com',
           { senderName, inboxUrl, adminInboxUrl: 'https://ctchickens.com/#/admin/inbox' },
           resend
         );
@@ -621,11 +621,11 @@ export const onInquiryThreadCreated = onDocumentCreated(
         }
       } else {
         // Unclaimed listing — notify admins and the farm's contact email if one exists
-        const recipients: string[] = ['admins@ctchickens.com'];
+        const recipients: string[] = ['admin@ctchickens.com'];
         try {
           const listingDoc = await db.collection('directory_members').doc(data.breederSlug as string).get();
           const contactEmail = listingDoc.data()?.profile?.contactEmail as string | undefined;
-          if (contactEmail && contactEmail !== 'admins@ctchickens.com') {
+          if (contactEmail && contactEmail !== 'admin@ctchickens.com') {
             recipients.push(contactEmail);
           }
         } catch (err) {
