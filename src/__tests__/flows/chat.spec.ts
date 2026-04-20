@@ -26,8 +26,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/inbox', name: 'inbox', component: InboxView },
-    { path: '/inbox/:threadId', name: 'inbox-thread', component: InboxView },
+    { path: '/inbox/:threadId?', name: 'inbox', component: InboxView },
     { path: '/directory/:slug', name: 'breeder-profile', component: { template: '<div>Profile</div>' } }
   ]
 });
