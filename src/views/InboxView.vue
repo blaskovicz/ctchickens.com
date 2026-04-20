@@ -4,7 +4,7 @@ import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
 import { db, trackEvent } from '../firebase';
 import { 
-  collection, query, where, orderBy, onSnapshot, 
+  collection, query, where, orderBy, onSnapshot,
   doc, updateDoc, serverTimestamp, runTransaction, getDoc,
   writeBatch, or
 } from 'firebase/firestore';
@@ -32,12 +32,36 @@ const messages = ref<InquiryMessage[]>([]);
 const activeThreadId = ref<string | null>((route.params.threadId as string) || null);
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
 
-const activeBreederOwnerUid = ref<string | null>(null);
+// undefined = still resolving, null = confirmed unclaimed, string = has owner
+const activeBreederOwnerUid = ref<string | null | undefined>(undefined);
+
 const isUnclaimed = computed(() => {
   if (!activeThread.value || activeThread.value.type === 'support') return false;
-  // If the user is the sender, they want to know if it's unclaimed
-  return activeThread.value.userUid === user.value?.uid && activeBreederOwnerUid.value === null;
+  if (activeThread.value.userUid !== user.value?.uid) return false;
+  if (activeBreederOwnerUid.value === undefined) return false; // loading — don't flash
+  return activeBreederOwnerUid.value === null;
 });
+
+const fetchBreederStatus = async (slug: string) => {
+  activeBreederOwnerUid.value = undefined; // reset to loading
+  if (!slug || slug === 'support') return;
+
+  // Check store first (free, synchronous)
+  const storeBreeder = (store.state.breeders as any[]).find((b) => b.id === slug);
+  if (storeBreeder !== undefined) {
+    activeBreederOwnerUid.value = storeBreeder.ownerUid || null;
+    return;
+  }
+
+  // Fall back to a direct read for listings not yet in the store
+  try {
+    const snap = await getDoc(doc(db, 'directory_members', slug));
+    activeBreederOwnerUid.value = snap.exists() ? (snap.data().account?.ownerUid || null) : null;
+  } catch (e) {
+    console.error('Error checking breeder status:', e);
+    activeBreederOwnerUid.value = null;
+  }
+};
 
 const activeDisplayName = computed(() => {
   if (!activeThread.value) return '';
@@ -103,17 +127,9 @@ const scrollToBottom = async () => {
   }
 };
 
-const fetchBreederStatus = async (slug: string) => {
-  if (!slug || slug === 'support') return;
-  try {
-    const docRef = doc(db, 'directory_members', slug);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      activeBreederOwnerUid.value = snap.data().account?.ownerUid || null;
-    }
-  } catch (e) {
-    console.error("Error checking breeder status:", e);
-  }
+const handleRefresh = () => {
+  fetchThreads();
+  store.dispatch('fetchDirectory');
 };
 
 const handleContactSupport = () => contactSupport();
@@ -142,7 +158,7 @@ const markAsRead = async (threadId: string) => {
 watch(activeThreadId, (newId) => {
   if (messagesUnsubscribe) messagesUnsubscribe();
   messages.value = [];
-  activeBreederOwnerUid.value = null;
+  activeBreederOwnerUid.value = undefined;
 
   if (newId) {
     isLoadingMessages.value = true;
@@ -161,6 +177,8 @@ watch(activeThreadId, (newId) => {
     const thread = threads.value.find(t => t.id === newId);
     if (thread && thread.type !== 'support' && thread.breederSlug !== 'support') {
       fetchBreederStatus(thread.breederSlug);
+    } else {
+      activeBreederOwnerUid.value = null;
     }
   }
 }, { immediate: true });
@@ -180,7 +198,7 @@ const handleSend = async () => {
     let recipientUid = activeThread.value.participants.find(p => p !== user.value?.uid) || 'admin';
 
     // If we're the buyer and the farm is unclaimed, the recipient is admin
-    if (activeThread.value.type !== 'support' && activeThread.value.userUid === user.value.uid && !activeBreederOwnerUid.value) {
+    if (isUnclaimed.value) {
       recipientUid = 'admin';
     }
 
@@ -266,11 +284,11 @@ onUnmounted(() => {
         <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
           <h5 class="mb-0 fw-bold">Messages</h5>
           <div class="d-flex gap-2">
-            <BButton variant="outline-primary" size="sm" @click="handleContactSupport" title="Contact Site Support">
-              <i class="bi bi-headset"></i>
+            <BButton v-if="!isAdmin" variant="outline-primary" size="sm" @click="handleContactSupport">
+              <i class="bi bi-headset me-1"></i>Support
             </BButton>
-            <BButton variant="link" size="sm" @click="fetchThreads" class="p-0 text-muted">
-              <i class="bi bi-arrow-clockwise"></i>
+            <BButton variant="outline-primary" size="sm" @click="handleRefresh">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </BButton>
           </div>
         </div>
@@ -326,9 +344,8 @@ onUnmounted(() => {
             <div>
               <h6 class="mb-0 fw-bold">{{ activeDisplayName }}</h6>
               <small class="text-muted" v-if="activeThread.type !== 'support'">
-                Inquiry for 
                 <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
-                  {{ activeThread.breederName }}
+                  <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
                 </router-link>
               </small>
               <small class="text-muted" v-else>
@@ -440,6 +457,7 @@ onUnmounted(() => {
 .thread-item.active {
   background-color: #e9ecef !important;
   border-left: 4px solid var(--bs-primary) !important;
+  color: inherit !important;
 }
 
 .unread {
