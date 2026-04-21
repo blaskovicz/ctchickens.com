@@ -388,8 +388,8 @@ onUnmounted(() => {
             </div>
             <div>
               <h6 class="mb-0 fw-bold">{{ isPendingSupportThread ? 'Site Support' : activeDisplayName }}</h6>
-              <small class="text-muted" v-if="!isPendingSupportThread && activeThread?.type !== 'support'">
-                <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread!.breederSlug } }" class="text-decoration-none">
+              <small class="text-muted" v-if="!isPendingSupportThread && activeThread?.type !== 'support' && activeThread?.breederSlug">
+                <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
                   <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
                 </router-link>
               </small>
