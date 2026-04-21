@@ -282,6 +282,34 @@ export async function sendClassifiedExpiryWarningEmail(
   });
 }
 
+export async function sendClassifiedExpiredEmail(
+  to: string,
+  vars: { firstName: string; categoryLabel: string; expiresAt: string },
+  resend: Resend
+): Promise<void> {
+  const subject = 'Your classified listing has expired — CT Chickens';
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('classified-expired-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendClassifiedRenewedEmail(
+  to: string,
+  vars: { firstName: string; categoryLabel: string; newExpiresAt: string; renewalsRemaining: number; classifiedUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = 'Your classified listing has been renewed — CT Chickens';
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('classified-renewed-body.html', { subject, ...vars }),
+  });
+}
+
 export async function sendAnnouncementEmail(
   to: string,
   vars: {

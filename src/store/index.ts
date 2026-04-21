@@ -433,6 +433,15 @@ export default createStore({
       return action;
     },
 
+    async openPeerThread({ state }: ActionContext<State, State>, payload: { targetUid: string; senderFarmSlug?: string; classifiedId?: string }) {
+      if (!state.user) throw new Error('Must be logged in.');
+      const fn = httpsCallable(functions, 'initiatePeerThread');
+      const result = await fn(payload);
+      const { threadId } = result.data as { threadId: string };
+      router.push(`/inbox/${threadId}`);
+      return threadId;
+    },
+
     async createDraftListing({ state, dispatch }: ActionContext<State, State>, payload: { businessName: string; town: string; memberType: string }) {
       if (!state.user) {
         throw new Error("Must be logged in to create a listing.");

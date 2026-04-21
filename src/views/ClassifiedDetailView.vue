@@ -23,11 +23,16 @@ const isLoading = ref(true);
 const isActing = ref(false);
 const showPublishModal = ref(false);
 const showDiscardModal = ref(false);
+const showMessageModal = ref(false);
+const selectedFarmSlug = ref<string | null>(null);
+const isOpeningThread = ref(false);
 
 const user = computed(() => store.state.user);
 const isAdmin = computed(() => store.getters.isAdmin);
+const isLoggedIn = computed(() => store.getters.isLoggedIn);
 const isOwner = computed(() => !!user.value && (classified.value?.owner_uid === user.value.uid || draftClassified.value?.owner_uid === user.value.uid));
 const isDraft = computed(() => !!draftClassified.value && !classified.value);
+const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter((b: any) => b.status === 'published'));
 
 const CATEGORY_LABELS: Record<string, string> = {
   iso: 'In Search Of',
@@ -96,7 +101,16 @@ const handleRenew = async () => {
       owner_uid: user.value!.uid,
       created_at: serverTimestamp(),
     });
-    create?.({ body: 'Renewal requested. Your listing will be extended shortly.', variant: 'success' });
+    // Optimistically update local state so the button disappears immediately
+    const currentExpiry = classified.value!.expires_at.toDate
+      ? classified.value!.expires_at.toDate()
+      : new Date(classified.value!.expires_at);
+    classified.value = {
+      ...classified.value!,
+      renewal_count: classified.value!.renewal_count + 1,
+      expires_at: new Date(currentExpiry.getTime() + 7 * 24 * 60 * 60 * 1000),
+    };
+    create?.({ body: 'Listing renewed successfully.', variant: 'success' });
   } catch (e: any) {
     create?.({ body: `Renewal failed: ${e.message}`, variant: 'danger' });
   } finally {
@@ -177,6 +191,23 @@ const handleReject = async () => {
   }
 };
 
+const handleMessage = async (farmSlug?: string | null) => {
+  if (!classified.value || isOpeningThread.value) return;
+  showMessageModal.value = false;
+  isOpeningThread.value = true;
+  try {
+    await store.dispatch('openPeerThread', {
+      targetUid: classified.value.owner_uid,
+      senderFarmSlug: farmSlug || undefined,
+      classifiedId: docId,
+    });
+  } catch (e: any) {
+    create?.({ body: `Failed to open conversation: ${e.message}`, variant: 'danger' });
+  } finally {
+    isOpeningThread.value = false;
+  }
+};
+
 const activeData = computed(() => classified.value || draftClassified.value);
 </script>
 
@@ -214,6 +245,20 @@ const activeData = computed(() => classified.value || draftClassified.value);
           </BButton>
           <BButton variant="outline-danger" size="sm" @click="handleDiscard" :disabled="isActing">
             <i class="bi bi-x-circle me-1"></i> Close Listing
+          </BButton>
+        </div>
+
+        <!-- Message button for non-owners -->
+        <div v-else-if="isLoggedIn && !isDraft && classified?.status === 'active'" class="d-flex gap-2">
+          <BButton
+            variant="outline-primary"
+            size="sm"
+            :disabled="isOpeningThread"
+            @click="publishedFarms.length > 0 ? (showMessageModal = true) : handleMessage(null)"
+          >
+            <BSpinner v-if="isOpeningThread" small class="me-1" />
+            <i v-else class="bi bi-chat me-1"></i>
+            Message {{ activeData?.display_name }}
           </BButton>
         </div>
 
@@ -280,6 +325,24 @@ const activeData = computed(() => classified.value || draftClassified.value);
     <!-- DISCARD CONFIRMATION MODAL -->
     <BModal v-model="showDiscardModal" title="Discard Draft?" @ok="handleReject" :ok-disabled="isActing" ok-title="Discard Draft" ok-variant="danger">
       <p>Are you sure you want to discard this classified? This action cannot be undone.</p>
+    </BModal>
+
+    <!-- MESSAGE AS MODAL -->
+    <BModal v-model="showMessageModal" title="Message as..." hide-footer>
+      <div class="d-flex flex-column gap-2">
+        <BButton variant="outline-secondary" class="text-start" @click="handleMessage(null)">
+          <i class="bi bi-person me-2"></i>Yourself ({{ user?.displayName }})
+        </BButton>
+        <BButton
+          v-for="farm in publishedFarms"
+          :key="farm.id"
+          variant="outline-primary"
+          class="text-start"
+          @click="handleMessage(farm.id)"
+        >
+          <i class="bi bi-house me-2"></i>{{ farm.name }}
+        </BButton>
+      </div>
     </BModal>
   </div>
 </template>

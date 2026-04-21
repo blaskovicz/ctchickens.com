@@ -20,6 +20,8 @@ import {
   sendClassifiedSubmittedAdminEmail,
   sendClassifiedApprovedEmail,
   sendClassifiedExpiryWarningEmail,
+  sendClassifiedExpiredEmail,
+  sendClassifiedRenewedEmail,
   sendInquiryBuyerEmail,
   sendInquirySellerEmail,
   sendInquiryAdminUnclaimedEmail,
@@ -645,6 +647,38 @@ export const onInquiryThreadCreated = onDocumentCreated(
           }
         }
       }
+    } else if (type === 'peer') {
+      const participants = data.participants as string[];
+      const initiatorUid = data.userUid as string;
+      const targetUid = participants.find((p: string) => p !== initiatorUid);
+      if (!targetUid) return;
+
+      const peerParticipantNames = data.peerParticipantNames as Record<string, string> | undefined;
+      const senderName = peerParticipantNames?.[initiatorUid] || 'Someone';
+
+      let classifiedLabel = 'a classified';
+      const classifiedId = data.classifiedId as string | null;
+      if (classifiedId) {
+        try {
+          const snap = await db.collection('classifieds').doc(classifiedId).get();
+          const desc = snap.data()?.description as string | undefined;
+          if (desc) classifiedLabel = desc.length > 64 ? desc.substring(0, 61) + '...' : desc;
+        } catch (err) {
+          console.error('[onInquiryThreadCreated] Failed to fetch classified for peer email', err);
+        }
+      }
+
+      try {
+        const targetDoc = await db.collection('users').doc(targetUid).get();
+        const targetEmail = targetDoc.exists ? resolveEmail(targetDoc.data()!) : null;
+        if (targetEmail) {
+          const resend = new Resend(resendApiKey.value());
+          await sendInquirySellerEmail(targetEmail, { senderName, breederName: classifiedLabel, inboxUrl }, resend);
+          console.log(`[onInquiryThreadCreated] Peer notification sent to ${targetEmail}`);
+        }
+      } catch (err) {
+        console.error('[onInquiryThreadCreated] Failed to send peer notification email', err);
+      }
     } else {
       console.log(`[onInquiryThreadCreated] Unknown thread type "${type}" for ${threadId}, skipping`);
     }
@@ -830,7 +864,154 @@ export const onClassifiedAction = onDocumentCreated(
         expiry_warning_sent: false,
       });
       console.log(`[onClassifiedAction] Classified ${classifiedId} renewed (${renewalCount + 1}/${maxRenewals})`);
+
+      try {
+        const resend = new Resend(resendApiKey.value());
+        const userDoc = await db.collection('users').doc(actionOwnerUid).get();
+        if (userDoc.exists) {
+          const userEmail = resolveEmail(userDoc.data()!);
+          if (userEmail) {
+            const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+            const category = (classified.category as string) || 'iso';
+            const newExpiresAtStr = newExpiresAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            await sendClassifiedRenewedEmail(userEmail, {
+              firstName,
+              categoryLabel: CATEGORY_LABELS[category] || category,
+              newExpiresAt: newExpiresAtStr,
+              renewalsRemaining: maxRenewals - (renewalCount + 1),
+              classifiedUrl: `https://ctchickens.com/#/classified/${classifiedId}`,
+            }, resend);
+            console.log(`[onClassifiedAction] Renewal email sent to ${userEmail} for ${classifiedId}`);
+          }
+        }
+      } catch (err) {
+        console.error('[onClassifiedAction] Failed to send renewal email', { classifiedId, err });
+      }
     }
+  }
+);
+
+// Callable: find or create a peer-to-peer inquiry thread between two users.
+// Runs server-side so it can read both users' display names (client rules forbid cross-user reads).
+export const initiatePeerThread = onCall(
+  { secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'Must be signed in.');
+    }
+
+    const { targetUid, senderFarmSlug, classifiedId } = request.data as { targetUid: string; senderFarmSlug?: string; classifiedId?: string };
+
+    if (!targetUid || typeof targetUid !== 'string') {
+      throw new HttpsError('invalid-argument', 'targetUid is required.');
+    }
+
+    const callerUid = request.auth.uid;
+
+    if (callerUid === targetUid) {
+      throw new HttpsError('invalid-argument', 'Cannot start a thread with yourself.');
+    }
+
+    const [callerDoc, targetDoc] = await Promise.all([
+      db.collection('users').doc(callerUid).get(),
+      db.collection('users').doc(targetUid).get(),
+    ]);
+
+    if (!targetDoc.exists) {
+      throw new HttpsError('not-found', 'Target user not found.');
+    }
+
+    let callerName: string = formatDisplayName((callerDoc.data()?.displayName as string) || 'User');
+
+    if (senderFarmSlug) {
+      const farmDoc = await db.collection('directory_members').doc(senderFarmSlug).get();
+      if (!farmDoc.exists || farmDoc.data()?.account?.ownerUid !== callerUid) {
+        throw new HttpsError('permission-denied', 'You do not own this farm.');
+      }
+      callerName = (farmDoc.data()?.profile?.businessName as string) || senderFarmSlug;
+    }
+
+    const targetName = formatDisplayName((targetDoc.data()?.displayName as string) || 'User');
+    const peerKey = [callerUid, targetUid].sort().join('_');
+
+    const existing = await db.collection('inquiry_threads')
+      .where('peerKey', '==', peerKey)
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      const threadId = existing.docs[0].id;
+      if (classifiedId) {
+        const threadRef = db.collection('inquiry_threads').doc(threadId);
+        let title = 'View listing';
+        try {
+          const snap = await db.collection('classifieds').doc(classifiedId).get();
+          const desc = snap.data()?.description as string | undefined;
+          if (desc) title = desc.length > 64 ? desc.substring(0, 61) + '...' : desc;
+        } catch (e) { /* fall back */ }
+        const messageText = `I'm messaging you about your classified: [${title}](https://ctchickens.com/#/classified/${classifiedId})`;
+        await db.runTransaction(async (tx) => {
+          const threadSnap = await tx.get(threadRef);
+          const currentUnread = threadSnap.data()?.unreadCount?.[targetUid] || 0;
+          tx.update(threadRef, {
+            lastMessage: messageText.substring(0, 80),
+            updatedAt: FieldValue.serverTimestamp(),
+            [`unreadCount.${targetUid}`]: currentUnread + 1,
+          });
+          tx.set(threadRef.collection('messages').doc(), {
+            senderUid: callerUid,
+            text: messageText,
+            createdAt: FieldValue.serverTimestamp(),
+            read: false,
+          });
+        });
+      }
+      return { threadId };
+    }
+
+    let classifiedTitle = 'View listing';
+    if (classifiedId) {
+      try {
+        const classifiedSnap = await db.collection('classifieds').doc(classifiedId).get();
+        const desc = classifiedSnap.data()?.description as string | undefined;
+        if (desc) classifiedTitle = desc.length > 64 ? desc.substring(0, 61) + '...' : desc;
+      } catch (e) {
+        // fall back to generic title
+      }
+    }
+
+    const firstMessageText = classifiedId
+      ? `I'm messaging you about your classified: [${classifiedTitle}](https://ctchickens.com/#/classified/${classifiedId})`
+      : `${callerName} started a conversation with you.`;
+
+    const threadRef = db.collection('inquiry_threads').doc();
+    await db.runTransaction(async (tx) => {
+      tx.set(threadRef, {
+        type: 'peer',
+        peerKey,
+        participants: [callerUid, targetUid],
+        userUid: callerUid,
+        senderFarmSlug: senderFarmSlug || null,
+        peerParticipantNames: {
+          [callerUid]: callerName,
+          [targetUid]: targetName,
+        },
+        classifiedId: classifiedId || null,
+        breederSlug: '',
+        breederName: targetName,
+        lastMessage: firstMessageText.substring(0, 80),
+        updatedAt: FieldValue.serverTimestamp(),
+        unreadCount: { [targetUid]: 1 },
+      });
+      tx.set(threadRef.collection('messages').doc(), {
+        senderUid: callerUid,
+        text: firstMessageText,
+        createdAt: FieldValue.serverTimestamp(),
+        read: false,
+      });
+    });
+
+    return { threadId: threadRef.id };
   }
 );
 
@@ -854,6 +1035,28 @@ export const sweepExpiredClassifieds = onSchedule(
       if (!expiredSnap.empty) {
         await batch.commit();
         console.log(`[sweepExpiredClassifieds] Expired ${expiredSnap.size} classifieds`);
+
+        for (const d of expiredSnap.docs) {
+          const c = d.data();
+          const ownerUid = c.owner_uid as string;
+          try {
+            const userDoc = await db.collection('users').doc(ownerUid).get();
+            if (!userDoc.exists) continue;
+            const userEmail = resolveEmail(userDoc.data()!);
+            if (!userEmail) continue;
+            const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+            const category = (c.category as string) || 'iso';
+            const expiresAtStr = (c.expires_at as Timestamp).toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            await sendClassifiedExpiredEmail(userEmail, {
+              firstName,
+              categoryLabel: CATEGORY_LABELS[category] || category,
+              expiresAt: expiresAtStr,
+            }, resend);
+            console.log(`[sweepExpiredClassifieds] Expired email sent to ${userEmail} for ${d.id}`);
+          } catch (err) {
+            console.error('[sweepExpiredClassifieds] Failed to send expired email for', d.id, err);
+          }
+        }
       }
     } catch (err) {
       console.error('[sweepExpiredClassifieds] Failed to expire classifieds', err);

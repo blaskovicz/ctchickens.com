@@ -45,6 +45,13 @@
       ]
     },
     {
+      "collectionGroup": "inquiry_threads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "peerKey", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

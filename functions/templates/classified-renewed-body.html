@@ -1,15 +1,14 @@
 <h2 style="color:#1e3a8a;margin:0 0 16px;font-size:22px;font-weight:700;">
-  Your classified is live!
+  Your listing has been renewed
 </h2>
 <p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
-  Hi {{firstName}}, your <strong>{{categoryLabel}}</strong> listing has been approved and is now live on our Classifieds Ads.
+  Hi {{firstName}}, your <strong>{{categoryLabel}}</strong> listing has been renewed and is active until <strong>{{newExpiresAt}}</strong>.
 </p>
 
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 28px;background:#f8faff;border-radius:8px;border:1px solid #e2e8f0;">
   <tr>
     <td style="padding:20px;">
-      <p style="margin:0 0 8px;font-size:14px;color:#374151;"><strong>Expires:</strong> {{expiresAt}}</p>
-      <p style="margin:0;font-size:14px;color:#374151;">You can renew your listing up to {{maxRenewals}} time(s) within 2 days of expiration.</p>
+      <p style="margin:0;font-size:14px;color:#374151;"><strong>Renewals remaining:</strong> {{renewalsRemaining}}</p>
     </td>
   </tr>
 </table>

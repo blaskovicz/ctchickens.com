@@ -59,9 +59,9 @@ export interface Review {
   }
 
   export interface InquiryThread {
-    id: string; // generated: `${userUid}_${breederSlug}`
-    participants: string[]; // [userUid, breederOwnerUid]
-    type?: 'inquiry' | 'support' | 'direct';
+    id: string;
+    participants: string[];
+    type?: 'inquiry' | 'support' | 'peer';
     userUid: string;
     userName?: string;
     breederSlug: string;
@@ -69,6 +69,10 @@ export interface Review {
     lastMessage: string;
     updatedAt: any; // ServerTimestamp
     unreadCount: Record<string, number>; // { [uid]: count }
+    // peer thread fields
+    peerKey?: string;
+    peerParticipantNames?: Record<string, string>;
+    senderFarmSlug?: string | null;
   }
 
   export type ClassifiedCategory = 'iso' | 'for_sale' | 'rehoming' | 'hatching_eggs';
