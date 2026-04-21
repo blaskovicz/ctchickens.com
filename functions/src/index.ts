@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { Resend } from 'resend';
@@ -16,6 +17,9 @@ import {
   sendLocalEmailSetNotification,
   sendAdminDraftReviewEmail,
   sendClaimApprovedEmail,
+  sendClassifiedSubmittedAdminEmail,
+  sendClassifiedApprovedEmail,
+  sendClassifiedExpiryWarningEmail,
   sendInquiryBuyerEmail,
   sendInquirySellerEmail,
   sendInquiryAdminUnclaimedEmail,
@@ -647,3 +651,248 @@ export const onInquiryThreadCreated = onDocumentCreated(
   }
 );
 
+const CATEGORY_LABELS: Record<string, string> = {
+  iso: 'In Search Of',
+  for_sale: 'For Sale',
+  rehoming: 'Rehoming',
+  hatching_eggs: 'Hatching Eggs',
+};
+
+// Emails admins when a new draft_classified is submitted for review.
+export const onDraftClassifiedCreated = onDocumentCreated(
+  { document: 'draft_classifieds/{docId}', secrets: [resendApiKey] },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const docId = event.params.docId;
+    const ownerUid = data.owner_uid as string | undefined;
+    if (!ownerUid) {
+      console.error('[onDraftClassifiedCreated] Missing owner_uid', { docId });
+      return;
+    }
+
+    const userSnap = await healUserProfileIfRequired(docId, ownerUid);
+    const ownerName = (userSnap?.data()?.displayName as string) || (data.display_name as string) || 'Unknown';
+    const category = (data.category as string) || 'unknown';
+    const location = (data.location as string) || 'Unknown';
+    const description = (data.description as string) || '';
+    const reviewUrl = `https://ctchickens.com/#/classified/${docId}`;
+
+    const resend = new Resend(resendApiKey.value());
+    try {
+      await sendClassifiedSubmittedAdminEmail(
+        'admin@ctchickens.com',
+        { ownerName, category: CATEGORY_LABELS[category] || category, location, description, reviewUrl },
+        resend
+      );
+      console.log(`[onDraftClassifiedCreated] Admin review email sent for ${docId}`);
+    } catch (err) {
+      console.error('[onDraftClassifiedCreated] Failed to send admin email', { docId, err });
+    }
+  }
+);
+
+// Fires when admin creates a draft_classified_history doc with status='approved'.
+// Publishes the classified, sets expiry, determines max_renewals, deletes draft, emails owner.
+export const onDraftClassifiedApproved = onDocumentCreated(
+  { document: 'draft_classified_history/{historyId}', secrets: [resendApiKey] },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+    if (data.draft_meta?.status !== 'approved') return;
+
+    const historyId = event.params.historyId;
+    const ownerUid = data.draft_meta?.owner_uid as string | undefined;
+    if (!ownerUid) {
+      console.error('[onDraftClassifiedApproved] Missing owner_uid in history doc', { historyId });
+      return;
+    }
+
+    const snapshot = data.snapshot as Record<string, any>;
+    const category = (snapshot?.category as string) || 'iso';
+
+    // Determine max_renewals based on verified farm ownership
+    let maxRenewals = 1;
+    try {
+      const verifiedFarmsSnap = await db.collection('directory_members')
+        .where('account.ownerUid', '==', ownerUid)
+        .where('account.isVerified', '==', true)
+        .limit(1)
+        .get();
+      if (!verifiedFarmsSnap.empty) maxRenewals = 3;
+    } catch (err) {
+      console.error('[onDraftClassifiedApproved] Failed to query verified farms', { ownerUid, err });
+    }
+
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+
+    // Write to classifieds
+    try {
+      await db.collection('classifieds').doc(historyId).set({
+        ...snapshot,
+        owner_uid: ownerUid,
+        status: 'active',
+        expires_at: expiresAt,
+        renewal_count: 0,
+        max_renewals: maxRenewals,
+        expiry_warning_sent: false,
+      });
+    } catch (err) {
+      console.error('[onDraftClassifiedApproved] Failed to write classifieds doc', { historyId, err });
+      return;
+    }
+
+    // Delete draft
+    try {
+      await db.collection('draft_classifieds').doc(historyId).delete();
+    } catch (err) {
+      console.error('[onDraftClassifiedApproved] Failed to delete draft', { historyId, err });
+    }
+
+    // Email owner
+    const resend = new Resend(resendApiKey.value());
+    try {
+      const userDoc = await db.collection('users').doc(ownerUid).get();
+      if (!userDoc.exists) return;
+      const userEmail = resolveEmail(userDoc.data()!);
+      if (!userEmail) return;
+      const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+      const classifiedUrl = `https://ctchickens.com/#/classified/${historyId}`;
+      const expiresAtStr = expiresAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      await sendClassifiedApprovedEmail(userEmail, {
+        firstName,
+        categoryLabel: CATEGORY_LABELS[category] || category,
+        expiresAt: expiresAtStr,
+        maxRenewals,
+        classifiedUrl,
+      }, resend);
+      console.log(`[onDraftClassifiedApproved] Approval email sent to ${userEmail}`);
+    } catch (err) {
+      console.error('[onDraftClassifiedApproved] Failed to send approval email', { historyId, err });
+    }
+  }
+);
+
+// Fires when an action doc is written to classifieds/{classifiedId}/actions/{actionId}.
+// Handles 'renew' (extends expiry) and 'discard' (marks as discarded).
+export const onClassifiedAction = onDocumentCreated(
+  { document: 'classifieds/{classifiedId}/actions/{actionId}', secrets: [resendApiKey] },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const { classifiedId } = event.params;
+    const action = data.action as string;
+    const actionOwnerUid = data.owner_uid as string;
+
+    const classifiedRef = db.collection('classifieds').doc(classifiedId);
+    const classifiedSnap = await classifiedRef.get();
+    if (!classifiedSnap.exists) {
+      console.error('[onClassifiedAction] Classified not found', { classifiedId });
+      return;
+    }
+
+    const classified = classifiedSnap.data()!;
+    if (classified.owner_uid !== actionOwnerUid) {
+      console.error('[onClassifiedAction] Action owner mismatch', { classifiedId, actionOwnerUid });
+      return;
+    }
+
+    if (action === 'discard') {
+      await classifiedRef.update({ status: 'discarded' });
+      console.log(`[onClassifiedAction] Classified ${classifiedId} discarded`);
+      return;
+    }
+
+    if (action === 'renew') {
+      const renewalCount = (classified.renewal_count as number) || 0;
+      const maxRenewals = (classified.max_renewals as number) || 1;
+      if (renewalCount >= maxRenewals) {
+        console.log(`[onClassifiedAction] Renewal limit reached for ${classifiedId}`);
+        return;
+      }
+
+      const expiresAt = (classified.expires_at as Timestamp).toDate();
+      const now = new Date();
+      const msUntilExpiry = expiresAt.getTime() - now.getTime();
+      const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+
+      if (msUntilExpiry > twoDaysMs || classified.status !== 'active') {
+        console.log(`[onClassifiedAction] Renewal not yet allowed for ${classifiedId} (${Math.round(msUntilExpiry / 86400000)}d remaining)`);
+        return;
+      }
+
+      const newExpiresAt = Timestamp.fromDate(new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000));
+      await classifiedRef.update({
+        expires_at: newExpiresAt,
+        renewal_count: FieldValue.increment(1),
+        expiry_warning_sent: false,
+      });
+      console.log(`[onClassifiedAction] Classified ${classifiedId} renewed (${renewalCount + 1}/${maxRenewals})`);
+    }
+  }
+);
+
+// Runs daily: expires overdue classifieds and sends 2-day warning emails.
+export const sweepExpiredClassifieds = onSchedule(
+  { schedule: 'every 24 hours', timeZone: 'America/New_York', secrets: [resendApiKey] },
+  async () => {
+    const now = new Date();
+    const nowTs = Timestamp.fromDate(now);
+    const twoDaysTs = Timestamp.fromDate(new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000));
+    const resend = new Resend(resendApiKey.value());
+
+    // Expire overdue active classifieds
+    try {
+      const expiredSnap = await db.collection('classifieds')
+        .where('status', '==', 'active')
+        .where('expires_at', '<', nowTs)
+        .get();
+      const batch = db.batch();
+      expiredSnap.docs.forEach(d => batch.update(d.ref, { status: 'expired' }));
+      if (!expiredSnap.empty) {
+        await batch.commit();
+        console.log(`[sweepExpiredClassifieds] Expired ${expiredSnap.size} classifieds`);
+      }
+    } catch (err) {
+      console.error('[sweepExpiredClassifieds] Failed to expire classifieds', err);
+    }
+
+    // Send 2-day expiry warnings
+    try {
+      const warningSnap = await db.collection('classifieds')
+        .where('status', '==', 'active')
+        .where('expires_at', '<=', twoDaysTs)
+        .where('expiry_warning_sent', '==', false)
+        .get();
+
+      for (const classifiedDoc of warningSnap.docs) {
+        const classified = classifiedDoc.data();
+        const ownerUid = classified.owner_uid as string;
+        try {
+          const userDoc = await db.collection('users').doc(ownerUid).get();
+          if (!userDoc.exists) continue;
+          const userEmail = resolveEmail(userDoc.data()!);
+          if (!userEmail) continue;
+          const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+          const category = (classified.category as string) || 'iso';
+          const expiresAtStr = (classified.expires_at as Timestamp).toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const classifiedUrl = `https://ctchickens.com/#/classified/${classifiedDoc.id}`;
+          await sendClassifiedExpiryWarningEmail(userEmail, {
+            firstName,
+            categoryLabel: CATEGORY_LABELS[category] || category,
+            expiresAt: expiresAtStr,
+            classifiedUrl,
+          }, resend);
+          await classifiedDoc.ref.update({ expiry_warning_sent: true });
+          console.log(`[sweepExpiredClassifieds] Warning sent to ${userEmail} for ${classifiedDoc.id}`);
+        } catch (err) {
+          console.error('[sweepExpiredClassifieds] Failed to send warning for', classifiedDoc.id, err);
+        }
+      }
+    } catch (err) {
+      console.error('[sweepExpiredClassifieds] Failed to query classifieds for warnings', err);
+    }
+  }
+);

@@ -71,6 +71,35 @@ export interface Review {
     unreadCount: Record<string, number>; // { [uid]: count }
   }
 
+  export type ClassifiedCategory = 'iso' | 'for_sale' | 'rehoming' | 'hatching_eggs';
+  export type ClassifiedStatus = 'active' | 'expired' | 'discarded';
+
+  export interface Classified {
+    id: string;
+    owner_uid: string;
+    display_name: string;
+    location: string;
+    description: string;
+    category: ClassifiedCategory;
+    status: ClassifiedStatus;
+    expires_at: any;
+    renewal_count: number;
+    max_renewals: number;
+    created_at: any;
+    expiry_warning_sent?: boolean;
+  }
+
+  export interface DraftClassified {
+    id: string;
+    owner_uid: string;
+    display_name: string;
+    location: string;
+    description: string;
+    category: ClassifiedCategory;
+    status: 'pending';
+    created_at: any;
+  }
+
   export interface InquiryMessage {
     id?: string;
     senderUid: string;

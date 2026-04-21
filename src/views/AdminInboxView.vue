@@ -18,6 +18,7 @@ const { create } = useToast();
 
 const claims = ref<any[]>([]);
 const drafts = ref<any[]>([]);
+const draftClassifieds = ref<any[]>([]);
 const flaggedMessages = ref<any[]>([]);
 const supportThreads = ref<any[]>([]);
 const liveSlugs = ref<Set<string>>(new Set()); // Track which drafts are already live
@@ -38,6 +39,9 @@ const fetchData = async () => {
 
     const draftSnap = await getDocs(collection(db, 'draft_profiles'));
     drafts.value = draftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const classifiedDraftSnap = await getDocs(collection(db, 'draft_classifieds'));
+    draftClassifieds.value = classifiedDraftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     // Fetch Support Threads
     const supportQ = query(
@@ -277,6 +281,33 @@ const handleRejectClaim = async (id: string) => {
                   <div class="d-flex gap-2">
                     <BButton :to="`/directory/${draft.id}/edit`" variant="outline-primary" size="sm">Review</BButton>
                   </div>
+                </div>
+              </BListGroupItem>
+            </BListGroup>
+          </BCard>
+        </div>
+
+        <!-- SECTION: Pending Classifieds -->
+        <div class="col-lg-6">
+          <BCard shadow class="border-0 h-100">
+            <template #header>
+              <div class="d-flex align-items-center gap-2 py-1">
+                <i class="bi bi-tags-fill text-success"></i>
+                <h5 class="mb-0 fw-bold">Pending Classifieds ({{ draftClassifieds.length }})</h5>
+              </div>
+            </template>
+            <BListGroup flush>
+              <BListGroupItem v-if="draftClassifieds.length === 0" class="text-center py-4 text-muted">
+                No pending classifieds.
+              </BListGroupItem>
+              <BListGroupItem v-for="item in draftClassifieds" :key="item.id" class="p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="d-flex flex-column gap-1">
+                    <h6 class="mb-0 fw-bold">{{ item.category }}</h6>
+                    <p class="mb-0 small text-muted">{{ item.display_name }} — {{ item.location }}</p>
+                    <p class="mb-0 small text-truncate" style="max-width:220px;">{{ item.description }}</p>
+                  </div>
+                  <BButton :to="`/classified/${item.id}`" variant="outline-primary" size="sm">Review</BButton>
                 </div>
               </BListGroupItem>
             </BListGroup>

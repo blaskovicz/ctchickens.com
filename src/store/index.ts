@@ -1,10 +1,10 @@
 import { createStore } from 'vuex';
 import type { ActionContext } from 'vuex';
-import type { Breeder, FirestoreMember } from '../types';
+import type { Breeder, FirestoreMember, Classified, DraftClassified, ClassifiedCategory } from '../types';
 import { db, auth, functions, facebookProvider, trackEvent } from '../firebase';
 import router from '../router';
 import {
-  collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction
+  collection, getDocs, query, where, orderBy, doc, setDoc, getDoc, serverTimestamp, runTransaction, addDoc
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import {
@@ -30,7 +30,9 @@ async function fullSignOut() {
 
 interface State {
   breeders: Breeder[];
-  myDrafts: Breeder[]; // List of drafts owned by the current user
+  myDrafts: Breeder[];
+  classifieds: Classified[];
+  myClassifieds: (Classified | DraftClassified)[];
   lastFetch: number;
   user: User | null; 
   userData: any | null; 
@@ -72,6 +74,8 @@ export default createStore({
   state: {
     breeders: [],
     myDrafts: [],
+    classifieds: [],
+    myClassifieds: [],
     lastFetch: 0,
     user: null,
     userData: null,
@@ -87,6 +91,12 @@ export default createStore({
     },
     SET_MY_DRAFTS(state: State, payload: Breeder[]) {
       state.myDrafts = payload;
+    },
+    SET_CLASSIFIEDS(state: State, payload: Classified[]) {
+      state.classifieds = payload;
+    },
+    SET_MY_CLASSIFIEDS(state: State, payload: (Classified | DraftClassified)[]) {
+      state.myClassifieds = payload;
     },
     REMOVE_DRAFT(state: State, slug: string) {
       state.myDrafts = state.myDrafts.filter(d => d.id !== slug);
@@ -158,7 +168,8 @@ export default createStore({
           await Promise.all([
             dispatch('fetchUserData', user.uid),
             dispatch('fetchActiveClaims', user.uid),
-            dispatch('fetchMyDrafts', user.uid)
+            dispatch('fetchMyDrafts', user.uid),
+            dispatch('fetchMyClassifieds', user.uid)
           ]);
         } else if (hadPendingRedirect) {
           // A redirect was in flight but returned no user — stale auth state
@@ -204,7 +215,8 @@ export default createStore({
             await Promise.all([
               dispatch('fetchUserData', user.uid),
               dispatch('fetchActiveClaims', user.uid),
-              dispatch('fetchMyDrafts', user.uid)
+              dispatch('fetchMyDrafts', user.uid),
+              dispatch('fetchMyClassifieds', user.uid)
             ]);
 
             // Fallback: if no users doc exists after fetching, upsert one from the
@@ -275,6 +287,54 @@ export default createStore({
       } catch (e) {
         console.error("Error fetching claims:", e);
       }
+    },
+
+    async fetchClassifieds({ commit }: ActionContext<State, State>) {
+      try {
+        const q = query(
+          collection(db, 'classifieds'),
+          where('status', '==', 'active'),
+          orderBy('created_at', 'desc')
+        );
+        const snap = await getDocs(q);
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Classified));
+        commit('SET_CLASSIFIEDS', items);
+      } catch (e) {
+        console.error('Error fetching classifieds:', e);
+      }
+    },
+
+    async fetchMyClassifieds({ commit }: ActionContext<State, State>, uid: string) {
+      try {
+        const liveQ = query(collection(db, 'classifieds'), where('owner_uid', '==', uid));
+        const draftQ = query(collection(db, 'draft_classifieds'), where('owner_uid', '==', uid));
+        const [liveSnap, draftSnap] = await Promise.all([getDocs(liveQ), getDocs(draftQ)]);
+        const liveItems = liveSnap.docs.map(d => ({ id: d.id, ...d.data() } as Classified));
+        const draftItems = draftSnap.docs.map(d => ({ id: d.id, ...d.data() } as DraftClassified));
+        commit('SET_MY_CLASSIFIEDS', [...liveItems, ...draftItems]);
+      } catch (e) {
+        console.error('Error fetching my classifieds:', e);
+      }
+    },
+
+    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; description: string }) {
+      if (!state.user) throw new Error('Must be logged in to post a classified.');
+      const fullName = state.user.displayName || '';
+      const parts = fullName.trim().split(' ');
+      const displayName = parts.length <= 1
+        ? (parts[0] || 'User')
+        : `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+      const ref = await addDoc(collection(db, 'draft_classifieds'), {
+        owner_uid: state.user.uid,
+        display_name: displayName,
+        location: payload.location,
+        description: payload.description,
+        category: payload.category,
+        status: 'pending',
+        created_at: serverTimestamp()
+      });
+      await dispatch('fetchMyClassifieds', state.user.uid);
+      return ref.id;
     },
 
     async fetchMyDrafts({ commit }: ActionContext<State, State>, uid: string) {
