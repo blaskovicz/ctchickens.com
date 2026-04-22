@@ -247,7 +247,7 @@ describe('Security Rules: Claim Requests', () => {
 
     // 1. Seed the claim directly via REST to avoid the client-side create rule evaluation
     //    (specifically the emulator's flaky serverTimestamp == request.time check).
-    const { seedClaimRequest } = await import('../test-helpers');
+    const { seedClaimRequest } = await import('./test-helpers');
     await seedClaimRequest(slug, {
       businessName: 'Test Farm',
       businessSlug: slug,
