@@ -31,13 +31,6 @@ const CATEGORY_LABELS: Record<ClassifiedCategory, string> = {
   hatching_eggs: 'Hatching Eggs',
 };
 
-const CATEGORY_VARIANTS: Record<ClassifiedCategory, string> = {
-  iso: 'primary',
-  for_sale: 'success',
-  rehoming: 'warning',
-  hatching_eggs: 'info',
-};
-
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
 const classifieds = computed<Classified[]>(() => store.state.classifieds);
 const myPendingClassifieds = computed<DraftClassified[]>(() =>
@@ -55,12 +48,6 @@ const filteredClassifieds = computed(() => {
     return true;
   });
 });
-
-const formatExpiry = (ts: any) => {
-  if (!ts) return '';
-  const d = ts.toDate ? ts.toDate() : new Date(ts);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
 
 onMounted(async () => {
   const promises: Promise<any>[] = [store.dispatch('fetchClassifieds')];

@@ -24,7 +24,6 @@ const isActing = ref(false);
 const showPublishModal = ref(false);
 const showDiscardModal = ref(false);
 const showMessageModal = ref(false);
-const selectedFarmSlug = ref<string | null>(null);
 const isOpeningThread = ref(false);
 let unsubscribeClassified: (() => void) | null = null;
 
@@ -40,13 +39,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   for_sale: 'For Sale',
   rehoming: 'Rehoming',
   hatching_eggs: 'Hatching Eggs',
-};
-
-const CATEGORY_VARIANTS: Record<string, string> = {
-  iso: 'primary',
-  for_sale: 'success',
-  rehoming: 'warning',
-  hatching_eggs: 'info',
 };
 
 const daysUntilExpiry = computed(() => {
