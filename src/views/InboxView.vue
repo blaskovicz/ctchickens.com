@@ -320,6 +320,25 @@ const getThreadDisplayName = (thread: InquiryThread) => {
   return formatDisplayName(thread.userName || 'User', false);
 };
 
+const getRespondingAsLabel = (thread: InquiryThread) => {
+  if (!user.value) return null;
+  
+  // Peer threads (user initiated the thread as a farm)
+  if (thread.type === 'peer' && thread.userUid === user.value.uid && thread.senderFarmSlug) {
+    return thread.peerParticipantNames?.[user.value.uid];
+  }
+
+  // Standard listing inquiries (user is the farm owner/responder)
+  if (thread.type !== 'peer' && thread.type !== 'support' && thread.breederSlug && thread.breederSlug !== 'support') {
+    const isBuyer = thread.userUid === user.value.uid;
+    if (!isBuyer) {
+      return thread.breederName;
+    }
+  }
+
+  return null;
+};
+
 onMounted(() => {
   fetchThreads();
 });
@@ -384,6 +403,11 @@ onUnmounted(() => {
                   {{ thread.unreadCount?.[user?.uid!] }}
                 </BBadge>
               </div>
+              <div v-if="getRespondingAsLabel(thread)" class="mt-1">
+                <small class="text-primary fw-bold" style="font-size: 0.7rem;">
+                  as {{ getRespondingAsLabel(thread) }}
+                </small>
+              </div>
             </BListGroupItem>
 
             <div v-if="threads.length === 0" class="text-center py-5 text-muted">
@@ -405,7 +429,18 @@ onUnmounted(() => {
             <div>
               <h6 class="mb-0 fw-bold">{{ isPendingSupportThread ? 'Site Support' : activeDisplayName }}</h6>
               <small class="text-muted" v-if="!isPendingSupportThread && activeThread?.type !== 'support' && activeThread?.type !== 'peer' && activeThread?.breederSlug">
-                <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
+                <template v-if="getRespondingAsLabel(activeThread)">
+                  responding as {{ getRespondingAsLabel(activeThread) }}
+                </template>
+                <router-link v-else :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
+                  <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
+                </router-link>
+              </small>
+              <small class="text-muted" v-else-if="activeThread?.type === 'peer' && activeThread?.senderFarmSlug">
+                <template v-if="activeThread.userUid === user?.uid">
+                  responding as {{ activeThread.peerParticipantNames?.[user?.uid!] }}
+                </template>
+                <router-link v-else :to="{ name: 'breeder-profile', params: { slug: activeThread.senderFarmSlug } }" class="text-decoration-none">
                   <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
                 </router-link>
               </small>
@@ -413,6 +448,11 @@ onUnmounted(() => {
               <small class="text-muted" v-else-if="isPendingSupportThread || activeThread?.type === 'support'">
                 Site Support Ticket
               </small>
+            </div>
+            <div class="ms-auto">
+              <BBadge v-if="isPendingSupportThread || activeThread?.type === 'support'" pill variant="info" style="font-size: 0.65rem;">Support</BBadge>
+              <BBadge v-else-if="activeThread?.type === 'peer'" pill variant="secondary" style="font-size: 0.65rem;">Direct</BBadge>
+              <BBadge v-else pill variant="primary" style="font-size: 0.65rem;">Inquiry</BBadge>
             </div>
           </div>
 

@@ -31,7 +31,12 @@ async function seedClassified(docId: string, data: {
   created_at?: Date;
 }) {
   const projectId = PROJECT_ID();
-  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${docId}`;
+  const fields = [
+    'owner_uid', 'display_name', 'location', 'title', 'description',
+    'category', 'status', 'renewal_count', 'max_renewals', 'expires_at', 'created_at'
+  ];
+  const mask = fields.map(f => `updateMask.fieldPaths=${f}`).join('&');
+  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${docId}?${mask}`;
 
   const expiresAt = data.expires_at ?? new Date(Date.now() + 30 * 86400000);
   const createdAt = data.created_at ?? new Date();
@@ -73,7 +78,12 @@ async function seedDraftClassified(docId: string, data: {
   category?: string;
 }) {
   const projectId = PROJECT_ID();
-  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/draft_classifieds/${docId}`;
+  const fields = [
+    'owner_uid', 'display_name', 'location', 'title', 'description',
+    'category', 'status', 'created_at'
+  ];
+  const mask = fields.map(f => `updateMask.fieldPaths=${f}`).join('&');
+  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/draft_classifieds/${docId}?${mask}`;
 
   const payload = {
     fields: {
@@ -103,7 +113,12 @@ async function seedDraftClassified(docId: string, data: {
  */
 async function simulateCFPublish(docId: string, ownerUid: string, draftData: any) {
   const projectId = PROJECT_ID();
-  const classifiedUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${docId}`;
+  const fields = [
+    'owner_uid', 'display_name', 'location', 'title', 'description',
+    'category', 'status', 'renewal_count', 'max_renewals', 'expires_at', 'created_at'
+  ];
+  const mask = fields.map(f => `updateMask.fieldPaths=${f}`).join('&');
+  const classifiedUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${docId}?${mask}`;
   const draftUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/draft_classifieds/${docId}`;
 
   // Write the published classified
@@ -334,7 +349,7 @@ describe('Classified Flow: published → renewed twice', () => {
     // Simulate CF processing first renewal: extend 30 days, increment count
     const afterFirstExpiry = new Date(initialExpiry.getTime() + 30 * 86400000);
     await fetch(
-      `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${classifiedId}`,
+      `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${classifiedId}?updateMask.fieldPaths=renewal_count&updateMask.fieldPaths=expires_at`,
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
@@ -361,7 +376,7 @@ describe('Classified Flow: published → renewed twice', () => {
 
     const afterSecondExpiry = new Date(afterFirstExpiry.getTime() + 30 * 86400000);
     await fetch(
-      `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${classifiedId}`,
+      `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${classifiedId}?updateMask.fieldPaths=renewal_count&updateMask.fieldPaths=expires_at`,
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
@@ -410,7 +425,7 @@ describe('Classified Flow: published → expired by daily sweep', () => {
 
     // Simulate the daily sweep (CF updates the doc)
     await fetch(
-      `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${classifiedId}`,
+      `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${classifiedId}?updateMask.fieldPaths=status`,
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },

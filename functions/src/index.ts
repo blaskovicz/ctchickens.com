@@ -933,7 +933,11 @@ export const initiatePeerThread = onCall(
     }
 
     const targetName = formatDisplayName((targetDoc.data()?.displayName as string) || 'User');
-    const peerKey = [callerUid, targetUid].sort().join('_');
+    // Farm threads are distinct from personal threads — include the slug so
+    // "send as myself" and "send as Farm A" never collapse into the same thread.
+    const peerKey = senderFarmSlug
+      ? `${[callerUid, targetUid].sort().join('_')}_farm_${senderFarmSlug}`
+      : [callerUid, targetUid].sort().join('_');
 
     const existing = await db.collection('inquiry_threads')
       .where('peerKey', '==', peerKey)
