@@ -317,14 +317,14 @@ export default createStore({
       }
     },
 
-    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; title: string; description: string }) {
+    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; title: string; description: string; price?: string }) {
       if (!state.user) throw new Error('Must be logged in to post a classified.');
       const fullName = state.user.displayName || '';
       const parts = fullName.trim().split(' ');
       const displayName = parts.length <= 1
         ? (parts[0] || 'User')
         : `${parts[0]} ${(parts[parts.length - 1] || '').charAt(0).toUpperCase()}.`;
-      const ref = await addDoc(collection(db, 'draft_classifieds'), {
+      const docData: Record<string, any> = {
         owner_uid: state.user.uid,
         display_name: displayName,
         location: payload.location,
@@ -333,7 +333,11 @@ export default createStore({
         category: payload.category,
         status: 'pending',
         created_at: serverTimestamp()
-      });
+      };
+      if (payload.price) {
+        docData.price = payload.price;
+      }
+      const ref = await addDoc(collection(db, 'draft_classifieds'), docData);
       await dispatch('fetchMyClassifieds', state.user.uid);
       return ref.id;
     },

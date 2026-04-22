@@ -85,6 +85,7 @@ export interface Review {
     location: string;
     title: string;
     description: string;
+    price?: string;
     category: ClassifiedCategory;
     status: ClassifiedStatus;
     expires_at: any;
@@ -101,6 +102,7 @@ export interface Review {
     location: string;
     title: string;
     description: string;
+    price?: string;
     category: ClassifiedCategory;
     status: 'pending';
     created_at: any;

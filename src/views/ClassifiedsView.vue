@@ -145,6 +145,7 @@ onMounted(async () => {
             <p class="card-title fw-semibold text-dark mb-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
               {{ item.title }}
             </p>
+            <p v-if="item.price" class="text-success fw-semibold small mb-1">{{ item.price }}</p>
             <p class="card-text text-muted small mb-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
               {{ item.description }}
             </p>

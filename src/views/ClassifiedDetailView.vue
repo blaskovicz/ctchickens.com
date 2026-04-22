@@ -241,19 +241,8 @@ const activeData = computed(() => classified.value || draftClassified.value);
           </BButton>
         </div>
 
-        <!-- Message button for non-owners -->
-        <div v-else-if="isLoggedIn && !isDraft && classified?.status === 'active'" class="d-flex gap-2">
-          <BButton
-            variant="outline-primary"
-            size="sm"
-            :disabled="isOpeningThread"
-            @click="publishedFarms.length > 0 ? (showMessageModal = true) : handleMessage(null)"
-          >
-            <BSpinner v-if="isOpeningThread" small class="me-1" />
-            <i v-else class="bi bi-chat me-1"></i>
-            Message {{ activeData?.display_name }}
-          </BButton>
-        </div>
+        <!-- Admin approve/reject only in the header row; message button moved to card footer -->
+
 
         <!-- Admin approve/reject -->
         <div v-else-if="isAdmin && isDraft" class="d-flex gap-2">
@@ -295,6 +284,10 @@ const activeData = computed(() => classified.value || draftClassified.value);
             <!-- Meta + actions (40%) -->
             <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3">
               <div class="d-flex flex-column gap-2 small">
+                <div v-if="activeData.price" class="d-flex gap-2">
+                  <span class="text-muted" style="min-width:64px;">Price</span>
+                  <span class="fw-semibold">{{ activeData.price }}</span>
+                </div>
                 <div class="d-flex gap-2">
                   <span class="text-muted" style="min-width:64px;">Location</span>
                   <span>{{ activeData.location }}</span>
@@ -325,6 +318,21 @@ const activeData = computed(() => classified.value || draftClassified.value);
               </span>
             </div>
           </div>
+        </div>
+
+        <!-- Card footer: message button for non-owners on active listings -->
+        <div v-if="!isOwner && !isDraft && classified?.status === 'active'" class="card-footer bg-white border-top px-4 py-3">
+          <BButton
+            variant="primary"
+            class="w-100"
+            :disabled="isOpeningThread"
+            @click="isLoggedIn ? (publishedFarms.length > 0 ? (showMessageModal = true) : handleMessage(null)) : store.dispatch('loginWithFacebook')"
+          >
+            <BSpinner v-if="isOpeningThread" small class="me-1" />
+            <i v-else class="bi bi-lock-fill me-1"></i>
+            <template v-if="isLoggedIn">Send Secure Message</template>
+            <template v-else>Log in to Send a Message</template>
+          </BButton>
         </div>
       </div>
     </div>

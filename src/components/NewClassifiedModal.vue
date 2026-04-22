@@ -16,6 +16,7 @@ const category = ref<ClassifiedCategory>('iso');
 const location = ref('');
 const title = ref('');
 const description = ref('');
+const price = ref('');
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
 
@@ -42,6 +43,7 @@ const reset = () => {
   location.value = '';
   title.value = '';
   description.value = '';
+  price.value = '';
 };
 
 const handleSubmit = async () => {
@@ -53,6 +55,7 @@ const handleSubmit = async () => {
       location: location.value.trim(),
       title: title.value.trim(),
       description: description.value.trim(),
+      price: price.value.trim() || undefined,
     });
     create?.({ body: 'Your listing has been submitted for review. We\'ll email you when it\'s approved.', variant: 'success' });
     show.value = false;
@@ -96,6 +99,18 @@ const handleSubmit = async () => {
         />
         <div class="text-end small mt-1" :class="title.length > 0 && (title.length < 5 || title.length > 100) ? 'text-danger' : 'text-muted'">
           {{ title.length }} / 100
+        </div>
+      </BFormGroup>
+
+      <BFormGroup label="Price" label-for="price" description="Optional — e.g. $25 each, $10/dozen, Free to good home">
+        <BFormInput
+          id="price"
+          v-model="price"
+          placeholder="e.g. $25 each"
+          maxlength="60"
+        />
+        <div v-if="price.length > 0" class="text-end small mt-1 text-muted">
+          {{ price.length }} / 60
         </div>
       </BFormGroup>
 

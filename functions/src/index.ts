@@ -954,11 +954,19 @@ export const initiatePeerThread = onCall(
         await db.runTransaction(async (tx) => {
           const threadSnap = await tx.get(threadRef);
           const currentUnread = threadSnap.data()?.unreadCount?.[targetUid] || 0;
-          tx.update(threadRef, {
+          const threadUpdate: Record<string, any> = {
             lastMessage: messageText.substring(0, 80),
             updatedAt: FieldValue.serverTimestamp(),
             [`unreadCount.${targetUid}`]: currentUnread + 1,
-          });
+          };
+          // Keep the sender identity on the thread in sync with the chosen farm slug.
+          // Without this, a caller who previously messaged as themselves but now messages
+          // as a farm would still appear under their personal name in peerParticipantNames.
+          if (senderFarmSlug) {
+            threadUpdate[`peerParticipantNames.${callerUid}`] = callerName;
+            threadUpdate.senderFarmSlug = senderFarmSlug;
+          }
+          tx.update(threadRef, threadUpdate);
           tx.set(threadRef.collection('messages').doc(), {
             senderUid: callerUid,
             text: messageText,
