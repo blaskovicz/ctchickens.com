@@ -1,4 +1,4 @@
-// Rules Version: 2026-04-14-01
+// Rules Version: 2026-04-21-02
 rules_version = '2';
 
 service cloud.firestore {
@@ -57,12 +57,12 @@ service cloud.firestore {
       // Admins can write anything (e.g. set isAdmin, blockedFromChat)
       allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
       // Users can create their own doc on first login — safe fields only, no isAdmin/blockedFromChat
-      // email must match the auth token — can't be spoofed to an arbitrary address
+    // email must match the auth token — can't be spoofed to an arbitrary address
       allow create: if isSignedIn() && request.auth.uid == userId &&
       request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']) &&
       request.resource.data.get('email', request.auth.token.email) == request.auth.token.email;
       // Users can only touch their own profile fields — never isAdmin or blockedFromChat
-      // If email is being changed it must still match the auth token (no spoofing)
+    // If email is being changed it must still match the auth token (no spoofing)
       allow update: if isSignedIn() && request.auth.uid == userId &&
       request.resource.data.diff(resource.data).affectedKeys()
       .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']) &&
@@ -110,9 +110,9 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
       isUserAdmin(request.auth.uid) ||
       (
-        (resource.data.draft_owner_uid == request.auth.uid ||
-         resource.data.get(['account', 'ownerUid'], '') == request.auth.uid) &&
-        request.resource.data.draft_owner_uid == request.auth.uid
+      (resource.data.draft_owner_uid == request.auth.uid ||
+      resource.data.get(['account', 'ownerUid'], '') == request.auth.uid) &&
+      request.resource.data.draft_owner_uid == request.auth.uid
       )
       ) && isValidDraftSchema(request.resource.data);
 
@@ -131,22 +131,22 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/directory_members/$(requestId))
         && get(/databases/$(database)/documents/directory_members/$(requestId)).data.account.get('ownerUid', null) == null
         && request.resource.data.requesterUid == request.auth.uid
-        // Anti-tampering: the email written to the doc must be one of the user's own verified
-        // emails. The two paths are mutually exclusive — if a localEmail is set, it must be
-        // used. email_verified only guards the OAuth path; localEmail has its own HMAC
-        // verification flow, so its presence in the users doc is proof enough.
+      // Anti-tampering: the email written to the doc must be one of the user's own verified
+      // emails. The two paths are mutually exclusive — if a localEmail is set, it must be
+      // used. email_verified only guards the OAuth path; localEmail has its own HMAC
+      // verification flow, so its presence in the users doc is proof enough.
         && (
-          (userLocalEmail(request.auth.uid) == ''
-           && request.auth.token.email_verified == true
-           && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower())
-          || (userLocalEmail(request.auth.uid) != ''
-              && request.resource.data.requesterEmail.lower() == userLocalEmail(request.auth.uid).lower())
-        )
+      (userLocalEmail(request.auth.uid) == ''
+        && request.auth.token.email_verified == true
+        && request.resource.data.requesterEmail.lower() == request.auth.token.email.lower())
+        || (userLocalEmail(request.auth.uid) != ''
+        && request.resource.data.requesterEmail.lower() == userLocalEmail(request.auth.uid).lower())
+      )
         && request.resource.data.status == 'pending'
         && request.resource.data.businessSlug == requestId
         && request.resource.data.createdAt == request.time
-        // Authorization: requesterEmail is already proven to be the user's own verified email
-        // above, so we just need it to match the farm's contact email.
+      // Authorization: requesterEmail is already proven to be the user's own verified email
+    // above, so we just need it to match the farm's contact email.
         && farmContactEmail(requestId).lower() == request.resource.data.requesterEmail.lower()
         && request.resource.data.keys().hasOnly(['requesterUid', 'requesterEmail', 'requesterName', 'requesterPhotoURL', 'status', 'businessName', 'businessSlug', 'createdAt']);
 
@@ -206,6 +206,60 @@ service cloud.firestore {
         resource.data.senderUid != request.auth.uid)
         );
       }
+    }
+
+    match /draft_classifieds/{docId} {
+      allow read: if isSignedIn() && (
+      resource == null ||
+      isUserAdmin(request.auth.uid) ||
+      resource.data.owner_uid == request.auth.uid
+      );
+      allow create: if isSignedIn() &&
+      request.resource.data.owner_uid == request.auth.uid &&
+      request.resource.data.status == 'pending' &&
+      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status']);
+      allow delete: if isSignedIn() && (
+      resource == null ||
+      isUserAdmin(request.auth.uid) ||
+      resource.data.owner_uid == request.auth.uid
+      );
+      allow update: if false;
+    }
+
+
+    match /classifieds/{docId} {
+      allow get: if
+      resource == null ||
+      resource.data.status == 'active' ||
+      (isSignedIn() && (
+      isUserAdmin(request.auth.uid) ||
+      resource.data.owner_uid == request.auth.uid
+      ));
+      allow list: if
+      resource == null ||
+      resource.data.status == 'active' ||
+      (isSignedIn() && (
+      isUserAdmin(request.auth.uid) ||
+      resource.data.owner_uid == request.auth.uid
+      ));
+      allow write: if isSignedIn() && isUserAdmin(request.auth.uid);
+
+      match /actions/{actionId} {
+        allow create: if isSignedIn() &&
+        request.resource.data.owner_uid == request.auth.uid &&
+        request.resource.data.action in ['renew', 'discard'] &&
+        request.resource.data.keys().hasOnly(['action', 'created_at', 'owner_uid']) &&
+        // Caller must own the parent classified — or be an admin.
+        // Evaluating isUserAdmin last avoids a get() call for the common non-admin path.
+        get(/databases/$(database)/documents/classifieds/$(docId)).data.get('owner_uid', '') == request.auth.uid;
+        allow read: if false;
+      }
+    }
+
+    match /draft_classified_history/{historyId} {
+      // Admins can create and update — batch.set() evaluates as 'update' when the doc already
+      // exists (e.g. a listing that was previously rejected and is being re-submitted).
+      allow read, create, update, delete: if isSignedIn() && isUserAdmin(request.auth.uid);
     }
 
     // Required for admin collectionGroup query of flagged messages across all threads

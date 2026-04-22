@@ -59,9 +59,9 @@ export interface Review {
   }
 
   export interface InquiryThread {
-    id: string; // generated: `${userUid}_${breederSlug}`
-    participants: string[]; // [userUid, breederOwnerUid]
-    type?: 'inquiry' | 'support' | 'direct';
+    id: string;
+    participants: string[];
+    type?: 'inquiry' | 'support' | 'peer';
     userUid: string;
     userName?: string;
     breederSlug: string;
@@ -69,6 +69,43 @@ export interface Review {
     lastMessage: string;
     updatedAt: any; // ServerTimestamp
     unreadCount: Record<string, number>; // { [uid]: count }
+    // peer thread fields
+    peerKey?: string;
+    peerParticipantNames?: Record<string, string>;
+    senderFarmSlug?: string | null;
+  }
+
+  export type ClassifiedCategory = 'iso' | 'for_sale' | 'rehoming' | 'hatching_eggs';
+  export type ClassifiedStatus = 'active' | 'expired' | 'discarded';
+
+  export interface Classified {
+    id: string;
+    owner_uid: string;
+    display_name: string;
+    location: string;
+    title: string;
+    description: string;
+    price?: string;
+    category: ClassifiedCategory;
+    status: ClassifiedStatus;
+    expires_at: any;
+    renewal_count: number;
+    max_renewals: number;
+    created_at: any;
+    expiry_warning_sent?: boolean;
+  }
+
+  export interface DraftClassified {
+    id: string;
+    owner_uid: string;
+    display_name: string;
+    location: string;
+    title: string;
+    description: string;
+    price?: string;
+    category: ClassifiedCategory;
+    status: 'pending';
+    created_at: any;
   }
 
   export interface InquiryMessage {

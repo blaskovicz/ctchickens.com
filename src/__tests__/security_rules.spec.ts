@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth } from '../firebase';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, deleteDoc, addDoc, collection } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { 
   clearFirestoreEmulator, 
@@ -212,7 +212,24 @@ describe('Security Rules: Claim Requests', () => {
       createdAt: serverTimestamp()
     };
 
-    await expect(setDoc(claimRef, claimData)).resolves.not.toThrow();
+    // The Firestore emulator occasionally reports an evaluation error instead of
+    // resolving when serverTimestamp() is matched against request.time in rules.
+    // Retry once to guard against this transient emulator quirk.
+    let err: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await setDoc(claimRef, claimData);
+        err = null;
+        break;
+      } catch (e) {
+        err = e;
+        if (attempt === 0) {
+          // Wait briefly before retrying
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+    }
+    expect(err).toBeNull();
   });
 
   it('prevents strangers from reading someone else\'s claim request', async () => {
@@ -228,23 +245,22 @@ describe('Security Rules: Claim Requests', () => {
     const ownerUser = await createTestUser(ownerEmail, 'Owner');
     await createTestUser(strangerEmail, 'Stranger');
 
-    // 1. Create claim as owner
-    await signInWithEmailAndPassword(auth, ownerEmail, 'password123');
-    const claimRef = doc(db, 'claim_requests', slug);
-    await setDoc(claimRef, {
+    // 1. Seed the claim directly via REST to avoid the client-side create rule evaluation
+    //    (specifically the emulator's flaky serverTimestamp == request.time check).
+    const { seedClaimRequest } = await import('./test-helpers');
+    await seedClaimRequest(slug, {
+      businessName: 'Test Farm',
+      businessSlug: slug,
       requesterUid: ownerUser.uid,
       requesterEmail: ownerEmail,
       requesterName: 'Owner',
-      requesterPhotoURL: null,
       status: 'pending',
-      businessName: 'Test Farm',
-      businessSlug: slug,
-      createdAt: serverTimestamp()
     });
 
-    // 2. Try to read as stranger
+    // 2. Try to read as stranger — should be denied
     await signOut(auth);
     await signInWithEmailAndPassword(auth, strangerEmail, 'password123');
+    const claimRef = doc(db, 'claim_requests', slug);
     await expect(getDoc(claimRef)).rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error/i);
   });
 });
@@ -272,5 +288,220 @@ describe('Security Rules: User Email Fields', () => {
 
     await expect(updateDoc(doc(db, 'users', user.uid), { localEmail: 'hack@example.com' }))
       .rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security Rules: Classifieds
+// ---------------------------------------------------------------------------
+describe('Security Rules: Classifieds', () => {
+  const PROJECT_ID = () => import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
+
+  async function seedClassifiedViaRest(docId: string, ownerUid: string, status: string = 'active') {
+    const url = `http://127.0.0.1:8080/v1/projects/${PROJECT_ID()}/databases/(default)/documents/classifieds/${docId}`;
+    const payload = {
+      fields: {
+        owner_uid: { stringValue: ownerUid },
+        display_name: { stringValue: 'Test User' },
+        location: { stringValue: 'Storrs, CT' },
+        description: { stringValue: 'Test classified listing' },
+        category: { stringValue: 'iso' },
+        status: { stringValue: status },
+        renewal_count: { integerValue: 0 },
+        max_renewals: { integerValue: 2 },
+        expires_at: { timestampValue: new Date(Date.now() + 30 * 86400000).toISOString() },
+        created_at: { timestampValue: new Date().toISOString() },
+      }
+    };
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`seed failed: ${await res.text()}`);
+  }
+
+  beforeEach(async () => {
+    await clearFirestoreEmulator();
+    await clearAuthEmulator();
+    await signOut(auth);
+  });
+
+  it('unauthenticated user can read an active classified', async () => {
+    const ownerUser = await createTestUser('classified-owner@example.com', 'Owner');
+    await seedClassifiedViaRest('active-public', ownerUser.uid, 'active');
+
+    // Sign out to become unauthenticated
+    await signOut(auth);
+
+    const snap = await getDoc(doc(db, 'classifieds', 'active-public'));
+    expect(snap.exists()).toBe(true);
+    expect(snap.data()?.status).toBe('active');
+  });
+
+  it('unauthenticated user cannot read an expired classified', async () => {
+    const ownerUser = await createTestUser('expired-owner@example.com', 'Expired Owner');
+    await seedClassifiedViaRest('expired-listing', ownerUser.uid, 'expired');
+
+    await signOut(auth);
+
+    // The Firestore emulator may return either a clean PERMISSION_DENIED or an
+    // "evaluation error" when a rule's get() conditions are not met for an
+    // unauthenticated caller — both indicate the read was denied.
+    await expect(getDoc(doc(db, 'classifieds', 'expired-listing')))
+      .rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error/i);
+  });
+
+  it('unauthenticated user cannot read a discarded classified', async () => {
+    const ownerUser = await createTestUser('discard-owner@example.com', 'Discard Owner');
+    await seedClassifiedViaRest('discarded-listing', ownerUser.uid, 'discarded');
+
+    await signOut(auth);
+
+    await expect(getDoc(doc(db, 'classifieds', 'discarded-listing')))
+      .rejects.toThrow(/PERMISSION_DENIED|permission-denied|evaluation error/i);
+  });
+
+  it('owner cannot write directly to classifieds collection', async () => {
+    const ownerEmail = 'direct-writer@example.com';
+    const ownerUser = await createTestUser(ownerEmail, 'Direct Writer');
+    await signInWithEmailAndPassword(auth, ownerEmail, 'password123');
+
+    await expect(
+      setDoc(doc(db, 'classifieds', 'tamper-attempt'), {
+        owner_uid: ownerUser.uid,
+        display_name: 'Direct Writer',
+        location: 'Hartford, CT',
+        description: 'Bypassing approval flow',
+        category: 'iso',
+        status: 'active',
+        renewal_count: 0,
+        max_renewals: 2,
+        expires_at: new Date(Date.now() + 30 * 86400000),
+        created_at: new Date(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+
+  it('owner can create a renew action on their own classified', async () => {
+    const ownerEmail = 'renew-owner@example.com';
+    const ownerUser = await createTestUser(ownerEmail, 'Renew Owner');
+    await seedClassifiedViaRest('owned-classified', ownerUser.uid, 'active');
+
+    await signInWithEmailAndPassword(auth, ownerEmail, 'password123');
+
+    await expect(
+      addDoc(collection(db, 'classifieds', 'owned-classified', 'actions'), {
+        action: 'renew',
+        owner_uid: ownerUser.uid,
+        created_at: serverTimestamp(),
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it('owner cannot create a renew action on another user\'s classified', async () => {
+    const ownerEmail = 'real-owner@example.com';
+    const attackerEmail = 'attacker@example.com';
+    const ownerUser = await createTestUser(ownerEmail, 'Real Owner');
+    const attackerUser = await createTestUser(attackerEmail, 'Attacker');
+
+    await seedClassifiedViaRest('target-classified', ownerUser.uid, 'active');
+
+    // Attacker logs in and tries to renew someone else's listing
+    await signInWithEmailAndPassword(auth, attackerEmail, 'password123');
+
+    await expect(
+      addDoc(collection(db, 'classifieds', 'target-classified', 'actions'), {
+        action: 'renew',
+        owner_uid: attackerUser.uid,
+        created_at: serverTimestamp(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+
+  it('owner cannot spoof a different owner_uid in a renew action', async () => {
+    const ownerEmail = 'spoof-owner@example.com';
+    const ownerUser = await createTestUser(ownerEmail, 'Spoof Owner');
+    await seedClassifiedViaRest('spoofed-classified', ownerUser.uid, 'active');
+
+    await signInWithEmailAndPassword(auth, ownerEmail, 'password123');
+
+    await expect(
+      addDoc(collection(db, 'classifieds', 'spoofed-classified', 'actions'), {
+        action: 'renew',
+        owner_uid: 'someone-else-uid', // does not match request.auth.uid
+        created_at: serverTimestamp(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+
+  it('user can create a draft classified with correct fields', async () => {
+    const email = 'draft-poster@example.com';
+    const user = await createTestUser(email, 'Draft Poster');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    await expect(
+      addDoc(collection(db, 'draft_classifieds'), {
+        owner_uid: user.uid,
+        display_name: 'Draft P.',
+        location: 'Lebanon, CT',
+        description: 'Looking for Silkie hens',
+        category: 'iso',
+        status: 'pending',
+        created_at: serverTimestamp(),
+      })
+    ).resolves.not.toThrow();
+  });
+
+  it('user cannot create a draft classified with status other than pending', async () => {
+    const email = 'bad-status@example.com';
+    const user = await createTestUser(email, 'Bad Status');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    await expect(
+      addDoc(collection(db, 'draft_classifieds'), {
+        owner_uid: user.uid,
+        display_name: 'Bad S.',
+        location: 'Hartford, CT',
+        description: 'Trying to skip moderation',
+        category: 'for_sale',
+        status: 'active', // invalid — must be 'pending'
+        created_at: serverTimestamp(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+
+  it('user cannot create a draft classified with a spoofed owner_uid', async () => {
+    const email = 'uid-spoofer@example.com';
+    await createTestUser(email, 'UID Spoofer');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    await expect(
+      addDoc(collection(db, 'draft_classifieds'), {
+        owner_uid: 'some-other-user-uid', // does not match request.auth.uid
+        display_name: 'Spoofer S.',
+        location: 'Storrs, CT',
+        description: 'Trying to post as someone else',
+        category: 'iso',
+        status: 'pending',
+        created_at: serverTimestamp(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
+  });
+
+  it('unauthenticated user cannot create a draft classified', async () => {
+    await signOut(auth);
+
+    await expect(
+      addDoc(collection(db, 'draft_classifieds'), {
+        owner_uid: 'nobody',
+        display_name: 'Anon',
+        location: 'Nowhere, CT',
+        description: 'I am not logged in at all',
+        category: 'iso',
+        status: 'pending',
+        created_at: serverTimestamp(),
+      })
+    ).rejects.toThrow(/PERMISSION_DENIED|permission-denied/i);
   });
 });

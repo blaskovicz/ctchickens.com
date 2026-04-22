@@ -14,6 +14,7 @@ import {
 } from 'bootstrap-vue-next';
 import { useBreederUtils } from '../composables/useBreederUtils';
 import { useSupport } from '../composables/useSupport';
+import { renderMessage, stripMarkdown } from '../composables/useMessageRenderer';
 import type { InquiryThread, InquiryMessage } from '../types';
 
 const store = useStore();
@@ -37,7 +38,7 @@ const isPendingSupportThread = computed(() => activeThreadId.value === 'support_
 const activeBreederOwnerUid = ref<string | null | undefined>(undefined);
 
 const isUnclaimed = computed(() => {
-  if (!activeThread.value || activeThread.value.type === 'support') return false;
+  if (!activeThread.value || activeThread.value.type === 'support' || activeThread.value.type === 'peer') return false;
   if (activeThread.value.userUid !== user.value?.uid) return false;
   if (activeBreederOwnerUid.value === undefined) return false; // loading — don't flash
   return activeBreederOwnerUid.value === null;
@@ -74,6 +75,7 @@ const isSending = ref(false);
 const isLoadingThreads = ref(true);
 const isLoadingMessages = ref(false);
 const messageContainer = ref<HTMLElement | null>(null);
+const textareaRef = ref<InstanceType<typeof BFormTextarea> | null>(null);
 
 let threadsUnsubscribe: (() => void) | null = null;
 let messagesUnsubscribe: (() => void) | null = null;
@@ -121,11 +123,20 @@ watch(() => route.params.threadId, (newId) => {
   activeThreadId.value = (newId as string) || null;
 });
 
+watch(activeThread, (thread) => {
+  if (thread) focusTextarea();
+});
+
 const scrollToBottom = async () => {
   await nextTick();
   if (messageContainer.value) {
     messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
   }
+};
+
+const focusTextarea = async () => {
+  await nextTick();
+  (textareaRef.value?.$el as HTMLElement)?.focus();
 };
 
 const handleRefresh = () => {
@@ -181,7 +192,7 @@ watch(activeThreadId, (newId) => {
   });
 
   const thread = threads.value.find(t => t.id === newId);
-  if (thread && thread.type !== 'support' && thread.breederSlug !== 'support') {
+  if (thread && thread.type !== 'support' && thread.type !== 'peer' && thread.breederSlug !== 'support') {
     fetchBreederStatus(thread.breederSlug);
   } else {
     activeBreederOwnerUid.value = null;
@@ -291,9 +302,14 @@ const handleFlag = async (msg: InquiryMessage) => {
 
 const getThreadDisplayName = (thread: InquiryThread) => {
   if (thread.type === 'support') {
-    return user.value?.uid === thread.userUid 
-      ? 'Site Support' 
+    return user.value?.uid === thread.userUid
+      ? 'Site Support'
       : formatDisplayName(thread.userName || 'User', false);
+  }
+
+  if (thread.type === 'peer') {
+    const otherUid = thread.participants.find(p => p !== user.value?.uid);
+    return (otherUid && thread.peerParticipantNames?.[otherUid]) || 'Direct Message';
   }
 
   // If the user is the original buyer (userUid), the other participant is the breeder
@@ -302,6 +318,25 @@ const getThreadDisplayName = (thread: InquiryThread) => {
 
   // If the user is the breeder, the other participant is the buyer
   return formatDisplayName(thread.userName || 'User', false);
+};
+
+const getRespondingAsLabel = (thread: InquiryThread) => {
+  if (!user.value) return null;
+  
+  // Peer threads (user initiated the thread as a farm)
+  if (thread.type === 'peer' && thread.userUid === user.value.uid && thread.senderFarmSlug) {
+    return thread.peerParticipantNames?.[user.value.uid];
+  }
+
+  // Standard listing inquiries (user is the farm owner/responder)
+  if (thread.type !== 'peer' && thread.type !== 'support' && thread.breederSlug && thread.breederSlug !== 'support') {
+    const isBuyer = thread.userUid === user.value.uid;
+    if (!isBuyer) {
+      return thread.breederName;
+    }
+  }
+
+  return null;
 };
 
 onMounted(() => {
@@ -353,7 +388,7 @@ onUnmounted(() => {
               :class="{ 'unread': (thread.unreadCount?.[user?.uid!] || 0) > 0 }"
             >
               <div class="d-flex justify-content-between align-items-start mb-1">
-                <h6 class="mb-0 fw-bold text-truncate" style="max-width: 150px;">
+                <h6 class="mb-0 fw-bold text-truncate" style="max-width: 60%;">
                   {{ getThreadDisplayName(thread) }}
                 </h6>
                 <small class="text-muted" style="font-size: 0.7rem;">
@@ -362,11 +397,16 @@ onUnmounted(() => {
               </div>
               <div class="d-flex justify-content-between align-items-center">
                 <p class="mb-0 small text-muted text-truncate me-2">
-                  {{ thread.lastMessage }}
+                  {{ stripMarkdown(thread.lastMessage) }}
                 </p>
                 <BBadge v-if="(thread.unreadCount?.[user?.uid!] || 0) > 0" pill variant="primary" size="sm">
                   {{ thread.unreadCount?.[user?.uid!] }}
                 </BBadge>
+              </div>
+              <div v-if="getRespondingAsLabel(thread)" class="mt-1">
+                <small class="text-primary fw-bold" style="font-size: 0.7rem;">
+                  as {{ getRespondingAsLabel(thread) }}
+                </small>
               </div>
             </BListGroupItem>
 
@@ -388,14 +428,31 @@ onUnmounted(() => {
             </div>
             <div>
               <h6 class="mb-0 fw-bold">{{ isPendingSupportThread ? 'Site Support' : activeDisplayName }}</h6>
-              <small class="text-muted" v-if="!isPendingSupportThread && activeThread?.type !== 'support' && activeThread?.breederSlug">
-                <router-link :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
+              <small class="text-muted" v-if="!isPendingSupportThread && activeThread?.type !== 'support' && activeThread?.type !== 'peer' && activeThread?.breederSlug">
+                <template v-if="getRespondingAsLabel(activeThread)">
+                  responding as {{ getRespondingAsLabel(activeThread) }}
+                </template>
+                <router-link v-else :to="{ name: 'breeder-profile', params: { slug: activeThread.breederSlug } }" class="text-decoration-none">
                   <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
                 </router-link>
               </small>
-              <small class="text-muted" v-else>
+              <small class="text-muted" v-else-if="activeThread?.type === 'peer' && activeThread?.senderFarmSlug">
+                <template v-if="activeThread.userUid === user?.uid">
+                  responding as {{ activeThread.peerParticipantNames?.[user?.uid!] }}
+                </template>
+                <router-link v-else :to="{ name: 'breeder-profile', params: { slug: activeThread.senderFarmSlug } }" class="text-decoration-none">
+                  <i class="bi bi-box-arrow-up-right me-1" style="font-size: 0.7rem;"></i>View listing
+                </router-link>
+              </small>
+              <small class="text-muted" v-else-if="activeThread?.type === 'peer'">Direct message</small>
+              <small class="text-muted" v-else-if="isPendingSupportThread || activeThread?.type === 'support'">
                 Site Support Ticket
               </small>
+            </div>
+            <div class="ms-auto">
+              <BBadge v-if="isPendingSupportThread || activeThread?.type === 'support'" pill variant="info" style="font-size: 0.65rem;">Support</BBadge>
+              <BBadge v-else-if="activeThread?.type === 'peer'" pill variant="secondary" style="font-size: 0.65rem;">Direct</BBadge>
+              <BBadge v-else pill variant="primary" style="font-size: 0.65rem;">Inquiry</BBadge>
             </div>
           </div>
 
@@ -426,9 +483,7 @@ onUnmounted(() => {
                   <div v-if="msg.adminReviewStatus === 'hidden'" class="fst-italic small opacity-75">
                     [This message was removed for violating community guidelines]
                   </div>
-                  <div v-else>
-                    {{ msg.text }}
-                  </div>
+                  <div v-else v-html="renderMessage(msg.text)"></div>
 
                   <div class="d-flex justify-content-between align-items-center mt-2 opacity-50" style="font-size: 0.65rem;">
                     <div class="d-flex align-items-center gap-1">
@@ -456,7 +511,8 @@ onUnmounted(() => {
           <!-- Input -->
           <div class="p-3 border-top bg-white">
             <div class="input-group">
-              <BFormTextarea 
+              <BFormTextarea
+                ref="textareaRef"
                 v-model="newMessage"
                 :placeholder="isPendingSupportThread ? 'Describe your issue...' : 'Write a reply...'"
                 rows="1"
@@ -475,6 +531,9 @@ onUnmounted(() => {
                 <BSpinner v-if="isSending" small />
                 <i v-else class="bi bi-send-fill"></i>
               </BButton>
+            </div>
+            <div class="text-end mt-1">
+              <a href="https://commonmark.org/help/" target="_blank" rel="noopener noreferrer" class="text-muted" style="font-size: 0.7rem;">Markdown supported</a>
             </div>
           </div>
         </div>
@@ -524,6 +583,17 @@ onUnmounted(() => {
 
 .message-bubble {
   word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.message-bubble.bg-primary :deep(a) {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.message-bubble.bg-white :deep(a) {
+  color: #1e40af;
+  text-decoration: underline;
 }
 
 .flag-btn {

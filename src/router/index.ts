@@ -51,6 +51,16 @@ const router = createRouter({
       component: () => import('../views/BreederEditView.vue')
     },
     {
+      path: '/classified',
+      name: 'classifieds',
+      component: () => import('../views/ClassifiedsView.vue')
+    },
+    {
+      path: '/classified/:docId',
+      name: 'classified-detail',
+      component: () => import('../views/ClassifiedDetailView.vue')
+    },
+    {
       path: '/inbox/:threadId?',
       name: 'inbox',
       component: () => import('../views/InboxView.vue')
@@ -92,6 +102,16 @@ const router = createRouter({
       });
     }
     return { top: 0 };
+  }
+});
+
+router.onError((error, to) => {
+  const isChunkLoadError =
+    error.message.includes('Failed to fetch dynamically imported module') ||
+    error.message.includes('Importing a module script failed') ||
+    error.message.includes('Unable to preload CSS');
+  if (isChunkLoadError) {
+    window.location.href = to.fullPath;
   }
 });
 
