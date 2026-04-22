@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createStore } from 'vuex';
 import NewClassifiedModal from '../NewClassifiedModal.vue';
@@ -15,140 +15,170 @@ const createMockStore = (isLoggedIn = true) =>
     },
   });
 
+/**
+ * Mount NewClassifiedModal attached to document.body so that BModal's
+ * <Teleport> lands inside the live document.
+ *
+ * BModal teleports its content directly to <body>, so wrapper.find() cannot
+ * reach it. All DOM interactions use document.querySelector / getElementById
+ * instead, which scans the entire document including teleported nodes.
+ */
+function mountModal(store: ReturnType<typeof createMockStore>) {
+  const div = document.createElement('div');
+  document.body.appendChild(div);
+  return mount(NewClassifiedModal, {
+    attachTo: div,
+    global: { plugins: [store] },
+  });
+}
+
+/** Helper: set value on a teleported element and trigger Vue reactivity. */
+async function setDocValue(selector: string, value: string) {
+  const el = document.querySelector(selector) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+  if (!el) throw new Error(`setDocValue: element not found for selector "${selector}"`);
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  await flushPromises();
+}
+
+/** Helper: find a button anywhere in the document by its text content. */
+function findDocButton(text: string): HTMLButtonElement | null {
+  return Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes(text)) as HTMLButtonElement | null;
+}
+
 describe('NewClassifiedModal', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
   it('submit button is disabled when description is less than 20 characters', async () => {
     const store = createMockStore();
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
-    // Open the modal
     (wrapper.vm as any).open();
     await flushPromises();
 
-    // Set a short description (< 20 chars)
-    const textarea = wrapper.find('textarea');
-    await textarea.setValue('Too short');
+    await setDocValue('textarea#desc', 'Too short');
+    await setDocValue('#loc', 'Hartford, CT');
+    await setDocValue('#title', 'Valid Title Here');
 
-    // Location and title must be valid so only description triggers invalidity
-    const locInput = wrapper.find('#loc');
-    await locInput.setValue('Hartford, CT');
-    const titleInput = wrapper.find('#title');
-    await titleInput.setValue('Valid Title Here');
-
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Submit'));
-    expect(submitBtn?.element.disabled).toBe(true);
+    const submitBtn = findDocButton('Submit');
+    expect(submitBtn).not.toBeNull();
+    expect(submitBtn?.disabled).toBe(true);
   });
 
   it('submit button is disabled when location is less than 2 characters', async () => {
     const store = createMockStore();
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    const textarea = wrapper.find('textarea');
-    await textarea.setValue('A long enough description that is at least 20 chars');
+    await setDocValue('textarea#desc', 'A long enough description that is at least 20 chars');
+    await setDocValue('#loc', 'X');
+    await setDocValue('#title', 'Valid Title Here');
 
-    const locInput = wrapper.find('#loc');
-    await locInput.setValue('X');
-    const titleInput = wrapper.find('#title');
-    await titleInput.setValue('Valid Title Here');
-
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Submit'));
-    expect(submitBtn?.element.disabled).toBe(true);
+    const submitBtn = findDocButton('Submit');
+    expect(submitBtn?.disabled).toBe(true);
   });
 
   it('submit button is disabled when title is less than 5 characters', async () => {
     const store = createMockStore();
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    await wrapper.find('textarea').setValue('A long enough description that is at least 20 chars');
-    await wrapper.find('#loc').setValue('Hartford, CT');
-    await wrapper.find('#title').setValue('Hi');
+    await setDocValue('textarea#desc', 'A long enough description that is at least 20 chars');
+    await setDocValue('#loc', 'Hartford, CT');
+    await setDocValue('#title', 'Hi');
 
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Submit'));
-    expect(submitBtn?.element.disabled).toBe(true);
+    const submitBtn = findDocButton('Submit');
+    expect(submitBtn?.disabled).toBe(true);
   });
 
   it('submit button is enabled when all fields are valid', async () => {
     const store = createMockStore();
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    await wrapper.find('textarea').setValue('Looking for 10 Silkie hens near Hartford CT area');
-    await wrapper.find('#loc').setValue('Hartford, CT');
-    await wrapper.find('#title').setValue('3 Buff Orpington Hens');
+    await setDocValue('textarea#desc', 'Looking for 10 Silkie hens near Hartford CT area');
+    await setDocValue('#loc', 'Hartford, CT');
+    await setDocValue('#title', '3 Buff Orpington Hens');
 
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Submit'));
-    expect(submitBtn?.element.disabled).toBe(false);
+    const submitBtn = findDocButton('Submit');
+    expect(submitBtn?.disabled).toBe(false);
   });
 
   it('shows character counter in danger class when description is below minimum', async () => {
     const store = createMockStore();
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    await wrapper.find('textarea').setValue('Short');
-    const counter = wrapper.find('.text-danger');
-    expect(counter.exists()).toBe(true);
-    expect(counter.text()).toContain('5');
+    await setDocValue('textarea#desc', 'Short');
+
+    // The counter is inside the teleported content — query from document
+    const counter = document.querySelector('.text-danger');
+    expect(counter).not.toBeNull();
+    expect(counter?.textContent).toContain('5');
   });
 
   it('dispatches createDraftClassified with correct fields on valid submit', async () => {
     const store = createMockStore();
     const dispatchSpy = vi.spyOn(store, 'dispatch');
 
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    await wrapper.find('#cat').setValue('for_sale');
-    await wrapper.find('#loc').setValue('Lebanon, CT');
-    await wrapper.find('#title').setValue('6 Buff Orpington Pullets');
-    await wrapper.find('#desc').setValue('Selling 6 Buff Orpington pullets ready to lay');
+    await setDocValue('#cat', 'for_sale');
+    await setDocValue('#loc', 'Lebanon, CT');
+    await setDocValue('#title', '6 Buff Orpington Pullets');
+    await setDocValue('textarea#desc', 'Selling 6 Buff Orpington pullets ready to lay');
 
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Submit'));
-    await submitBtn!.trigger('click');
+    const submitBtn = findDocButton('Submit');
+    expect(submitBtn).not.toBeNull();
+    submitBtn!.click();
     await flushPromises();
 
-    expect(dispatchSpy).toHaveBeenCalledWith('createDraftClassified', {
+    expect(dispatchSpy).toHaveBeenCalledWith('createDraftClassified', expect.objectContaining({
       category: 'for_sale',
       location: 'Lebanon, CT',
       title: '6 Buff Orpington Pullets',
       description: 'Selling 6 Buff Orpington pullets ready to lay',
-    });
+    }));
   });
 
   it('shows login prompt when user is not signed in', async () => {
     const store = createMockStore(false);
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    expect(wrapper.text()).toContain('signed in to post');
+    // Modal content is teleported to body — check full document text
+    expect(document.body.textContent).toContain('signed in to post');
   });
 
   it('emits "submitted" event with the new doc id after successful submission', async () => {
     const store = createMockStore();
-    const wrapper = mount(NewClassifiedModal, { global: { plugins: [store] } });
+    const wrapper = mountModal(store);
 
     (wrapper.vm as any).open();
     await flushPromises();
 
-    await wrapper.find('#loc').setValue('Storrs, CT');
-    await wrapper.find('#title').setValue('5 Heritage Breed Roosters');
-    await wrapper.find('#desc').setValue('Looking for 5 heritage breed roosters for breeding stock');
+    await setDocValue('#loc', 'Storrs, CT');
+    await setDocValue('#title', '5 Heritage Breed Roosters');
+    await setDocValue('textarea#desc', 'Looking for 5 heritage breed roosters for breeding stock');
 
-    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Submit'));
-    await submitBtn!.trigger('click');
+    const submitBtn = findDocButton('Submit');
+    submitBtn!.click();
     await flushPromises();
 
     expect(wrapper.emitted('submitted')).toBeTruthy();

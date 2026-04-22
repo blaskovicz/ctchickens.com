@@ -145,9 +145,9 @@ async function simulateCFPublish(docId: string, ownerUid: string, draftData: any
 // ---------------------------------------------------------------------------
 describe('Classified Flow: create → approved → published', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
     store.commit('SET_USER', null);
     store.commit('SET_USER_DATA', null);
     store.commit('SET_CLASSIFIEDS', []);
@@ -235,9 +235,9 @@ describe('Classified Flow: create → approved → published', () => {
 // ---------------------------------------------------------------------------
 describe('Classified Flow: create → declined → no classifieds doc', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
     store.commit('SET_USER', null);
     store.commit('SET_USER_DATA', null);
   });
@@ -301,9 +301,9 @@ describe('Classified Flow: create → declined → no classifieds doc', () => {
 // ---------------------------------------------------------------------------
 describe('Classified Flow: published → renewed twice', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
     store.commit('SET_USER', null);
     store.commit('SET_USER_DATA', null);
   });
@@ -386,9 +386,9 @@ describe('Classified Flow: published → renewed twice', () => {
 // ---------------------------------------------------------------------------
 describe('Classified Flow: published → expired by daily sweep', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
   });
 
   it('daily sweep sets status to expired when expires_at is in the past', async () => {
@@ -430,9 +430,9 @@ describe('Classified Flow: published → expired by daily sweep', () => {
 // ---------------------------------------------------------------------------
 describe('Store: fetchClassifieds', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
     store.commit('SET_USER', null);
     store.commit('SET_USER_DATA', null);
     store.commit('SET_CLASSIFIEDS', []);
@@ -464,9 +464,9 @@ describe('Store: fetchClassifieds', () => {
 // ---------------------------------------------------------------------------
 describe('Store: fetchMyClassifieds', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
     store.commit('SET_USER', null);
     store.commit('SET_USER_DATA', null);
     store.commit('SET_MY_CLASSIFIEDS', []);
@@ -500,9 +500,9 @@ describe('Store: fetchMyClassifieds', () => {
 // ---------------------------------------------------------------------------
 describe('Store: createDraftClassified', () => {
   beforeEach(async () => {
+    await logout();
     await clearFirestoreEmulator();
     await clearAuthEmulator();
-    await logout();
     store.commit('SET_USER', null);
     store.commit('SET_USER_DATA', null);
     store.commit('SET_MY_CLASSIFIEDS', []);

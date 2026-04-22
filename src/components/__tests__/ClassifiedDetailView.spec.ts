@@ -246,14 +246,17 @@ describe('ClassifiedDetailView', () => {
     expect(allBtnText.some(t => t.includes('Close Listing'))).toBe(false);
   });
 
-  it('logged-out user does not see owner actions or message button', async () => {
+  it('logged-out user sees login prompt button but not owner actions', async () => {
     const store = createMockStore({ user: null });
     const classified = makeClassified({ owner_uid: 'owner-1' });
     const wrapper = await mountDetail('classified-1', store, classified);
 
     const allBtnText = wrapper.findAll('button').map(b => b.text());
+    // Task 1: logged-out users now see a "Log in to Send a Message" CTA instead of being hidden
+    expect(allBtnText.some(t => t.includes('Log in to Send a Message'))).toBe(true);
+    // Owner-only controls must remain hidden
     expect(allBtnText.some(t => t.includes('Renew'))).toBe(false);
-    expect(allBtnText.some(t => t.includes('Message'))).toBe(false);
+    expect(allBtnText.some(t => t.includes('Close Listing'))).toBe(false);
   });
 
   it('admin sees Publish Live and Discard Draft buttons on a draft', async () => {

@@ -7,6 +7,21 @@ import { clearFirestoreEmulator, clearAuthEmulator, createTestUser } from '../te
 
 const HMAC_SECRET = 'local-dev-secret';
 
+/**
+ * Probe the Functions emulator at module load time (top-level await).
+ * If the emulator is not running, every test in this module is skipped so
+ * that `npm run test` without `npm run emulate` does not produce failures.
+ */
+let functionsEmulatorAvailable = false;
+try {
+  const res = await fetch('http://127.0.0.1:5001/', { signal: AbortSignal.timeout(2000) });
+  functionsEmulatorAvailable = res.status < 500;
+} catch {
+  /* emulator not running */
+}
+
+const maybeIt = functionsEmulatorAvailable ? it : it.skip;
+
 async function makeToken(uid: string, email: string, ts: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -42,7 +57,7 @@ describe('setLocalEmail callable', () => {
     await signOut(auth);
   });
 
-  it('sets pendingLocalEmail and returns verification_sent for a valid email', async () => {
+  maybeIt('sets pendingLocalEmail and returns verification_sent for a valid email', async () => {
     const fbEmail = 'user@example.com';
     const user = await createTestUser(fbEmail, 'Test User');
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
@@ -55,7 +70,7 @@ describe('setLocalEmail callable', () => {
     expect(snap.data()?.localEmail).toBeUndefined();
   });
 
-  it('clears both localEmail and pendingLocalEmail when email is empty', async () => {
+  maybeIt('clears both localEmail and pendingLocalEmail when email is empty', async () => {
     const fbEmail = 'user@example.com';
     const user = await createTestUser(fbEmail, 'Test User');
     await seedUserFields(user.uid, { localEmail: 'old@example.com', pendingLocalEmail: 'pending@example.com' });
@@ -69,7 +84,7 @@ describe('setLocalEmail callable', () => {
     expect(snap.data()?.pendingLocalEmail).toBeUndefined();
   });
 
-  it('rejects an invalid email format', async () => {
+  maybeIt('rejects an invalid email format', async () => {
     const fbEmail = 'user@example.com';
     await createTestUser(fbEmail, 'Test User');
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
@@ -78,7 +93,7 @@ describe('setLocalEmail callable', () => {
       .rejects.toThrow(/invalid/i);
   });
 
-  it('rejects unauthenticated calls', async () => {
+  maybeIt('rejects unauthenticated calls', async () => {
     await expect(httpsCallable(functions, 'setLocalEmail')({ email: 'test@example.com' }))
       .rejects.toThrow(/unauthenticated|must be signed in/i);
   });
@@ -91,7 +106,7 @@ describe('verifyLocalEmail callable', () => {
     await signOut(auth);
   });
 
-  it('promotes pendingLocalEmail to localEmail on a valid token', async () => {
+  maybeIt('promotes pendingLocalEmail to localEmail on a valid token', async () => {
     const fbEmail = 'user@example.com';
     const user = await createTestUser(fbEmail, 'Test User');
     await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
@@ -107,7 +122,7 @@ describe('verifyLocalEmail callable', () => {
     expect(snap.data()?.pendingLocalEmail).toBeUndefined();
   });
 
-  it('rejects an expired token and leaves pending email unchanged', async () => {
+  maybeIt('rejects an expired token and leaves pending email unchanged', async () => {
     const fbEmail = 'user@example.com';
     const user = await createTestUser(fbEmail, 'Test User');
     await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
@@ -123,7 +138,7 @@ describe('verifyLocalEmail callable', () => {
     expect(snap.data()?.pendingLocalEmail).toBe('notify@example.com');
   });
 
-  it('rejects a tampered token and leaves pending email unchanged', async () => {
+  maybeIt('rejects a tampered token and leaves pending email unchanged', async () => {
     const fbEmail = 'user@example.com';
     const user = await createTestUser(fbEmail, 'Test User');
     await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
@@ -138,7 +153,7 @@ describe('verifyLocalEmail callable', () => {
     expect(snap.data()?.localEmail).toBeUndefined();
   });
 
-  it('rejects when pending email no longer matches the token', async () => {
+  maybeIt('rejects when pending email no longer matches the token', async () => {
     const fbEmail = 'user@example.com';
     const user = await createTestUser(fbEmail, 'Test User');
 
