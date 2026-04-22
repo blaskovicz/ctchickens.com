@@ -83,6 +83,7 @@ export interface Review {
     owner_uid: string;
     display_name: string;
     location: string;
+    title: string;
     description: string;
     category: ClassifiedCategory;
     status: ClassifiedStatus;
@@ -98,6 +99,7 @@ export interface Review {
     owner_uid: string;
     display_name: string;
     location: string;
+    title: string;
     description: string;
     category: ClassifiedCategory;
     status: 'pending';

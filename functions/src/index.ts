@@ -661,8 +661,8 @@ export const onInquiryThreadCreated = onDocumentCreated(
       if (classifiedId) {
         try {
           const snap = await db.collection('classifieds').doc(classifiedId).get();
-          const desc = snap.data()?.description as string | undefined;
-          if (desc) classifiedLabel = desc.length > 64 ? desc.substring(0, 61) + '...' : desc;
+          const classifiedTitle = snap.data()?.title as string | undefined;
+          if (classifiedTitle) classifiedLabel = classifiedTitle.length > 64 ? classifiedTitle.substring(0, 61) + '...' : classifiedTitle;
         } catch (err) {
           console.error('[onInquiryThreadCreated] Failed to fetch classified for peer email', err);
         }
@@ -710,6 +710,7 @@ export const onDraftClassifiedCreated = onDocumentCreated(
     const ownerName = (userSnap?.data()?.displayName as string) || (data.display_name as string) || 'Unknown';
     const category = (data.category as string) || 'unknown';
     const location = (data.location as string) || 'Unknown';
+    const title = (data.title as string) || '';
     const description = (data.description as string) || '';
     const reviewUrl = `https://ctchickens.com/#/classified/${docId}`;
 
@@ -717,7 +718,7 @@ export const onDraftClassifiedCreated = onDocumentCreated(
     try {
       await sendClassifiedSubmittedAdminEmail(
         'admin@ctchickens.com',
-        { ownerName, category: CATEGORY_LABELS[category] || category, location, description, reviewUrl },
+        { ownerName, category: CATEGORY_LABELS[category] || category, location, title, description, reviewUrl },
         resend
       );
       console.log(`[onDraftClassifiedCreated] Admin review email sent for ${docId}`);
@@ -943,13 +944,13 @@ export const initiatePeerThread = onCall(
       const threadId = existing.docs[0].id;
       if (classifiedId) {
         const threadRef = db.collection('inquiry_threads').doc(threadId);
-        let title = 'View listing';
+        let linkLabel = 'View listing';
         try {
           const snap = await db.collection('classifieds').doc(classifiedId).get();
-          const desc = snap.data()?.description as string | undefined;
-          if (desc) title = desc.length > 64 ? desc.substring(0, 61) + '...' : desc;
+          const classifiedTitle = snap.data()?.title as string | undefined;
+          if (classifiedTitle) linkLabel = classifiedTitle.length > 64 ? classifiedTitle.substring(0, 61) + '...' : classifiedTitle;
         } catch (e) { /* fall back */ }
-        const messageText = `I'm messaging you about your classified: [${title}](https://ctchickens.com/#/classified/${classifiedId})`;
+        const messageText = `I'm messaging you about your classified: [${linkLabel}](https://ctchickens.com/#/classified/${classifiedId})`;
         await db.runTransaction(async (tx) => {
           const threadSnap = await tx.get(threadRef);
           const currentUnread = threadSnap.data()?.unreadCount?.[targetUid] || 0;
@@ -973,8 +974,8 @@ export const initiatePeerThread = onCall(
     if (classifiedId) {
       try {
         const classifiedSnap = await db.collection('classifieds').doc(classifiedId).get();
-        const desc = classifiedSnap.data()?.description as string | undefined;
-        if (desc) classifiedTitle = desc.length > 64 ? desc.substring(0, 61) + '...' : desc;
+        const fetchedTitle = classifiedSnap.data()?.title as string | undefined;
+        if (fetchedTitle) classifiedTitle = fetchedTitle.length > 64 ? fetchedTitle.substring(0, 61) + '...' : fetchedTitle;
       } catch (e) {
         // fall back to generic title
       }
@@ -1066,6 +1067,7 @@ export const sweepExpiredClassifieds = onSchedule(
     try {
       const warningSnap = await db.collection('classifieds')
         .where('status', '==', 'active')
+        .where('expires_at', '>', nowTs)
         .where('expires_at', '<=', twoDaysTs)
         .where('expiry_warning_sent', '==', false)
         .get();

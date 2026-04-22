@@ -1,4 +1,4 @@
-// Rules Version: 2026-04-21-01
+// Rules Version: 2026-04-21-02
 rules_version = '2';
 
 service cloud.firestore {
@@ -217,7 +217,7 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
       request.resource.data.owner_uid == request.auth.uid &&
       request.resource.data.status == 'pending' &&
-      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'description', 'category', 'created_at', 'status']);
+      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'category', 'created_at', 'status']);
       allow delete: if isSignedIn() && (
       resource == null ||
       isUserAdmin(request.auth.uid) ||

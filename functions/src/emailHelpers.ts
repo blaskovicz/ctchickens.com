@@ -242,10 +242,10 @@ export async function sendClaimApprovedEmail(
 
 export async function sendClassifiedSubmittedAdminEmail(
   to: string,
-  vars: { ownerName: string; category: string; location: string; description: string; reviewUrl: string },
+  vars: { ownerName: string; category: string; location: string; title: string; description: string; reviewUrl: string },
   resend: Resend
 ): Promise<void> {
-  const subject = `New classified needs review — ${vars.category} by ${vars.ownerName}`;
+  const subject = `New classified needs review — ${vars.title || vars.category} by ${vars.ownerName}`;
   await sendGenericEmail(resend, {
     from: 'CT Chickens <admin@ctchickens.com>',
     to,

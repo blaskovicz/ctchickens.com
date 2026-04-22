@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { formatRelativeTime } from '../composables/useBreederUtils';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp, setDoc, deleteDoc, Timestamp, writeBatch
+  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot
 } from 'firebase/firestore';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified } from '../types';
@@ -26,6 +26,7 @@ const showDiscardModal = ref(false);
 const showMessageModal = ref(false);
 const selectedFarmSlug = ref<string | null>(null);
 const isOpeningThread = ref(false);
+let unsubscribeClassified: (() => void) | null = null;
 
 const user = computed(() => store.state.user);
 const isAdmin = computed(() => store.getters.isAdmin);
@@ -70,13 +71,28 @@ const formatDate = (ts: any) => {
 
 onMounted(async () => {
   try {
+    // Attach a real-time listener on the classifieds doc so CF-driven updates
+    // (e.g. renewal) are reflected automatically without optimistic writes.
+    unsubscribeClassified = onSnapshot(
+      doc(db, 'classifieds', docId),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.status === 'active' || store.getters.isAdmin || data.owner_uid === user.value?.uid) {
+            classified.value = { id: snap.id, ...data } as Classified;
+          }
+        }
+        isLoading.value = false;
+      },
+      (e: any) => {
+        create?.({ body: `Failed to load listing: ${e.message}`, variant: 'danger' });
+        isLoading.value = false;
+      },
+    );
+
+    // If no live doc exists (or access is denied), fall back to draft lookup.
     const liveSnap = await getDoc(doc(db, 'classifieds', docId));
-    if (liveSnap.exists()) {
-      const data = liveSnap.data();
-      if (data.status === 'active' || store.getters.isAdmin || data.owner_uid === user.value?.uid) {
-        classified.value = { id: liveSnap.id, ...data } as Classified;
-      }
-    } else if (user.value) {
+    if (!liveSnap.exists() && user.value) {
       const draftSnap = await getDoc(doc(db, 'draft_classifieds', docId));
       if (draftSnap.exists()) {
         const data = draftSnap.data();
@@ -84,12 +100,18 @@ onMounted(async () => {
           draftClassified.value = { id: draftSnap.id, ...data } as DraftClassified;
         }
       }
+      // The snapshot listener will not fire for a doc that doesn't exist,
+      // so clear the loading state here for the draft path.
+      isLoading.value = false;
     }
   } catch (e: any) {
     create?.({ body: `Failed to load listing: ${e.message}`, variant: 'danger' });
-  } finally {
     isLoading.value = false;
   }
+});
+
+onUnmounted(() => {
+  unsubscribeClassified?.();
 });
 
 const handleRenew = async () => {
@@ -101,16 +123,9 @@ const handleRenew = async () => {
       owner_uid: user.value!.uid,
       created_at: serverTimestamp(),
     });
-    // Optimistically update local state so the button disappears immediately
-    const currentExpiry = classified.value!.expires_at.toDate
-      ? classified.value!.expires_at.toDate()
-      : new Date(classified.value!.expires_at);
-    classified.value = {
-      ...classified.value!,
-      renewal_count: classified.value!.renewal_count + 1,
-      expires_at: new Date(currentExpiry.getTime() + 7 * 24 * 60 * 60 * 1000),
-    };
-    create?.({ body: 'Listing renewed successfully.', variant: 'success' });
+    // No optimistic update — the onSnapshot listener picks up the CF's write
+    // to expires_at / renewal_count once it processes the action.
+    create?.({ body: 'Renewal requested — your listing will update shortly.', variant: 'info' });
   } catch (e: any) {
     create?.({ body: `Renewal failed: ${e.message}`, variant: 'danger' });
   } finally {
@@ -142,21 +157,7 @@ const handleApprove = async () => {
   isActing.value = true;
   try {
     const { id, ...snapshot } = draftClassified.value;
-    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     const batch = writeBatch(db);
-    batch.set(doc(db, 'classifieds', docId), {
-      owner_uid: snapshot.owner_uid,
-      display_name: snapshot.display_name,
-      location: snapshot.location,
-      description: snapshot.description,
-      category: snapshot.category,
-      status: 'active',
-      created_at: snapshot.created_at,
-      expires_at: expiresAt,
-      renewal_count: 0,
-      max_renewals: 2,
-      expiry_warning_sent: false,
-    });
     batch.set(doc(db, 'draft_classified_history', docId), {
       draft_meta: { status: 'approved', archivedAt: serverTimestamp(), owner_uid: snapshot.owner_uid },
       snapshot,
@@ -212,7 +213,7 @@ const activeData = computed(() => classified.value || draftClassified.value);
 </script>
 
 <template>
-  <div class="container py-5" style="max-width: 680px;">
+  <div class="container py-5" style="max-width: 960px;">
     <div v-if="isLoading" class="text-center py-5">
       <BSpinner variant="primary" />
     </div>
@@ -274,7 +275,7 @@ const activeData = computed(() => classified.value || draftClassified.value);
       </div>
 
       <div class="card border-0 shadow-sm overflow-hidden">
-        <!-- Hero header -->
+        <!-- Hero header: title + badges, full width -->
         <div class="classified-detail-header p-4 text-white position-relative">
           <div class="position-relative z-1">
             <div class="d-flex justify-content-between align-items-start mb-3">
@@ -287,32 +288,51 @@ const activeData = computed(() => classified.value || draftClassified.value);
               <BBadge v-else-if="classified?.status === 'expired'" variant="secondary" pill>Expired</BBadge>
               <BBadge v-else-if="classified?.status === 'discarded'" variant="danger" pill>Closed</BBadge>
             </div>
-            <p class="fs-5 text-white mb-0" style="line-height:1.7;">{{ activeData.description }}</p>
+            <h2 class="fs-4 fw-bold text-white mb-0">{{ activeData.title }}</h2>
           </div>
         </div>
 
-        <!-- Meta -->
-        <div class="card-body p-4 bg-white">
-          <div class="d-flex flex-column gap-2 text-muted small">
-            <span><i class="bi bi-geo-alt me-1"></i>Location: {{ activeData.location }}</span>
-            <span><i class="bi bi-person me-1"></i>Posted by: {{ activeData.display_name }}<span v-if="user?.uid === activeData.owner_uid" class="text-muted"> (you)</span></span>
-            <span><i class="bi bi-clock me-1"></i>Created {{ formatRelativeTime(activeData.created_at) }}</span>
-            <span v-if="classified?.expires_at">
-              <i class="bi bi-calendar me-1"></i>
-              <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }">
-                Expires {{ formatDate(classified.expires_at) }}
-                <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0"> ({{ daysUntilExpiry }}d)</span>
-                <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0"> (today)</span>
+        <!-- Two-column body: description left, meta right -->
+        <div class="card-body p-0">
+          <div class="row g-0">
+            <!-- Description (60%) -->
+            <div class="col-12 col-md-7 p-4 border-end description-col">
+              <p class="mb-0" style="line-height:1.8; white-space: pre-wrap;">{{ activeData.description }}</p>
+            </div>
+
+            <!-- Meta + actions (40%) -->
+            <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3">
+              <div class="d-flex flex-column gap-2 small">
+                <div class="d-flex gap-2">
+                  <span class="text-muted" style="min-width:64px;">Location</span>
+                  <span>{{ activeData.location }}</span>
+                </div>
+                <div class="d-flex gap-2">
+                  <span class="text-muted" style="min-width:64px;">Posted by</span>
+                  <span>{{ activeData.display_name }}<span v-if="user?.uid === activeData.owner_uid" class="text-muted"> (you)</span></span>
+                </div>
+                <div class="d-flex gap-2">
+                  <span class="text-muted" style="min-width:64px;">Posted</span>
+                  <span>{{ formatRelativeTime(activeData.created_at) }}</span>
+                </div>
+                <div v-if="classified?.expires_at" class="d-flex gap-2">
+                  <span class="text-muted" style="min-width:64px;">Expires</span>
+                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }">
+                    {{ formatDate(classified.expires_at) }}
+                    <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0">({{ daysUntilExpiry }}d)</span>
+                    <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0">(today)</span>
+                  </span>
+                </div>
+                <div v-if="classified && (isOwner || isAdmin)" class="d-flex gap-2">
+                  <span class="text-muted" style="min-width:64px;">Renewals</span>
+                  <span>{{ classified.renewal_count }} / {{ classified.max_renewals }} used</span>
+                </div>
+              </div>
+              <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted small">
+                Renewal available within 2 days of expiration
               </span>
-            </span>
-            <span v-if="classified && (isOwner || isAdmin)">
-              <i class="bi bi-arrow-repeat me-1"></i>
-              {{ classified.renewal_count }} / {{ classified.max_renewals }} renewals used
-            </span>
+            </div>
           </div>
-          <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted small d-block mt-3">
-            Renewal available within 2 days of expiration
-          </span>
         </div>
       </div>
     </div>
@@ -348,6 +368,12 @@ const activeData = computed(() => classified.value || draftClassified.value);
 </template>
 
 <style scoped>
+@media (min-width: 768px) {
+  .description-col {
+    min-height: 220px;
+  }
+}
+
 .classified-detail-header {
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
 }

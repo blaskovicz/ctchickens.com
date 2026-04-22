@@ -303,7 +303,7 @@ const handleRejectClaim = async (id: string) => {
               <BListGroupItem v-for="item in draftClassifieds" :key="item.id" class="p-3">
                 <div class="d-flex justify-content-between align-items-start">
                   <div class="d-flex flex-column gap-1">
-                    <h6 class="mb-0 fw-bold">{{ item.category }}</h6>
+                    <h6 class="mb-0 fw-bold">{{ item.title || item.category }}</h6>
                     <p class="mb-0 small text-muted">{{ item.display_name }} — {{ item.location }}</p>
                     <p class="mb-0 small text-truncate" style="max-width:220px;">{{ item.description }}</p>
                   </div>

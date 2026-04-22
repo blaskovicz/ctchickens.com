@@ -51,7 +51,7 @@ const filteredClassifieds = computed(() => {
   return classifieds.value.filter(c => {
     if (cat && c.category !== cat) return false;
     if (loc && !c.location.toLowerCase().includes(loc)) return false;
-    if (text && !c.description.toLowerCase().includes(text) && !c.location.toLowerCase().includes(text)) return false;
+    if (text && !c.title.toLowerCase().includes(text) && !c.description.toLowerCase().includes(text) && !c.location.toLowerCase().includes(text)) return false;
     return true;
   });
 });
@@ -124,7 +124,7 @@ onMounted(async () => {
         >
           <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
             <BBadge variant="secondary" pill>{{ CATEGORY_LABELS[item.category] }}</BBadge>
-            <span class="text-dark flex-grow-1 text-truncate small">{{ item.description }}</span>
+            <span class="text-dark flex-grow-1 text-truncate small">{{ item.title }}</span>
             <div class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
               <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
             </div>
@@ -155,7 +155,10 @@ onMounted(async () => {
                 {{ CATEGORY_LABELS[item.category] }}
               </BBadge>
             </div>
-            <p class="card-text text-dark mb-2" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+            <p class="card-title fw-semibold text-dark mb-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+              {{ item.title }}
+            </p>
+            <p class="card-text text-muted small mb-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
               {{ item.description }}
             </p>
             <div class="d-flex align-items-center gap-1 text-muted small">

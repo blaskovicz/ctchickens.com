@@ -317,7 +317,7 @@ export default createStore({
       }
     },
 
-    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; description: string }) {
+    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; title: string; description: string }) {
       if (!state.user) throw new Error('Must be logged in to post a classified.');
       const fullName = state.user.displayName || '';
       const parts = fullName.trim().split(' ');
@@ -328,6 +328,7 @@ export default createStore({
         owner_uid: state.user.uid,
         display_name: displayName,
         location: payload.location,
+        title: payload.title,
         description: payload.description,
         category: payload.category,
         status: 'pending',

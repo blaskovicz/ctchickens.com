@@ -14,6 +14,7 @@ const isSubmitting = ref(false);
 
 const category = ref<ClassifiedCategory>('iso');
 const location = ref('');
+const title = ref('');
 const description = ref('');
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
@@ -28,6 +29,8 @@ const categoryOptions = [
 const isValid = computed(() =>
   category.value &&
   location.value.trim().length >= 2 &&
+  title.value.trim().length >= 5 &&
+  title.value.trim().length <= 100 &&
   description.value.trim().length >= 20
 );
 
@@ -37,6 +40,7 @@ defineExpose({ open });
 const reset = () => {
   category.value = 'iso';
   location.value = '';
+  title.value = '';
   description.value = '';
 };
 
@@ -47,6 +51,7 @@ const handleSubmit = async () => {
     const id = await store.dispatch('createDraftClassified', {
       category: category.value,
       location: location.value.trim(),
+      title: title.value.trim(),
       description: description.value.trim(),
     });
     create?.({ body: 'Your listing has been submitted for review. We\'ll email you when it\'s approved.', variant: 'success' });
@@ -78,6 +83,20 @@ const handleSubmit = async () => {
 
       <BFormGroup label="Location" label-for="loc" description="Town, state (e.g. Lebanon, CT)">
         <BFormInput id="loc" v-model="location" placeholder="Lebanon, CT" required />
+      </BFormGroup>
+
+      <BFormGroup label="Title" label-for="title" description="Short headline — 5 to 100 characters (e.g. 3 Buff Orpington Hens)">
+        <BFormInput
+          id="title"
+          v-model="title"
+          placeholder="e.g. 3 Buff Orpington Hens"
+          minlength="5"
+          maxlength="100"
+          required
+        />
+        <div class="text-end small mt-1" :class="title.length > 0 && (title.length < 5 || title.length > 100) ? 'text-danger' : 'text-muted'">
+          {{ title.length }} / 100
+        </div>
       </BFormGroup>
 
       <BFormGroup label="Description" label-for="desc" description="Minimum 20 characters — be specific about breed, quantity, age, etc.">
