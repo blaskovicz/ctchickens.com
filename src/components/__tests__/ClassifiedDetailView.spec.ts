@@ -97,7 +97,7 @@ const createMockStore = (opts: {
       myBreeders: () => opts.myBreeders ?? [],
     },
     actions: {
-      openPeerThread: vi.fn(),
+      openPeerThread: vi.fn() as any,
     },
     mutations: {
       SET_CLASSIFIEDS(state: any, p: Classified[]) { state.classifieds = p; },
@@ -306,7 +306,7 @@ describe('ClassifiedDetailView', () => {
     await flushPromises();
 
     expect(mockAddDoc).toHaveBeenCalledOnce();
-    const [, payload] = mockAddDoc.mock.calls[0];
+    const [, payload] = mockAddDoc.mock.calls[0] as any;
     expect(payload.action).toBe('renew');
     expect(payload.owner_uid).toBe(ownerId);
   });
@@ -319,7 +319,6 @@ describe('ClassifiedDetailView: canRenew logic', () => {
   beforeEach(() => vi.clearAllMocks());
 
   const buildWrapperForCanRenew = async (
-    ownerId: string,
     user: any,
     classified: Classified
   ) => {
@@ -344,7 +343,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
       max_renewals: 2,
       expires_at: { toDate: () => new Date(Date.now() + 1 * 86400000) },
     });
-    const wrapper = await buildWrapperForCanRenew('owner-1', { uid: 'stranger' }, classified);
+    const wrapper = await buildWrapperForCanRenew({ uid: 'stranger' }, classified);
     const renewBtn = wrapper.findAll('button').find(b => b.text().includes('Renew'));
     expect(renewBtn).toBeUndefined();
   });
@@ -356,7 +355,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
       max_renewals: 2,
       expires_at: { toDate: () => new Date(Date.now() + 1 * 86400000) },
     });
-    const wrapper = await buildWrapperForCanRenew('owner-1', { uid: 'owner-1' }, classified);
+    const wrapper = await buildWrapperForCanRenew({ uid: 'owner-1' }, classified);
     const renewBtn = wrapper.findAll('button').find(b => b.text().includes('Renew'));
     expect(renewBtn).toBeUndefined();
   });
@@ -368,7 +367,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
       max_renewals: 2,
       expires_at: { toDate: () => new Date(Date.now() + 5 * 86400000) },
     });
-    const wrapper = await buildWrapperForCanRenew('owner-1', { uid: 'owner-1' }, classified);
+    const wrapper = await buildWrapperForCanRenew({ uid: 'owner-1' }, classified);
     const renewBtn = wrapper.findAll('button').find(b => b.text().includes('Renew'));
     expect(renewBtn).toBeUndefined();
   });
@@ -380,7 +379,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
       max_renewals: 2,
       expires_at: { toDate: () => new Date(Date.now() + 1 * 86400000) },
     });
-    const wrapper = await buildWrapperForCanRenew('owner-1', { uid: 'owner-1' }, classified);
+    const wrapper = await buildWrapperForCanRenew({ uid: 'owner-1' }, classified);
     const renewBtn = wrapper.findAll('button').find(b => b.text().includes('Renew'));
     expect(renewBtn).toBeDefined();
     expect(renewBtn?.exists()).toBe(true);

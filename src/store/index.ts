@@ -323,7 +323,7 @@ export default createStore({
       const parts = fullName.trim().split(' ');
       const displayName = parts.length <= 1
         ? (parts[0] || 'User')
-        : `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.`;
+        : `${parts[0]} ${(parts[parts.length - 1] || '').charAt(0).toUpperCase()}.`;
       const ref = await addDoc(collection(db, 'draft_classifieds'), {
         owner_uid: state.user.uid,
         display_name: displayName,

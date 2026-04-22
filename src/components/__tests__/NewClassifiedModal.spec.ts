@@ -11,7 +11,7 @@ const createMockStore = (isLoggedIn = true) =>
     },
     actions: {
       createDraftClassified: vi.fn(() => Promise.resolve('new-doc-id')),
-      loginWithFacebook: vi.fn(),
+      loginWithFacebook: vi.fn() as any,
     },
   });
 

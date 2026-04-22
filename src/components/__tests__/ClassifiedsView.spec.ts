@@ -61,8 +61,8 @@ const createMockStore = (opts: {
       isAdmin: () => opts.isAdmin ?? false,
     },
     actions: {
-      fetchClassifieds: vi.fn(),
-      fetchMyClassifieds: vi.fn(),
+      fetchClassifieds: vi.fn() as any,
+      fetchMyClassifieds: vi.fn() as any,
     },
     mutations: {
       SET_CLASSIFIEDS(state: any, p: Classified[]) { state.classifieds = p; },

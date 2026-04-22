@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth } from '../../firebase';
 import {
-  doc, getDoc, setDoc, addDoc, collection, serverTimestamp, writeBatch,
-  getDocs, query, where
-} from 'firebase/firestore';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch} from 'firebase/firestore';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import {
   clearFirestoreEmulator,
   clearAuthEmulator,
@@ -160,7 +158,7 @@ describe('Classified Flow: create → approved → published', () => {
     const userEmail = 'poster@example.com';
     const adminEmail = 'admin@example.com';
     const posterUser = await createTestUser(userEmail, 'Poster Pete');
-    const adminUser = await createTestUser(adminEmail, 'Admin Anna', true);
+    await createTestUser(adminEmail, 'Admin Anna', true);
 
     const draftId = 'draft-approved-test';
 
