@@ -65,8 +65,10 @@ describe('setLocalEmail callable', () => {
   });
 
   maybeIt('sets pendingLocalEmail and returns verification_sent for a valid email', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
+    // Ensure localEmail is not seeded by createTestUser
+    await seedUserFields(user.uid, { localEmail: null });
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
 
     const result = await httpsCallable(functions, 'setLocalEmail')({ email: 'notify@example.com' });
@@ -78,7 +80,7 @@ describe('setLocalEmail callable', () => {
   });
 
   maybeIt('clears both localEmail and pendingLocalEmail when email is empty', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
     await seedUserFields(user.uid, { localEmail: 'old@example.com', pendingLocalEmail: 'pending@example.com' });
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
@@ -92,7 +94,7 @@ describe('setLocalEmail callable', () => {
   });
 
   maybeIt('rejects an invalid email format', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     await createTestUser(fbEmail, 'Test User');
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
 
@@ -114,9 +116,9 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('promotes pendingLocalEmail to localEmail on a valid token', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
-    await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'notify@example.com' });
 
     const ts = String(Date.now());
     const token = await makeToken(user.uid, 'notify@example.com', ts);
@@ -130,9 +132,9 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('rejects an expired token and leaves pending email unchanged', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
-    await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'notify@example.com' });
 
     const expiredTs = String(Date.now() - 25 * 60 * 60 * 1000);
     const token = await makeToken(user.uid, 'notify@example.com', expiredTs);
@@ -146,9 +148,9 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('rejects a tampered token and leaves pending email unchanged', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
-    await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'notify@example.com' });
 
     const ts = String(Date.now());
     const badToken = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
@@ -161,14 +163,14 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('rejects when pending email no longer matches the token', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
 
     const ts = String(Date.now());
     const token = await makeToken(user.uid, 'notify@example.com', ts);
 
     // User changed their mind — pending is now a different address
-    await seedUserFields(user.uid, { pendingLocalEmail: 'different@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'different@example.com' });
 
     await expect(httpsCallable(functions, 'verifyLocalEmail')({ uid: user.uid, email: 'notify@example.com', ts, token }))
       .rejects.toThrow();
