@@ -48,7 +48,7 @@ describe('Directory Flow - Unauthenticated User', () => {
     expect(wrapper.text()).toContain('Storrs');
     
     // Check for the table header to ensure we're looking at the directory section
-    expect(wrapper.text()).toContain('Local Breeder & Supplier Directory');
+    expect(wrapper.text()).toContain('View Full Directory');
   });
 
   it('user without farm does not see claim banner if not logged in', async () => {
