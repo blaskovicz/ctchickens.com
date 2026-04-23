@@ -399,7 +399,7 @@ describe('Security Rules: Classifieds', () => {
     ).resolves.not.toThrow();
   });
 
-  it.only('owner cannot create a renew action on another user\'s classified', async () => {
+  it('owner cannot create a renew action on another user\'s classified', async () => {
     const ownerEmail = 'real-owner@example.com';
     const attackerEmail = 'attacker@example.com';
     const ownerUser = await createTestUser(ownerEmail, 'Real Owner');
