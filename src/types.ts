@@ -85,12 +85,12 @@ export interface Review {
     hatching_eggs: 'Hatching Eggs',
   };
 
-  export const CATEGORY_VARIANTS: Record<ClassifiedCategory, string> = {
+  export const CATEGORY_VARIANTS = {
     iso: 'info',
     for_sale: 'success',
     rehoming: 'warning',
     hatching_eggs: 'primary',
-  };
+  } as const;
 
   export interface Classified {
     id: string;
