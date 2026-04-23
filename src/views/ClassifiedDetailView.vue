@@ -5,8 +5,10 @@ import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, getDocs
+  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, getDocs, deleteDoc
 } from 'firebase/firestore';
+import { storage } from '../firebase';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified, UserTier } from '../types';
 import { TIER_LIMITS, CATEGORY_LABELS } from '../types';
@@ -30,6 +32,7 @@ const isActing = ref(false);
 const showPublishModal = ref(false);
 const showDiscardModal = ref(false);
 const showArchiveModal = ref(false);
+const showDeleteDraftModal = ref(false);
 const showMessageModal = ref(false);
 const isOpeningThread = ref(false);
 let unsubscribeClassified: (() => void) | null = null;
@@ -231,6 +234,32 @@ const handleReject = async () => {
   }
 };
 
+const handleDeleteDraft = async () => {
+  if (!isDraft.value || !isOwner.value || isActing.value || !draftClassified.value) return;
+  isActing.value = true;
+  try {
+    const imageUrl = draftClassified.value.image_url;
+    if (imageUrl) {
+      try {
+        const url = new URL(imageUrl);
+        const pathEncoded = url.pathname.split('/o/')[1]?.split('?')[0];
+        if (pathEncoded) {
+          const path = decodeURIComponent(pathEncoded);
+          await deleteObject(storageRef(storage, path));
+        }
+      } catch {
+        // Storage deletion is best-effort; proceed with doc deletion regardless
+      }
+    }
+    await deleteDoc(doc(db, 'draft_classifieds', docId));
+    create?.({ body: 'Draft deleted.', variant: 'info' });
+    router.push('/classified');
+  } catch (e: any) {
+    create?.({ body: `Failed to delete draft: ${e.message}`, variant: 'danger' });
+    isActing.value = false;
+  }
+};
+
 const handleMessage = async (farmSlug?: string | null) => {
   if (!classified.value || isOpeningThread.value) return;
   showMessageModal.value = false;
@@ -291,6 +320,13 @@ const activeData = computed(() => classified.value || draftClassified.value);
 
         <!-- Admin approve/reject only in the header row; message button moved to card footer -->
 
+
+        <!-- Owner: delete own pending draft -->
+        <div v-else-if="isDraft && isOwner && !isAdmin">
+          <BButton variant="outline-danger" size="sm" @click="showDeleteDraftModal = true" :disabled="isActing">
+            <i class="bi bi-trash me-1"></i> Delete Draft
+          </BButton>
+        </div>
 
         <!-- Admin approve/reject -->
         <div v-else-if="isAdmin && isDraft" class="d-flex gap-2">
@@ -453,6 +489,11 @@ const activeData = computed(() => classified.value || draftClassified.value);
     >
       <p v-if="isAdmin && !isOwner">Are you sure you want to archive this listing? It will be removed from the public directory immediately.</p>
       <p v-else>Are you sure you want to close this listing? It will no longer be visible to others.</p>
+    </BModal>
+
+    <!-- DELETE DRAFT CONFIRMATION MODAL -->
+    <BModal v-model="showDeleteDraftModal" title="Delete Draft?" @ok="handleDeleteDraft" :ok-disabled="isActing" ok-title="Delete Draft" ok-variant="danger">
+      <p>Are you sure you want to delete this draft? This cannot be undone.</p>
     </BModal>
 
     <!-- MESSAGE AS MODAL -->

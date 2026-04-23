@@ -1,4 +1,4 @@
-// Rules Version: 2026-04-21-02
+// Rules Version: 2026-04-23-01
 rules_version = '2';
 
 service cloud.firestore {
@@ -144,7 +144,6 @@ service cloud.firestore {
       )
         && request.resource.data.status == 'pending'
         && request.resource.data.businessSlug == requestId
-        && request.resource.data.createdAt == request.time
       // Authorization: requesterEmail is already proven to be the user's own verified email
     // above, so we just need it to match the farm's contact email.
         && farmContactEmail(requestId).lower() == request.resource.data.requesterEmail.lower()
@@ -217,18 +216,14 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
       request.resource.data.owner_uid == request.auth.uid &&
       request.resource.data.status == 'pending' &&
-      (isUserAdmin(request.auth.uid) || (
-        // Check active counts manually via exists (limitations apply to rules efficiency but this works for small counts)
-        // Since we can't 'count' in rules easily without a dedicated counter doc, 
-        // we'll rely on the frontend for most enforcement and this basic rule for minimal protection.
-        // NOTE: Standard Firestore rules cannot iterate collections. 
-        // Realistically, to truly block this at the rules level, we need a 'counters' doc.
-        // For now, we will allow the create if the user doc says they are within limits (if we added a counter there).
-        // INSTEAD: Let's assume we might add a counter later, or just trust the frontend + Cloud Function rejection.
-        // ACTUALLY: Let's implement a 'count' check in Cloud Functions instead for robust enforcement.
-        true 
-      )) &&
-      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status', 'image_url']);
+      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status', 'image_url']) &&
+      // image_url must embed the caller's own UID in the storage path (no cross-user spoofing).
+      // Use .get() with a safe default so split() is never called on null, even if the emulator
+      // does not short-circuit || before evaluating both sides.
+      (request.resource.data.get('image_url', null) == null ||
+        (request.resource.data.get('image_url', 'classifieds%2Fplaceholder%2Ffile').split('classifieds%2F').size() == 2 &&
+         request.resource.data.get('image_url', 'classifieds%2Fplaceholder%2Ffile').split('classifieds%2F')[1].split('%2F').size() >= 2 &&
+         request.resource.data.get('image_url', 'classifieds%2Fplaceholder%2Ffile').split('classifieds%2F')[1].split('%2F')[0] == request.auth.uid));
       allow delete: if isSignedIn() && (
       resource == null ||
       isUserAdmin(request.auth.uid) ||
@@ -263,7 +258,8 @@ service cloud.firestore {
         request.resource.data.owner_uid == request.auth.uid &&
         // Authorization: Caller must own the listing OR be an admin
         (
-          get(/databases/$(database)/documents/classifieds/$(docId)).data.get('owner_uid', '') == request.auth.uid ||
+          (exists(/databases/$(database)/documents/classifieds/$(docId)) &&
+           get(/databases/$(database)/documents/classifieds/$(docId)).data.owner_uid == request.auth.uid) ||
           isUserAdmin(request.auth.uid)
         );
         allow read: if false;

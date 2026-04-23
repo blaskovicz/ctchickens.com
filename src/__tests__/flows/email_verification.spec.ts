@@ -14,8 +14,15 @@ const HMAC_SECRET = 'local-dev-secret';
  */
 let functionsEmulatorAvailable = false;
 try {
-  const res = await fetch('http://127.0.0.1:5001/', { signal: AbortSignal.timeout(2000) });
-  functionsEmulatorAvailable = res.status < 500;
+  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
+  // POST to the actual function — 404 means not deployed, any other status means running
+  const res = await fetch(`http://127.0.0.1:5001/${projectId}/us-central1/setLocalEmail`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: {} }),
+    signal: AbortSignal.timeout(2000),
+  });
+  functionsEmulatorAvailable = res.status !== 404;
 } catch {
   /* emulator not running */
 }

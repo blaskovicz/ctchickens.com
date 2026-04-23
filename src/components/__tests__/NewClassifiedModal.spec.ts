@@ -3,6 +3,8 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createStore } from 'vuex';
 import NewClassifiedModal from '../NewClassifiedModal.vue';
 
+const mockDeleteObject = vi.fn(() => Promise.resolve());
+
 // Mock Firebase Storage
 vi.mock('firebase/storage', () => ({
   getStorage: vi.fn(),
@@ -10,6 +12,7 @@ vi.mock('firebase/storage', () => ({
   ref: vi.fn(),
   uploadBytes: vi.fn(() => Promise.resolve({ ref: 'mock-ref' })),
   getDownloadURL: vi.fn(() => Promise.resolve('https://mock-storage.com/image.jpg')),
+  deleteObject: (...args: any[]) => mockDeleteObject(...args),
 }));
 
 // Mock URL.createObjectURL and revokeObjectURL
@@ -223,6 +226,32 @@ describe('NewClassifiedModal', () => {
       await flushPromises();
 
       expect((wrapper.vm as any).imageFile).toBeNull();
+    });
+
+    it('deletes uploaded image when createDraftClassified fails (orphan cleanup)', async () => {
+      const store = createMockStore();
+      const dispatchSpy = vi.spyOn(store, 'dispatch').mockImplementation((action: string) => {
+        if (action === 'createDraftClassified') return Promise.reject(new Error('Firestore write failed'));
+        return Promise.resolve();
+      });
+
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
+
+      await setDocValue('#loc', 'Hartford, CT');
+      await setDocValue('#title', 'Valid Title');
+      await setDocValue('textarea#desc', 'Valid description at least 20 chars long');
+
+      (wrapper.vm as any).imageFile = new File(['data'], 'test.png', { type: 'image/png' });
+      await flushPromises();
+
+      const submitBtn = findDocButton('Submit');
+      submitBtn?.click();
+      await flushPromises();
+
+      expect(dispatchSpy).toHaveBeenCalledWith('createDraftClassified', expect.anything());
+      expect(mockDeleteObject).toHaveBeenCalledWith('mock-ref');
     });
   });
 });

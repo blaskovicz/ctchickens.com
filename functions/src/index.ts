@@ -1172,7 +1172,8 @@ export const sweepExpiredClassifieds = onSchedule(
         const data = deadDoc.data();
         if (data.image_url) {
           const path = getStoragePathFromUrl(data.image_url);
-          if (path) {
+          const ownerUid = data.owner_uid as string | undefined;
+          if (path && ownerUid && path.startsWith(`classifieds/${ownerUid}/`)) {
             await bucket.file(path).delete().catch(() => {/* ignore */});
           }
         }
@@ -1193,9 +1194,10 @@ export const sweepExpiredClassifieds = onSchedule(
       for (const rejDoc of rejectedSnap.docs) {
         const data = rejDoc.data();
         const imageUrl = data.snapshot?.image_url;
-        if (imageUrl) {
+        const ownerUid = data.snapshot?.owner_uid as string | undefined;
+        if (imageUrl && ownerUid) {
           const path = getStoragePathFromUrl(imageUrl);
-          if (path) {
+          if (path && path.startsWith(`classifieds/${ownerUid}/`)) {
             await bucket.file(path).delete().catch(() => {/* ignore */});
           }
         }

@@ -5,7 +5,8 @@ import { BModal, BButton, BFormGroup, BFormInput, BFormSelect, BFormTextarea, BS
 import type { ClassifiedCategory, UserTier } from '../types';
 import { TIER_LIMITS } from '../types';
 import { storage } from '../firebase';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import type { StorageReference } from 'firebase/storage';
 
 const emit = defineEmits<{ submitted: [id: string] }>();
 
@@ -81,6 +82,7 @@ watch(imageFile, (newFile) => {
 const handleSubmit = async () => {
   if (!isValid.value || isSubmitting.value) return;
   isSubmitting.value = true;
+  let uploadedRef: StorageReference | null = null;
   try {
     let imageUrl = undefined;
     if (imageFile.value && user.value) {
@@ -91,6 +93,7 @@ const handleSubmit = async () => {
       const snapshot = await uploadBytes(fileRef, imageFile.value, {
         contentType: imageFile.value.type
       });
+      uploadedRef = snapshot.ref;
       imageUrl = await getDownloadURL(snapshot.ref);
     }
 
@@ -107,6 +110,9 @@ const handleSubmit = async () => {
     reset();
     emit('submitted', id);
   } catch (e: any) {
+    if (uploadedRef) {
+      await deleteObject(uploadedRef).catch(() => {});
+    }
     create?.({ body: e.message || 'Failed to submit listing.', variant: 'danger' });
     console.warn(e);
   } finally {
