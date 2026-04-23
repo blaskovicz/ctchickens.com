@@ -46,7 +46,9 @@ async function seedUserFields(uid: string, fields: Record<string, string | null>
   const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?${fieldPaths}`;
   const payload = {
     fields: Object.fromEntries(
-      Object.entries(fields).map(([k, v]) => [k, v === null ? { nullValue: null } : { stringValue: v }])
+      Object.entries(fields)
+        .filter(([_, v]) => v !== null)
+        .map(([k, v]) => [k, { stringValue: v }])
     ),
   };
   const res = await fetch(url, {
