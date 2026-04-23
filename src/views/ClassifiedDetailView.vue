@@ -10,7 +10,7 @@ import {
 import { storage } from '../firebase';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
-import type { Classified, DraftClassified, UserTier } from '../types';
+import type { Classified, DraftClassified } from '../types';
 import { TIER_LIMITS, CATEGORY_LABELS } from '../types';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
 import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
@@ -24,8 +24,6 @@ const docId = route.params.docId as string;
 
 const classified = ref<Classified | null>(null);
 const draftClassified = ref<DraftClassified | null>(null);
-const ownerFarms = ref<any[]>([]);
-const ownerTier = ref<UserTier>('freemium');
 const ownerActiveCount = ref(0);
 const isLoading = ref(true);
 const isActing = ref(false);
@@ -43,6 +41,19 @@ const isLoggedIn = computed(() => store.getters.isLoggedIn);
 const isOwner = computed(() => !!user.value && (classified.value?.owner_uid === user.value.uid || draftClassified.value?.owner_uid === user.value.uid));
 const isDraft = computed(() => !!draftClassified.value && !classified.value);
 const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter((b: any) => b.status === 'published'));
+
+// Get all farms owned by this seller from the store
+const ownerFarms = computed(() => {
+  const uid = classified.value?.owner_uid || draftClassified.value?.owner_uid;
+  if (!uid) return [];
+  return (store.state.breeders as any[]).filter(b => b.ownerUid === uid);
+});
+
+// Determine tier based on farm verification
+const ownerTier = computed(() => {
+  const hasVerified = ownerFarms.value.some(f => f.verified);
+  return hasVerified ? 'premium' : 'freemium';
+});
 
 const daysUntilExpiry = computed(() => {
   if (!classified.value?.expires_at) return null;
@@ -64,52 +75,21 @@ const formatDate = (ts: any) => {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
-const fetchOwnerSidebarData = async (ownerUid: string) => {
+const fetchAdminInsights = async (ownerUid: string) => {
+  if (!isAdmin.value) return;
   try {
-    // 1. Fetch user document (for explicit tier/admin status)
-    const userDoc = await getDoc(doc(db, 'users', ownerUid));
-    let baseTier: UserTier = 'freemium';
-    let userIsAdmin = false;
-    if (userDoc.exists()) {
-      const uData = userDoc.data();
-      baseTier = uData.tier || 'freemium';
-      userIsAdmin = uData.isAdmin || false;
-    }
-
-    // 2. Fetch all published farms for this user
-    const farmsQ = query(
-      collection(db, 'directory_members'),
-      where('account.ownerUid', '==', ownerUid),
-      where('account.status', '==', 'published')
-    );
-    const farmsSnap = await getDocs(farmsQ);
-    const farms = farmsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-    ownerFarms.value = farms;
-
-    // 3. Determine final tier (Premium if admin, has explicit tier, or owns a verified farm)
-    const hasVerifiedFarm = farms.some((f: any) => f.account?.isVerified === true);
-    if (userIsAdmin || baseTier === 'premium' || hasVerifiedFarm) {
-      ownerTier.value = 'premium';
-    } else {
-      ownerTier.value = 'freemium';
-    }
-
-    // 4. Count active/pending classifieds (for admin visibility)
-    if (isAdmin.value) {
-      const liveQ = query(collection(db, 'classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'active'));
-      const draftQ = query(collection(db, 'draft_classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'pending'));
-      const [liveSnap, draftSnap] = await Promise.all([getDocs(liveQ), getDocs(draftQ)]);
-      ownerActiveCount.value = liveSnap.size + draftSnap.size;
-    }
+    const liveQ = query(collection(db, 'classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'active'));
+    const draftQ = query(collection(db, 'draft_classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'pending'));
+    const [liveSnap, draftSnap] = await Promise.all([getDocs(liveQ), getDocs(draftQ)]);
+    ownerActiveCount.value = liveSnap.size + draftSnap.size;
   } catch (e) {
-    console.warn('Failed to fetch owner sidebar data:', e);
+    console.warn('Failed to fetch admin insights:', e);
   }
 };
 
 onMounted(async () => {
   try {
-    // Attach a real-time listener on the classifieds doc so CF-driven updates
-    // (e.g. renewal) are reflected automatically without optimistic writes.
+    // Attach a real-time listener on the classifieds doc
     unsubscribeClassified = onSnapshot(
       doc(db, 'classifieds', docId),
       (snap) => {
@@ -117,7 +97,7 @@ onMounted(async () => {
           const data = snap.data();
           if (data.status === 'active' || store.getters.isAdmin || data.owner_uid === user.value?.uid) {
             classified.value = { id: snap.id, ...data } as Classified;
-            fetchOwnerSidebarData(data.owner_uid);
+            fetchAdminInsights(data.owner_uid);
           }
         }
         isLoading.value = false;
@@ -128,7 +108,7 @@ onMounted(async () => {
       },
     );
 
-    // If no live doc exists (or access is denied), fall back to draft lookup.
+    // If no live doc exists, fall back to draft lookup
     const liveSnap = await getDoc(doc(db, 'classifieds', docId));
     if (!liveSnap.exists() && user.value) {
       const draftSnap = await getDoc(doc(db, 'draft_classifieds', docId));
@@ -136,11 +116,9 @@ onMounted(async () => {
         const data = draftSnap.data();
         if (isAdmin.value || data.owner_uid === user.value.uid) {
           draftClassified.value = { id: draftSnap.id, ...data } as DraftClassified;
-          fetchOwnerSidebarData(data.owner_uid);
+          fetchAdminInsights(data.owner_uid);
         }
       }
-      // The snapshot listener will not fire for a doc that doesn't exist,
-      // so clear the loading state here for the draft path.
       isLoading.value = false;
     }
   } catch (e: any) {
@@ -439,11 +417,11 @@ const activeData = computed(() => classified.value || draftClassified.value);
                 <div v-for="farm in ownerFarms" :key="farm.id" class="d-flex flex-column gap-2 mb-3">
                   <router-link :to="`/directory/${farm.id}`" class="text-decoration-none fw-bold text-primary d-flex align-items-center gap-2">
                     <i class="bi bi-house-door"></i>
-                    {{ farm.profile.businessName }}
+                    {{ farm.name }}
                   </router-link>
                   <div class="d-flex flex-wrap gap-2">
-                    <VerifiedBadge :verified="farm.account?.isVerified" />
-                    <FoundingBreederBadge :count="farm.account?.foundingMember" />
+                    <VerifiedBadge :verified="farm.verified" />
+                    <FoundingBreederBadge :count="farm.founding_breeder" />
                   </div>
                 </div>
               </div>

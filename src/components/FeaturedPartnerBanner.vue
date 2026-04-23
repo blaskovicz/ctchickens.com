@@ -15,6 +15,14 @@ const ROTATION_SPEED_MS = 6000;
 
 const messages = ref<BannerAd[]>([
   {
+    id: 4,
+    text: "Looking for local deals? Check out our new Community Classifieds!",
+    link: "/classified",
+    linkText: "Browse Classifieds",
+    icon: "bi-tag-fill",
+    isExternal: false
+  },
+  {
     id: 1,
     text: "New to chickens? Join our community for daily advice.",
     link: "https://www.facebook.com/groups/1465813350383274",

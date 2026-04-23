@@ -86,12 +86,17 @@ const handleSubmit = async () => {
   try {
     let imageUrl = undefined;
     if (imageFile.value && user.value) {
-      const fileExt = imageFile.value.name.split('.').pop();
+      // 1. Compress Image
+      const compressedBlob = await compressImage(imageFile.value);
+      
+      const fileExt = 'jpg'; // We force to jpg in compression
       const fileName = `${Date.now()}.${fileExt}`;
       const path = `classifieds/${user.value.uid}/${fileName}`;
       const fileRef = storageRef(storage, path);
-      const snapshot = await uploadBytes(fileRef, imageFile.value, {
-        contentType: imageFile.value.type
+      
+      // 2. Upload compressed blob
+      const snapshot = await uploadBytes(fileRef, compressedBlob, {
+        contentType: 'image/jpeg'
       });
       uploadedRef = snapshot.ref;
       imageUrl = await getDownloadURL(snapshot.ref);
@@ -118,6 +123,50 @@ const handleSubmit = async () => {
   } finally {
     isSubmitting.value = false;
   }
+};
+
+/**
+ * Client-side image compression using Canvas
+ */
+const compressImage = (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+
+        if (width > height && width > maxDim) {
+          height *= maxDim / width;
+          width = maxDim;
+        } else if (height > maxDim) {
+          width *= maxDim / height;
+          height = maxDim;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Compression failed'));
+          },
+          'image/jpeg',
+          0.6
+        );
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
 };
 </script>
 

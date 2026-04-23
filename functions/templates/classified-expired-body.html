@@ -2,7 +2,7 @@
   Your classified has expired
 </h2>
 <p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
-  Hi {{firstName}}, your <strong>{{categoryLabel}}</strong> listing expired on <strong>{{expiresAt}}</strong> and has been removed from the classifieds.
+  Hi {{firstName}}, your <strong>{{#if title}}{{title}}{{else}}{{categoryLabel}}{{/if}}</strong> listing expired on <strong>{{expiresAt}}</strong> and has been removed from the classifieds.
 </p>
 <p style="color:#374151;line-height:1.7;margin:0 0 24px;font-size:15px;">
   You can post a new listing at any time — it will go through the usual review process.

@@ -19,7 +19,9 @@ import {
   sendAdminDraftReviewEmail,
   sendClaimApprovedEmail,
   sendClassifiedSubmittedAdminEmail,
+  sendClassifiedSubmittedUserEmail,
   sendClassifiedApprovedEmail,
+  sendClassifiedRejectedEmail,
   sendClassifiedExpiryWarningEmail,
   sendClassifiedExpiredEmail,
   sendClassifiedRenewedEmail,
@@ -732,6 +734,8 @@ export const onDraftClassifiedCreated = onDocumentCreated(
     const reviewUrl = `https://ctchickens.com/#/classified/${docId}`;
 
     const resend = new Resend(resendApiKey.value());
+    
+    // 1. Notify Admin
     try {
       await sendClassifiedSubmittedAdminEmail(
         'admin@ctchickens.com',
@@ -742,86 +746,125 @@ export const onDraftClassifiedCreated = onDocumentCreated(
     } catch (err) {
       console.error('[onDraftClassifiedCreated] Failed to send admin email', { docId, err });
     }
+
+    // 2. Notify User
+    const userEmail = userSnap ? resolveEmail(userSnap.data()!) : null;
+    if (userEmail) {
+      try {
+        const firstName = ownerName.split(' ')[0] || 'there';
+        await sendClassifiedSubmittedUserEmail(
+          userEmail,
+          { firstName, category: CATEGORY_LABELS[category] || category, location, title, description },
+          resend
+        );
+        console.log(`[onDraftClassifiedCreated] User confirmation email sent to ${userEmail} for ${docId}`);
+      } catch (err) {
+        console.error('[onDraftClassifiedCreated] Failed to send user confirmation email', { userEmail, docId, err });
+      }
+    }
   }
 );
 
-// Fires when admin creates a draft_classified_history doc with status='approved'.
-// Publishes the classified, sets expiry, determines max_renewals, deletes draft, emails owner.
-export const onDraftClassifiedApproved = onDocumentCreated(
+// Fires when admin creates a draft_classified_history doc with status='approved' or 'rejected'.
+// Handles publishing or notifying the user of rejection.
+export const onDraftClassifiedReviewAction = onDocumentCreated(
   { document: 'draft_classified_history/{historyId}', secrets: [resendApiKey] },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
-    if (data.draft_meta?.status !== 'approved') return;
 
     const historyId = event.params.historyId;
+    const status = data.draft_meta?.status;
     const ownerUid = data.draft_meta?.owner_uid as string | undefined;
+
     if (!ownerUid) {
-      console.error('[onDraftClassifiedApproved] Missing owner_uid in history doc', { historyId });
+      console.error('[onDraftClassifiedReviewAction] Missing owner_uid in history doc', { historyId });
       return;
     }
 
     const snapshot = data.snapshot as Record<string, any>;
     const category = (snapshot?.category as string) || 'iso';
-
-    // Determine max_renewals based on verified farm ownership
-    let maxRenewals = 1;
-    try {
-      const verifiedFarmsSnap = await db.collection('directory_members')
-        .where('account.ownerUid', '==', ownerUid)
-        .where('account.isVerified', '==', true)
-        .limit(1)
-        .get();
-      if (!verifiedFarmsSnap.empty) maxRenewals = 3;
-    } catch (err) {
-      console.error('[onDraftClassifiedApproved] Failed to query verified farms', { ownerUid, err });
-    }
-
-    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
-
-    // Write to classifieds
-    try {
-      await db.collection('classifieds').doc(historyId).set({
-        ...snapshot,
-        owner_uid: ownerUid,
-        status: 'active',
-        expires_at: expiresAt,
-        renewal_count: 0,
-        max_renewals: maxRenewals,
-        expiry_warning_sent: false,
-      });
-    } catch (err) {
-      console.error('[onDraftClassifiedApproved] Failed to write classifieds doc', { historyId, err });
-      return;
-    }
-
-    // Delete draft
-    try {
-      await db.collection('draft_classifieds').doc(historyId).delete();
-    } catch (err) {
-      console.error('[onDraftClassifiedApproved] Failed to delete draft', { historyId, err });
-    }
-
-    // Email owner
     const resend = new Resend(resendApiKey.value());
-    try {
-      const userDoc = await db.collection('users').doc(ownerUid).get();
-      if (!userDoc.exists) return;
-      const userEmail = resolveEmail(userDoc.data()!);
-      if (!userEmail) return;
-      const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
-      const classifiedUrl = `https://ctchickens.com/#/classified/${historyId}`;
-      const expiresAtStr = expiresAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      await sendClassifiedApprovedEmail(userEmail, {
-        firstName,
-        categoryLabel: CATEGORY_LABELS[category] || category,
-        expiresAt: expiresAtStr,
-        maxRenewals,
-        classifiedUrl,
-      }, resend);
-      console.log(`[onDraftClassifiedApproved] Approval email sent to ${userEmail}`);
-    } catch (err) {
-      console.error('[onDraftClassifiedApproved] Failed to send approval email', { historyId, err });
+
+    if (status === 'approved') {
+      // Determine max_renewals based on verified farm ownership
+      let maxRenewals = 1;
+      try {
+        const verifiedFarmsSnap = await db.collection('directory_members')
+          .where('account.ownerUid', '==', ownerUid)
+          .where('account.isVerified', '==', true)
+          .limit(1)
+          .get();
+        if (!verifiedFarmsSnap.empty) maxRenewals = 3;
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to query verified farms', { ownerUid, err });
+      }
+
+      const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+
+      // Write to classifieds
+      try {
+        await db.collection('classifieds').doc(historyId).set({
+          ...snapshot,
+          owner_uid: ownerUid,
+          status: 'active',
+          expires_at: expiresAt,
+          renewal_count: 0,
+          max_renewals: maxRenewals,
+          expiry_warning_sent: false,
+        });
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to write classifieds doc', { historyId, err });
+        return;
+      }
+
+      // Delete draft
+      try {
+        await db.collection('draft_classifieds').doc(historyId).delete();
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to delete draft', { historyId, err });
+      }
+
+      // Email owner approval
+      try {
+        const userDoc = await db.collection('users').doc(ownerUid).get();
+        if (!userDoc.exists) return;
+        const userEmail = resolveEmail(userDoc.data()!);
+        if (!userEmail) return;
+        const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+        const classifiedUrl = `https://ctchickens.com/#/classified/${historyId}`;
+        const expiresAtStr = expiresAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const title = snapshot?.title as string | undefined;
+        await sendClassifiedApprovedEmail(userEmail, {
+          firstName,
+          categoryLabel: CATEGORY_LABELS[category] || category,
+          expiresAt: expiresAtStr,
+          maxRenewals,
+          classifiedUrl,
+          title,
+        }, resend);
+        console.log(`[onDraftClassifiedReviewAction] Approval email sent to ${userEmail}`);
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to send approval email', { historyId, err });
+      }
+    } else if (status === 'rejected') {
+      // Email owner rejection
+      try {
+        const userDoc = await db.collection('users').doc(ownerUid).get();
+        if (!userDoc.exists) return;
+        const userEmail = resolveEmail(userDoc.data()!);
+        if (!userEmail) return;
+        const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+        const title = snapshot?.title as string | undefined;
+        await sendClassifiedRejectedEmail(userEmail, {
+          firstName,
+          categoryLabel: CATEGORY_LABELS[category] || category,
+          title,
+        }, resend);
+        console.log(`[onDraftClassifiedReviewAction] Rejection email sent to ${userEmail}`);
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to send rejection email', { historyId, err });
+      }
     }
   }
 );
@@ -877,6 +920,7 @@ export const onClassifiedAction = onDocumentCreated(
             await sendClassifiedClosedEmail(ownerEmail, {
               firstName,
               categoryLabel: CATEGORY_LABELS[category] || category,
+              title: classified.title,
             }, resend);
             console.log(`[onClassifiedAction] Closure email sent to ${ownerEmail} for ${classifiedId}`);
           }
@@ -928,6 +972,7 @@ export const onClassifiedAction = onDocumentCreated(
               newExpiresAt: newExpiresAtStr,
               renewalsRemaining: maxRenewals - (renewalCount + 1),
               classifiedUrl: `https://ctchickens.com/#/classified/${classifiedId}`,
+              title: classified.title,
             }, resend);
             console.log(`[onClassifiedAction] Renewal email sent to ${userEmail} for ${classifiedId}`);
           }
@@ -1113,6 +1158,7 @@ export const sweepExpiredClassifieds = onSchedule(
               firstName,
               categoryLabel: CATEGORY_LABELS[category] || category,
               expiresAt: expiresAtStr,
+              title: c.title,
             }, resend);
             console.log(`[sweepExpiredClassifieds] Expired email sent to ${userEmail} for ${d.id}`);
           } catch (err) {
@@ -1150,6 +1196,7 @@ export const sweepExpiredClassifieds = onSchedule(
             categoryLabel: CATEGORY_LABELS[category] || category,
             expiresAt: expiresAtStr,
             classifiedUrl,
+            title: classified.title,
           }, resend);
           await classifiedDoc.ref.update({ expiry_warning_sent: true });
           console.log(`[sweepExpiredClassifieds] Warning sent to ${userEmail} for ${classifiedDoc.id}`);

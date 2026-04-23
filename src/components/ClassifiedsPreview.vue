@@ -27,7 +27,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="classifieds.length > 0" class="py-5 bg-white">
+  <section class="py-5 bg-white">
     <div class="container">
       <div class="row align-items-end mb-4">
         <div class="col-lg-9 text-center text-lg-start">

@@ -254,12 +254,43 @@ export async function sendClassifiedSubmittedAdminEmail(
   });
 }
 
-export async function sendClassifiedApprovedEmail(
+export async function sendClassifiedSubmittedUserEmail(
   to: string,
-  vars: { firstName: string; categoryLabel: string; expiresAt: string; maxRenewals: number; classifiedUrl: string },
+  vars: { firstName: string; category: string; location: string; title: string; description: string },
   resend: Resend
 ): Promise<void> {
-  const subject = 'Your classified is live on CT Chickens!';
+  const label = vars.title || vars.category;
+  const subject = `We've received your classified submission: ${label} — CT Chickens`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('classified-submitted-user-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendClassifiedRejectedEmail(
+  to: string,
+  vars: { firstName: string; categoryLabel: string; title?: string },
+  resend: Resend
+): Promise<void> {
+  const label = vars.title || vars.categoryLabel;
+  const subject = `Listing update: ${label} — CT Chickens`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('classified-rejected-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendClassifiedApprovedEmail(
+  to: string,
+  vars: { firstName: string; categoryLabel: string; expiresAt: string; maxRenewals: number; classifiedUrl: string; title?: string },
+  resend: Resend
+): Promise<void> {
+  const label = vars.title || vars.categoryLabel;
+  const subject = `Your classified is live: ${label} — CT Chickens`;
   await sendGenericEmail(resend, {
     from: 'CT Chickens <admin@ctchickens.com>',
     to,
@@ -270,10 +301,11 @@ export async function sendClassifiedApprovedEmail(
 
 export async function sendClassifiedExpiryWarningEmail(
   to: string,
-  vars: { firstName: string; categoryLabel: string; expiresAt: string; classifiedUrl: string },
+  vars: { firstName: string; categoryLabel: string; expiresAt: string; classifiedUrl: string; title?: string },
   resend: Resend
 ): Promise<void> {
-  const subject = 'Your classified listing is expiring soon — CT Chickens';
+  const label = vars.title || vars.categoryLabel;
+  const subject = `Listing expiring soon: ${label} — CT Chickens`;
   await sendGenericEmail(resend, {
     from: 'CT Chickens <admin@ctchickens.com>',
     to,
@@ -284,10 +316,11 @@ export async function sendClassifiedExpiryWarningEmail(
 
 export async function sendClassifiedExpiredEmail(
   to: string,
-  vars: { firstName: string; categoryLabel: string; expiresAt: string },
+  vars: { firstName: string; categoryLabel: string; expiresAt: string; title?: string },
   resend: Resend
 ): Promise<void> {
-  const subject = 'Your classified listing has expired — CT Chickens';
+  const label = vars.title || vars.categoryLabel;
+  const subject = `Listing expired: ${label} — CT Chickens`;
   await sendGenericEmail(resend, {
     from: 'CT Chickens <admin@ctchickens.com>',
     to,
@@ -298,10 +331,11 @@ export async function sendClassifiedExpiredEmail(
 
 export async function sendClassifiedRenewedEmail(
   to: string,
-  vars: { firstName: string; categoryLabel: string; newExpiresAt: string; renewalsRemaining: number; classifiedUrl: string },
+  vars: { firstName: string; categoryLabel: string; newExpiresAt: string; renewalsRemaining: number; classifiedUrl: string; title?: string },
   resend: Resend
 ): Promise<void> {
-  const subject = 'Your classified listing has been renewed — CT Chickens';
+  const label = vars.title || vars.categoryLabel;
+  const subject = `Listing renewed: ${label} — CT Chickens`;
   await sendGenericEmail(resend, {
     from: 'CT Chickens <admin@ctchickens.com>',
     to,
@@ -312,10 +346,11 @@ export async function sendClassifiedRenewedEmail(
 
 export async function sendClassifiedClosedEmail(
   to: string,
-  vars: { firstName: string; categoryLabel: string },
+  vars: { firstName: string; categoryLabel: string; title?: string },
   resend: Resend
 ): Promise<void> {
-  const subject = 'Your classified listing has been closed — CT Chickens';
+  const label = vars.title || vars.categoryLabel;
+  const subject = `Listing closed: ${label} — CT Chickens`;
   await sendGenericEmail(resend, {
     from: 'CT Chickens <admin@ctchickens.com>',
     to,

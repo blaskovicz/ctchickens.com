@@ -2,7 +2,7 @@
   Your classified is expiring soon
 </h2>
 <p style="color:#374151;line-height:1.7;margin:0 0 16px;font-size:15px;">
-  Hi {{firstName}}, your <strong>{{categoryLabel}}</strong> listing expires on <strong>{{expiresAt}}</strong>.
+  Hi {{firstName}}, your <strong>{{#if title}}{{title}}{{else}}{{categoryLabel}}{{/if}}</strong> listing expires on <strong>{{expiresAt}}</strong>.
 </p>
 <p style="color:#374151;line-height:1.7;margin:0 0 24px;font-size:15px;">
   Visit your listing to renew it before it expires and disappears from the directory.
