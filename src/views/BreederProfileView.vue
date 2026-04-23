@@ -311,12 +311,13 @@ const formatDate = (dateString: string) => {
                 Selling
               </h5>
               <div class="p-3 bg-light rounded-4 shadow-sm border selling-box">
-                <p class="fs-6 mb-0 text-dark">{{ breeder.selling }}</p>
+                <p v-if="breeder.selling" class="fs-6 mb-0 text-dark">{{ breeder.selling }}</p>
+                <p v-else class="fs-6 mb-0 text-muted fst-italic">Inquire for more info</p>
               </div>
             </div>
 
             <div class="d-flex align-right flex-wrap gap-2 mt-3">
-              <!-- Always show Secure Message -->
+              <!-- Always show Message Breeder -->
               <ContactButton 
                 :link="breeder.contact_link" 
                 :breeder="breeder" 

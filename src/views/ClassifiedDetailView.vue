@@ -263,11 +263,14 @@ const activeData = computed(() => classified.value || draftClassified.value);
               <BBadge bg-color="rgba(255,255,255,0.2)" text-color="white" pill class="fs-6 px-3 py-2 border border-white border-opacity-25">
                 {{ CATEGORY_LABELS[activeData.category] || activeData.category }}
               </BBadge>
-              <div v-if="isDraft" class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
-                <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
+              <div class="d-flex gap-2 align-items-center">
+                <span v-if="activeData.price" class="fs-5 fw-bold text-white shadow-sm">{{ activeData.price }}</span>
+                <div v-if="isDraft" class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
+                  <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
+                </div>
+                <BBadge v-else-if="classified?.status === 'expired'" variant="secondary" pill class="px-3 py-2">Expired</BBadge>
+                <BBadge v-else-if="classified?.status === 'discarded'" variant="danger" pill class="px-3 py-2">Closed</BBadge>
               </div>
-              <BBadge v-else-if="classified?.status === 'expired'" variant="secondary" pill>Expired</BBadge>
-              <BBadge v-else-if="classified?.status === 'discarded'" variant="danger" pill>Closed</BBadge>
             </div>
             <h2 class="fs-4 fw-bold text-white mb-0">{{ activeData.title }}</h2>
           </div>
@@ -278,16 +281,13 @@ const activeData = computed(() => classified.value || draftClassified.value);
           <div class="row g-0">
             <!-- Description (60%) -->
             <div class="col-12 col-md-7 p-4 border-end description-col">
-              <p class="mb-0" style="line-height:1.8; white-space: pre-wrap;">{{ activeData.description }}</p>
+              <p v-if="activeData.description" class="mb-0" style="line-height:1.8; white-space: pre-wrap;">{{ activeData.description }}</p>
+              <p v-else class="mb-0 text-muted fst-italic" style="line-height:1.8;">Inquire for more info</p>
             </div>
 
             <!-- Meta + actions (40%) -->
             <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3">
               <div class="d-flex flex-column gap-2 small">
-                <div v-if="activeData.price" class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Price</span>
-                  <span class="fw-semibold">{{ activeData.price }}</span>
-                </div>
                 <div class="d-flex gap-2">
                   <span class="text-muted" style="min-width:64px;">Location</span>
                   <span>{{ activeData.location }}</span>
@@ -321,16 +321,16 @@ const activeData = computed(() => classified.value || draftClassified.value);
         </div>
 
         <!-- Card footer: message button for non-owners on active listings -->
-        <div v-if="!isOwner && !isDraft && classified?.status === 'active'" class="card-footer bg-white border-top px-4 py-3">
+        <div v-if="!isOwner && !isDraft && classified?.status === 'active'" class="card-footer bg-white border-top px-4 py-4 d-flex justify-content-end">
           <BButton
             variant="primary"
-            class="w-100"
+            class="px-5 shadow-sm"
             :disabled="isOpeningThread"
             @click="isLoggedIn ? (publishedFarms.length > 0 ? (showMessageModal = true) : handleMessage(null)) : store.dispatch('loginWithFacebook')"
           >
             <BSpinner v-if="isOpeningThread" small class="me-1" />
-            <i v-else class="bi bi-lock-fill me-1"></i>
-            <template v-if="isLoggedIn">Send Secure Message</template>
+            <i v-else class="bi bi-chat-dots-fill me-1"></i>
+            <template v-if="isLoggedIn">Message</template>
             <template v-else>Log in to Send a Message</template>
           </BButton>
         </div>

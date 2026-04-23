@@ -45,10 +45,11 @@
       ]
     },
     {
-      "collectionGroup": "inquiry_threads",
+      "collectionGroup": "classifieds",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "peerKey", "order": "ASCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
     },
     {

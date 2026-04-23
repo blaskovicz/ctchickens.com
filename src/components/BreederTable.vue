@@ -226,7 +226,7 @@
                             by {{ splitBreederName(breeder.name).person }}
                           </div>
                         </div>
-                        <div class="d-flex align-items-center">
+                        <div class="d-flex align-items-center gap-1">
                           <VerifiedBadge :verified="breeder.verified" />
                           <FoundingBreederBadge :count="breeder.founding_breeder" />
                           <span v-if="breeder.reviews && breeder.reviews.length > 0" class="text-nowrap">
@@ -256,7 +256,7 @@
                     <td class="d-none d-md-table-cell">{{ breeder.location }}</td>
                     <td class="text-md-end align-middle">
                       <div class="d-flex flex-row justify-content-end gap-2">
-                        <!-- Directory ONLY shows Secure Message & View Profile -->
+                        <!-- Directory ONLY shows Message & Profile -->
                         <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
                         <ViewProfileButton :breeder-name="breeder.name" />
                       </div>
@@ -268,7 +268,9 @@
                         
                         <div class="mb-2 text-muted flex-grow-1">
                           <i class="bi bi-tag-fill me-1 text-secondary"></i>
-                          <strong>Selling:</strong> {{ breeder.selling }}
+                          <strong>Selling:</strong> 
+                          <span v-if="breeder.selling">&nbsp;{{ breeder.selling }}</span>
+                          <span v-else class="text-muted fst-italic">&nbsp;Inquire for more info</span>
                         </div>
 
                         <div 

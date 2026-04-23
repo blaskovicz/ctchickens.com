@@ -19,7 +19,7 @@ const { generateSlug } = useBreederUtils();
     :size="size || 'sm'"
     class="d-flex align-items-center gap-1"
   >
-    <i class="bi bi-person-bounding-box"></i>
-    <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">View Profile</span>
+    <i class="bi bi-person-circle"></i>
+    <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">Profile</span>
   </BButton>
 </template>

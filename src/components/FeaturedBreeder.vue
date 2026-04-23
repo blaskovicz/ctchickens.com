@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
 import type { Breeder } from '../types';
 import BreederGallery from './BreederGallery.vue';
 import VerifiedBadge from './VerifiedBadge.vue';
@@ -9,9 +10,12 @@ import ContactButton from './ContactButton.vue';
 import ViewProfileButton from './ViewProfileButton.vue';
 import VerifiedMemberLink from './VerifiedMemberLink.vue';
 import { useBreederUtils } from '../composables/useBreederUtils';
+import { useSupport } from '../composables/useSupport';
 
 const store = useStore();
-const { splitBreederName } = useBreederUtils();
+const router = useRouter();
+const { splitBreederName, generateSlug } = useBreederUtils();
+const { contactSupport } = useSupport();
 const featured = computed(() => store.getters.featuredBreeder as Breeder | null);
 const showReviews = ref(false);
 
@@ -29,19 +33,33 @@ const formatDate = (dateString: string) => {
   });
 };
 
+const goToProfile = () => {
+  if (featured.value) {
+    router.push({ 
+      name: 'breeder-profile', 
+      params: { slug: generateSlug(featured.value.name) } 
+    });
+  }
+};
+
 </script>
 
 <template>
   <div class="row g-4 mb-5">
     
     <div class="col-md-6">
-      <div v-if="featured" class="card h-100 border-warning shadow-sm position-relative overflow-hidden" style="border-width: 3px;">
+      <div 
+        v-if="featured" 
+        class="card h-100 border-primary shadow-sm position-relative overflow-hidden featured-card" 
+        style="border-width: 3px;"
+        @click="goToProfile"
+      >
         
         <div class="card-body bg-light bg-opacity-10 d-flex flex-column">
           
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="badge bg-warning text-dark d-flex align-items-center px-2 py-1">
-              <i class="bi bi-star-fill me-1"></i> FEATURED PARTNER
+            <span class="badge bg-primary text-white d-flex align-items-center px-2 py-1">
+              <i class="bi bi-star-fill me-1"></i> Featured
             </span>
             <span class="text-muted small">
               <i class="bi bi-geo-alt-fill me-1"></i>{{ featured.location }}
@@ -54,6 +72,7 @@ const formatDate = (dateString: string) => {
               :display-name="splitBreederName(featured.name).main"
               :verified="featured.verified" 
               icon-style="font-size: 1.5rem; line-height: 1;"
+              @click.stop
             />
           </h5>
           <div v-if="splitBreederName(featured.name).person" class="text-muted fst-italic font-serif mb-2" style="font-size: 0.95rem; font-weight: normal;">
@@ -71,7 +90,9 @@ const formatDate = (dateString: string) => {
           <div class="mb-4">
             <p class="card-text text-secondary clamped-text mb-0">
               <i class="bi bi-tag-fill me-2 text-warning"></i>
-              <span class="fw-medium text-dark">Selling:</span> {{ featured.selling }}
+              <span class="fw-medium text-dark">Selling:</span> 
+              <span v-if="featured.selling">&nbsp;{{ featured.selling }}</span>
+              <span v-else class="text-muted fst-italic">&nbsp;Inquire for more info</span>
             </p>
           </div>
 
@@ -79,11 +100,12 @@ const formatDate = (dateString: string) => {
             <BreederGallery 
               :logo="featured.logo" 
               :images="featured.images" 
+              @click.stop
             />
           </div>
 
-          <div class="d-flex gap-2 mt-auto align-items-center flex-wrap">
-            <!-- Featured Breeder shows Secure Message & View Profile -->
+          <div class="d-flex gap-2 mt-auto align-items-center flex-wrap" @click.stop>
+            <!-- Featured Breeder shows Message & Profile -->
             <ContactButton 
               :link="featured.contact_link" 
               :breeder="featured"
@@ -109,13 +131,13 @@ const formatDate = (dateString: string) => {
           </div>
 
           <div v-if="featured.reviews && featured.reviews.length > 0" class="mt-3 pt-2 border-top">
-            <button @click="showReviews = !showReviews" class="btn btn-sm btn-link text-decoration-none px-0 w-100 text-start">
+            <button @click.stop="showReviews = !showReviews" class="btn btn-sm btn-link text-decoration-none px-0 w-100 text-start">
                <i :class="showReviews ? 'bi-chevron-up' : 'bi-chevron-down'" class="bi me-1"></i>
                <span v-if="!showReviews">Read Reviews</span>
                <span v-else>Hide Reviews</span>
             </button>
             
-            <div v-if="showReviews" class="mt-2 reviews-container">
+            <div v-if="showReviews" class="mt-2 reviews-container" @click.stop>
               <div 
                 v-for="(review, index) in featured.reviews" 
                 :key="index"
@@ -140,18 +162,18 @@ const formatDate = (dateString: string) => {
         </div>
       </div>
       
-      <div v-else class="card h-100 border-warning shadow-sm" style="border-width: 3px; background-color: #fff3cd;">
+      <div v-else class="card h-100 border-primary shadow-sm" style="border-width: 3px; background-color: rgba(30, 58, 138, 0.05);">
         <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
-          <h5 class="mb-2 fw-bold">
-            <i class="bi bi-star-fill text-warning me-1"></i>
+          <h5 class="mb-2 fw-bold text-primary">
+            <i class="bi bi-star-fill me-1"></i>
             This Spot Available!
           </h5>
           <p class="small text-muted mb-3">
             Want to feature your farm or coop services here?
           </p>
-          <a target="_blank" href="mailto:marketing@ctchickens.com?subject=Inquiry%20from%20ctchickens.com" class="btn btn-sm btn-dark">
+          <button @click="contactSupport" class="btn btn-sm btn-dark fw-bold">
             Become a Partner
-          </a>
+          </button>
         </div>
       </div>
     </div>
@@ -167,9 +189,14 @@ const formatDate = (dateString: string) => {
             Get listed to show up in our directory of thousands of local keepers.
             Get verified to build trust with our community.
           </p>
-          <router-link to="/get-listed" class="btn btn-primary mt-2 fw-bold shadow-sm">
-            Apply to Get Listed
-          </router-link>
+          <div class="d-flex flex-wrap justify-content-center gap-2 mt-2">
+            <router-link to="/get-listed" class="btn btn-primary fw-bold shadow-sm px-4">
+              <i class="bi bi-plus-lg me-1"></i> Start Your Listing
+            </router-link>
+            <button @click="contactSupport" class="btn btn-outline-primary fw-bold shadow-sm px-4">
+              <i class="bi bi-megaphone me-1"></i> Get Featured
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -178,6 +205,16 @@ const formatDate = (dateString: string) => {
 </template>
 
 <style scoped>
+.featured-card {
+  cursor: pointer;
+  transition: all 0.25s ease-in-out;
+}
+
+.featured-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.15) !important;
+}
+
 .clamped-text {
   display: -webkit-box;
   -webkit-line-clamp: 3;

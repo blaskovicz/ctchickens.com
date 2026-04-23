@@ -5,12 +5,21 @@ import { useBreederUtils } from '../composables/useBreederUtils';
 import { trackEvent } from '../firebase';
 import type { Breeder } from '../types';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   link: string | null;
   breeder?: Breeder;
   showLabelOnMobile?: boolean;
   forceSecureOnly?: boolean;
-}>();
+  variant?: string;
+  directVariant?: string;
+  size?: string;
+}>(), {
+  showLabelOnMobile: false,
+  forceSecureOnly: false,
+  variant: 'outline-primary',
+  directVariant: 'outline-dark',
+  size: 'sm'
+});
 
 const store = useStore();
 const { formatContactLink } = useBreederUtils();
@@ -50,17 +59,21 @@ const handleDirectContact = () => {
 
 <template>
   <div v-if="!isOwner" class="d-inline-flex gap-2">
-    <!-- 1. The Secure Message Button (Always available unless it's the owner) -->
+    <!-- 1. The Message Breeder Button (Always available unless it's the owner) -->
     <button
       @click="handleSecureMessage"
-      class="btn btn-sm btn-outline-primary text-nowrap d-inline-flex align-items-center justify-content-center"
+      class="btn text-nowrap d-inline-flex align-items-center justify-content-center"
       style="min-width: 36px;"
-      :class="{ 'opacity-50': isBlocked }"
+      :class="[
+        variant ? `btn-${variant}` : 'btn-outline-primary', 
+        size ? `btn-${size}` : 'btn-sm',
+        { 'opacity-50': isBlocked }
+      ]"
       :disabled="isBlocked"
-      :title="isBlocked ? 'Messaging Restricted' : 'Secure Message via CTChickens'"
+      :title="isBlocked ? 'Messaging Restricted' : 'Message Breeder via CTChickens'"
     >
-      <i class="bi bi-lock-fill text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
-      <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">Secure Message</span>
+      <i class="bi bi-chat-dots-fill text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
+      <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">Message</span>
     </button>
 
     <!-- 2. Direct Contact (Only if verified AND not forced to secure only) -->
@@ -69,8 +82,12 @@ const handleDirectContact = () => {
       target="_blank"
       :href="formatContactLink(link)!"
       @click="handleDirectContact"
-      class="btn btn-sm btn-outline-dark text-nowrap d-inline-flex align-items-center justify-content-center"
+      class="btn text-nowrap d-inline-flex align-items-center justify-content-center"
       style="min-width: 36px;"
+      :class="[
+        directVariant ? `btn-${directVariant}` : 'btn-outline-dark',
+        size ? `btn-${size}` : 'btn-sm'
+      ]"
       title="Direct Contact"
     >
       <i class="bi bi-envelope-fill text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
