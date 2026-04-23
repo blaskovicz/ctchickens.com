@@ -83,11 +83,11 @@ const fetchOwnerSidebarData = async (ownerUid: string) => {
       where('account.status', '==', 'published')
     );
     const farmsSnap = await getDocs(farmsQ);
-    const farms = farmsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const farms = farmsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
     ownerFarms.value = farms;
 
     // 3. Determine final tier (Premium if admin, has explicit tier, or owns a verified farm)
-    const hasVerifiedFarm = farms.some(f => f.account?.isVerified === true);
+    const hasVerifiedFarm = farms.some((f: any) => f.account?.isVerified === true);
     if (userIsAdmin || baseTier === 'premium' || hasVerifiedFarm) {
       ownerTier.value = 'premium';
     } else {

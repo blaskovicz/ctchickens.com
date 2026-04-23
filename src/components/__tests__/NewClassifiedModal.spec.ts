@@ -3,7 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createStore } from 'vuex';
 import NewClassifiedModal from '../NewClassifiedModal.vue';
 
-const mockDeleteObject = vi.fn(() => Promise.resolve());
+const mockDeleteObject = vi.fn((_ref?: any) => Promise.resolve());
 
 // Mock Firebase Storage
 vi.mock('firebase/storage', () => ({
@@ -12,7 +12,7 @@ vi.mock('firebase/storage', () => ({
   ref: vi.fn(),
   uploadBytes: vi.fn(() => Promise.resolve({ ref: 'mock-ref' })),
   getDownloadURL: vi.fn(() => Promise.resolve('https://mock-storage.com/image.jpg')),
-  deleteObject: (...args: any[]) => mockDeleteObject(...args),
+  deleteObject: (ref: any) => mockDeleteObject(ref),
 }));
 
 // Mock URL.createObjectURL and revokeObjectURL
@@ -230,7 +230,7 @@ describe('NewClassifiedModal', () => {
 
     it('deletes uploaded image when createDraftClassified fails (orphan cleanup)', async () => {
       const store = createMockStore();
-      const dispatchSpy = vi.spyOn(store, 'dispatch').mockImplementation((action: string) => {
+      const dispatchSpy = vi.spyOn(store, 'dispatch').mockImplementation((action: any) => {
         if (action === 'createDraftClassified') return Promise.reject(new Error('Firestore write failed'));
         return Promise.resolve();
       });

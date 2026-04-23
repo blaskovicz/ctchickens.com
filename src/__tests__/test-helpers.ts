@@ -3,8 +3,7 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   signOut, 
-  updateProfile,
-  sendEmailVerification
+  updateProfile
 } from 'firebase/auth';
 
 const PROJECT_ID = () => import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
@@ -87,12 +86,6 @@ export async function seedTestBreeder(slug: string, data: any = {}) {
 /**
  * Helper to fetch OOB codes from the Auth Emulator.
  */
-async function getOobCodes(projectId: string) {
-  const url = `http://127.0.0.1:9099/emulator/v1/projects/${projectId}/oobCodes`;
-  const res = await fetch(url);
-  if (!res.ok) return { oobCodes: [] };
-  return res.json();
-}
 
 /**
  * Creates a test user and bypasses rules to set Admin status if needed.

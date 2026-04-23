@@ -14,7 +14,7 @@ const mockOnSnapshot = vi.fn();
 const mockAddDoc = vi.fn();
 const mockWriteBatch = vi.fn();
 
-const mockDeleteObject = vi.fn(() => Promise.resolve());
+const mockDeleteObject = vi.fn((_ref?: any) => Promise.resolve());
 const mockStorageRef = vi.fn((_storage: any, _path: string) => ({ path: _path }));
 
 vi.mock('../../firebase', () => ({
@@ -27,8 +27,8 @@ vi.mock('../../firebase', () => ({
 }));
 
 vi.mock('firebase/storage', () => ({
-  ref: (...args: any[]) => mockStorageRef(...args),
-  deleteObject: (...args: any[]) => mockDeleteObject(...args),
+  ref: (storage: any, path: string) => mockStorageRef(storage, path),
+  deleteObject: (ref: any) => mockDeleteObject(ref),
 }));
 
 vi.mock('firebase/firestore', async (importOriginal) => {
@@ -37,11 +37,11 @@ vi.mock('firebase/firestore', async (importOriginal) => {
     ...actual,
     doc: vi.fn((_db: any, ...segments: string[]) => ({ path: segments.join('/') })),
     collection: vi.fn((_db: any, ...segments: string[]) => ({ path: segments.join('/') })),
-    getDoc: (...args: any[]) => mockGetDoc(...args),
-    onSnapshot: (...args: any[]) => mockOnSnapshot(...args),
-    addDoc: (...args: any[]) => mockAddDoc(...args),
+    getDoc: (ref: any) => mockGetDoc(ref),
+    onSnapshot: (ref: any, successCb: any, errCb: any) => mockOnSnapshot(ref, successCb, errCb),
+    addDoc: (ref: any, data: any) => mockAddDoc(ref, data),
     serverTimestamp: vi.fn(() => new Date()),
-    writeBatch: (...args: any[]) => mockWriteBatch(...args),
+    writeBatch: () => mockWriteBatch(),
     query: vi.fn(),
     where: vi.fn(),
     orderBy: vi.fn(),
