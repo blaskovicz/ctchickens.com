@@ -8,7 +8,8 @@ import {
   doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, getDocs
 } from 'firebase/firestore';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
-import type { Classified, DraftClassified } from '../types';
+import type { Classified, DraftClassified, UserTier } from '../types';
+import { TIER_LIMITS, CATEGORY_LABELS } from '../types';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
 import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 
@@ -22,6 +23,8 @@ const docId = route.params.docId as string;
 const classified = ref<Classified | null>(null);
 const draftClassified = ref<DraftClassified | null>(null);
 const ownerFarms = ref<any[]>([]);
+const ownerTier = ref<UserTier>('freemium');
+const ownerActiveCount = ref(0);
 const isLoading = ref(true);
 const isActing = ref(false);
 const showPublishModal = ref(false);
@@ -36,13 +39,6 @@ const isLoggedIn = computed(() => store.getters.isLoggedIn);
 const isOwner = computed(() => !!user.value && (classified.value?.owner_uid === user.value.uid || draftClassified.value?.owner_uid === user.value.uid));
 const isDraft = computed(() => !!draftClassified.value && !classified.value);
 const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter((b: any) => b.status === 'published'));
-
-const CATEGORY_LABELS: Record<string, string> = {
-  iso: 'In Search Of',
-  for_sale: 'For Sale',
-  rehoming: 'Rehoming',
-  hatching_eggs: 'Hatching Eggs',
-};
 
 const daysUntilExpiry = computed(() => {
   if (!classified.value?.expires_at) return null;
@@ -343,6 +339,30 @@ const activeData = computed(() => classified.value || draftClassified.value);
               <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
                 <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
+
+              <!-- Admin context section -->
+              <div v-if="isAdmin" class="mt-4 pt-4 border-top">
+                <h6 class="text-uppercase small fw-bold text-danger mb-3 letter-spacing-1">
+                  <i class="bi bi-shield-lock me-1"></i> Admin: User Insights
+                </h6>
+                <div class="bg-white border rounded p-3 shadow-sm d-flex flex-column gap-2 small">
+                  <div class="d-flex justify-content-between border-bottom pb-2 mb-1">
+                    <span class="text-muted">Tier</span>
+                    <BBadge :variant="ownerTier === 'premium' ? 'success' : 'secondary'" pill>
+                      {{ ownerTier.toUpperCase() }}
+                    </BBadge>
+                  </div>
+                  <div class="d-flex justify-content-between">
+                    <span class="text-muted">Active Posts</span>
+                    <span :class="ownerActiveCount >= TIER_LIMITS[ownerTier] ? 'text-danger fw-bold' : 'text-dark'">
+                      {{ ownerActiveCount }} / {{ TIER_LIMITS[ownerTier] }}
+                    </span>
+                  </div>
+                  <div v-if="ownerActiveCount >= TIER_LIMITS[ownerTier]" class="text-danger smaller mt-1">
+                    <i class="bi bi-exclamation-circle me-1"></i> User has reached their limit
+                  </div>
+                </div>
+              </div>
 
               <!-- About the Seller section -->
               <div v-if="ownerFarms.length > 0" class="mt-4 pt-4 border-top">

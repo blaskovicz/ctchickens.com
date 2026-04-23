@@ -2,7 +2,8 @@
 import { ref, computed, watch } from 'vue';
 import { useStore } from 'vuex';
 import { BModal, BButton, BFormGroup, BFormInput, BFormSelect, BFormTextarea, BSpinner, useToast, BFormFile } from 'bootstrap-vue-next';
-import type { ClassifiedCategory } from '../types';
+import type { ClassifiedCategory, UserTier } from '../types';
+import { TIER_LIMITS } from '../types';
 import { storage } from '../firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -24,6 +25,9 @@ const imagePreview = ref<string | null>(null);
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
 const user = computed(() => store.getters.currentUser);
+const userTier = computed(() => store.getters.userTier as UserTier);
+const canPost = computed(() => store.getters.canPostClassified);
+const tierLimit = computed(() => TIER_LIMITS[userTier.value]);
 
 const categoryOptions = [
   { value: 'iso', text: 'In Search Of' },
@@ -122,76 +126,89 @@ const handleSubmit = async () => {
     </div>
 
     <form v-else @submit.prevent="handleSubmit" class="d-flex flex-column gap-3">
-      <BFormGroup label="Category" label-for="cat">
-        <BFormSelect id="cat" v-model="category" :options="categoryOptions" required />
-      </BFormGroup>
-
-      <BFormGroup label="Location" label-for="loc" description="Town, state (e.g. Lebanon, CT)">
-        <BFormInput id="loc" v-model="location" placeholder="Lebanon, CT" required />
-      </BFormGroup>
-
-      <BFormGroup label="Title" label-for="title" description="Short headline — 5 to 100 characters (e.g. 3 Buff Orpington Hens)">
-        <BFormInput
-          id="title"
-          v-model="title"
-          placeholder="e.g. 3 Buff Orpington Hens"
-          minlength="5"
-          maxlength="100"
-          required
-        />
-        <div class="text-end small mt-1" :class="title.length > 0 && (title.length < 5 || title.length > 100) ? 'text-danger' : 'text-muted'">
-          {{ title.length }} / 100
+      <div v-if="!canPost" class="alert alert-warning mb-0 border-0 shadow-sm d-flex align-items-center gap-3">
+        <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+        <div>
+          <p class="mb-0 fw-bold">Post Limit Reached</p>
+          <p class="small mb-0">
+            {{ userTier === 'freemium' ? 'Freemium' : 'Premium' }} users are limited to {{ tierLimit }} active posts. 
+            Close an existing listing to post a new one.
+          </p>
         </div>
-      </BFormGroup>
+      </div>
 
-      <BFormGroup label="Price" label-for="price" description="Optional — e.g. $25 each, $10/dozen, Free to good home">
-        <BFormInput
-          id="price"
-          v-model="price"
-          placeholder="e.g. $25 each"
-          maxlength="60"
-        />
-        <div v-if="price.length > 0" class="text-end small mt-1 text-muted">
-          {{ price.length }} / 60
-        </div>
-      </BFormGroup>
+      <fieldset :disabled="!canPost" class="d-flex flex-column gap-3 border-0 p-0 m-0">
+        <BFormGroup label="Category" label-for="cat">
+          <BFormSelect id="cat" v-model="category" :options="categoryOptions" required />
+        </BFormGroup>
 
-      <BFormGroup label="Description" label-for="desc" description="Minimum 20 characters — be specific about breed, quantity, age, etc.">
-        <BFormTextarea
-          id="desc"
-          v-model="description"
-          rows="4"
-          placeholder="Looking for 10 Silkie hens, pullets preferred, within 30 miles of Lebanon CT..."
-          required
-        />
-        <div class="text-end small mt-1" :class="description.length < 20 ? 'text-danger' : 'text-muted'">
-          {{ description.length }} / 20 min
-        </div>
-      </BFormGroup>
+        <BFormGroup label="Location" label-for="loc" description="Town, state (e.g. Lebanon, CT)">
+          <BFormInput id="loc" v-model="location" placeholder="Lebanon, CT" required />
+        </BFormGroup>
 
-      <BFormGroup label="Photo (Optional)" label-for="photo" description="Add 1 photo of your item (max 10MB)">
-        <BFormFile 
-          id="photo" 
-          v-model="imageFile" 
-          accept="image/*" 
-          placeholder="Choose an image..."
-          drop-placeholder="Drop image here..."
-        />
-        <div v-if="imagePreview" class="mt-2 text-center border rounded p-2 bg-light">
-          <img :src="imagePreview" class="img-fluid rounded" style="max-height: 200px;" />
-          <div class="mt-1">
-            <BButton size="sm" variant="outline-danger" @click="imageFile = null;">
-              <i class="bi bi-trash me-1"></i> Remove
-            </BButton>
+        <BFormGroup label="Title" label-for="title" description="Short headline — 5 to 100 characters (e.g. 3 Buff Orpington Hens)">
+          <BFormInput
+            id="title"
+            v-model="title"
+            placeholder="e.g. 3 Buff Orpington Hens"
+            minlength="5"
+            maxlength="100"
+            required
+          />
+          <div class="text-end small mt-1" :class="title.length > 0 && (title.length < 5 || title.length > 100) ? 'text-danger' : 'text-muted'">
+            {{ title.length }} / 100
           </div>
-        </div>
-      </BFormGroup>
+        </BFormGroup>
+
+        <BFormGroup label="Price" label-for="price" description="Optional — e.g. $25 each, $10/dozen, Free to good home">
+          <BFormInput
+            id="price"
+            v-model="price"
+            placeholder="e.g. $25 each"
+            maxlength="60"
+          />
+          <div v-if="price.length > 0" class="text-end small mt-1 text-muted">
+            {{ price.length }} / 60
+          </div>
+        </BFormGroup>
+
+        <BFormGroup label="Description" label-for="desc" description="Minimum 20 characters — be specific about breed, quantity, age, etc.">
+          <BFormTextarea
+            id="desc"
+            v-model="description"
+            rows="4"
+            placeholder="Looking for 10 Silkie hens, pullets preferred, within 30 miles of Lebanon CT..."
+            required
+          />
+          <div class="text-end small mt-1" :class="description.length < 20 ? 'text-danger' : 'text-muted'">
+            {{ description.length }} / 20 min
+          </div>
+        </BFormGroup>
+
+        <BFormGroup label="Photo (Optional)" label-for="photo" description="Add 1 photo of your item (max 10MB)">
+          <BFormFile 
+            id="photo" 
+            v-model="imageFile" 
+            accept="image/*" 
+            placeholder="Choose an image..."
+            drop-placeholder="Drop image here..."
+          />
+          <div v-if="imagePreview" class="mt-2 text-center border rounded p-2 bg-light">
+            <img :src="imagePreview" class="img-fluid rounded" style="max-height: 200px;" />
+            <div class="mt-1">
+              <BButton size="sm" variant="outline-danger" @click="imageFile = null;">
+                <i class="bi bi-trash me-1"></i> Remove
+              </BButton>
+            </div>
+          </div>
+        </BFormGroup>
+      </fieldset>
     </form>
 
     <template #footer>
       <div v-if="isLoggedIn" class="d-flex justify-content-end gap-2 w-100">
         <BButton variant="light" @click="show = false" :disabled="isSubmitting">Cancel</BButton>
-        <BButton variant="primary" :disabled="!isValid || isSubmitting" @click="handleSubmit">
+        <BButton variant="primary" :disabled="!isValid || isSubmitting || !canPost" @click="handleSubmit">
           <BSpinner v-if="isSubmitting" small class="me-1" />
           Submit for Review
         </BButton>

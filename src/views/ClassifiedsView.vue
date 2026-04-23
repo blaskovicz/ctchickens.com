@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
-import { useRouter } from 'vue-router';
 import { BButton, BSpinner, BFormInput, BFormSelect } from 'bootstrap-vue-next';
 import NewClassifiedModal from '../components/NewClassifiedModal.vue';
 import PageHero from '../components/PageHero.vue';
@@ -10,7 +9,6 @@ import type { Classified, DraftClassified, ClassifiedCategory } from '../types';
 import { CATEGORY_LABELS } from '../types';
 
 const store = useStore();
-const router = useRouter();
 
 const isLoading = ref(true);
 const textFilter = ref('');

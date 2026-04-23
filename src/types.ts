@@ -92,6 +92,13 @@ export interface Review {
     hatching_eggs: 'primary',
   } as const;
 
+  export type UserTier = 'freemium' | 'premium';
+
+  export const TIER_LIMITS: Record<UserTier, number> = {
+    freemium: 2,
+    premium: 10,
+  };
+
   export interface Classified {
     id: string;
     owner_uid: string;

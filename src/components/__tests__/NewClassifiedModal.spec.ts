@@ -15,8 +15,10 @@ vi.mock('firebase/storage', () => ({
 // Mock URL.createObjectURL and revokeObjectURL
 const mockCreateObjectURL = vi.fn(() => 'blob:mock-url');
 const mockRevokeObjectURL = vi.fn();
-global.URL.createObjectURL = mockCreateObjectURL as any;
-global.URL.revokeObjectURL = mockRevokeObjectURL as any;
+vi.stubGlobal('URL', {
+  createObjectURL: mockCreateObjectURL,
+  revokeObjectURL: mockRevokeObjectURL,
+});
 
 const createMockStore = (isLoggedIn = true) =>
   createStore({
@@ -141,7 +143,7 @@ describe('NewClassifiedModal', () => {
       const fileList = {
         0: file,
         length: 1,
-        item: (index: number) => file,
+        item: (_index: number) => file,
       };
 
       // Vue Test Utils doesn't handle File input v-model perfectly with BFormFile easily, 

@@ -1,6 +1,6 @@
 import { createStore } from 'vuex';
 import type { ActionContext } from 'vuex';
-import type { Breeder, FirestoreMember, Classified, DraftClassified, ClassifiedCategory } from '../types';
+import type { Breeder, FirestoreMember, Classified, DraftClassified, ClassifiedCategory, UserTier } from '../types';
 import { db, auth, functions, facebookProvider, trackEvent } from '../firebase';
 import router from '../router';
 import {
@@ -15,6 +15,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { generateSlug } from '../composables/useBreederUtils';
+import { TIER_LIMITS } from '../types';
 
 const AUTH_TOAST_SUFFIX = 'Please try again. On Android, try disabling "Open links in Facebook" in Facebook app settings. If it keeps failing, clear your site data in browser settings or contact admin@ctchickens.com';
 
@@ -520,6 +521,24 @@ export default createStore({
     currentUser: (state: State) => state.user,
     authReady: (state: State) => state.authReady,
     
+    userTier: (_state: State, getters: any): UserTier => {
+      if (getters.isAdmin) return 'premium';
+      const hasVerifiedFarm = getters.myBreeders.some((b: Breeder) => b.verified && b.status === 'published');
+      return hasVerifiedFarm ? 'premium' : 'freemium';
+    },
+
+    activeClassifiedCount: (state: State) => {
+      if (!state.user) return 0;
+      return state.myClassifieds.filter(c => c.status === 'active' || c.status === 'pending').length;
+    },
+
+    canPostClassified: (_state: State, getters: any) => {
+      if (getters.isAdmin) return true;
+      const tier = getters.userTier as UserTier;
+      const limit = TIER_LIMITS[tier];
+      return getters.activeClassifiedCount < limit;
+    },
+
     myBreeders: (state: State) => {
       if (!state.user) return [];
       
