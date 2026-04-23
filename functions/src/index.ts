@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { getStorage } from 'firebase-admin/storage';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -38,6 +39,21 @@ const hmacSecret = defineSecret('HMAC_SECRET');
 function resolveEmail(userData: FirebaseFirestore.DocumentData): string | null {
   if (userData.localEmail) return userData.localEmail;
   return userData.email ?? null;
+}
+
+/**
+ * Utility to extract the storage path from a Firebase Download URL.
+ * URL format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{path}?alt=media&token=...
+ */
+function getStoragePathFromUrl(url: string): string | null {
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const parts = decodedUrl.split('/o/');
+    if (parts.length < 2) return null;
+    return parts[1].split('?')[0];
+  } catch (e) {
+    return null;
+  }
 }
 
 
@@ -1035,9 +1051,11 @@ export const sweepExpiredClassifieds = onSchedule(
     const now = new Date();
     const nowTs = Timestamp.fromDate(now);
     const twoDaysTs = Timestamp.fromDate(new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000));
+    const sevenDaysAgoTs = Timestamp.fromDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
     const resend = new Resend(resendApiKey.value());
+    const bucket = getStorage().bucket();
 
-    // Expire overdue active classifieds
+    // 1. Expire overdue active classifieds
     try {
       const expiredSnap = await db.collection('classifieds')
         .where('status', '==', 'active')
@@ -1075,7 +1093,7 @@ export const sweepExpiredClassifieds = onSchedule(
       console.error('[sweepExpiredClassifieds] Failed to expire classifieds', err);
     }
 
-    // Send 2-day expiry warnings
+    // 2. Send 2-day expiry warnings
     try {
       const warningSnap = await db.collection('classifieds')
         .where('status', '==', 'active')
@@ -1110,6 +1128,51 @@ export const sweepExpiredClassifieds = onSchedule(
       }
     } catch (err) {
       console.error('[sweepExpiredClassifieds] Failed to query classifieds for warnings', err);
+    }
+
+    // 3. Cleanup dead listings (expired/discarded) older than 7 days
+    try {
+      const deadSnap = await db.collection('classifieds')
+        .where('status', 'in', ['expired', 'discarded'])
+        .where('expires_at', '<', sevenDaysAgoTs)
+        .get();
+
+      for (const deadDoc of deadSnap.docs) {
+        const data = deadDoc.data();
+        if (data.image_url) {
+          const path = getStoragePathFromUrl(data.image_url);
+          if (path) {
+            await bucket.file(path).delete().catch(() => {/* ignore */});
+          }
+        }
+        await deadDoc.ref.delete();
+      }
+      if (!deadSnap.empty) console.log(`[sweepExpiredClassifieds] Cleaned up ${deadSnap.size} dead listings and their images`);
+    } catch (err) {
+      console.error('[sweepExpiredClassifieds] Dead listing cleanup failed', err);
+    }
+
+    // 4. Cleanup rejected drafts older than 7 days
+    try {
+      const rejectedSnap = await db.collection('draft_classified_history')
+        .where('draft_meta.status', '==', 'rejected')
+        .where('draft_meta.archivedAt', '<', sevenDaysAgoTs)
+        .get();
+
+      for (const rejDoc of rejectedSnap.docs) {
+        const data = rejDoc.data();
+        const imageUrl = data.snapshot?.image_url;
+        if (imageUrl) {
+          const path = getStoragePathFromUrl(imageUrl);
+          if (path) {
+            await bucket.file(path).delete().catch(() => {/* ignore */});
+          }
+        }
+        await rejDoc.ref.delete();
+      }
+      if (!rejectedSnap.empty) console.log(`[sweepExpiredClassifieds] Cleaned up ${rejectedSnap.size} rejected drafts and their images`);
+    } catch (err) {
+      console.error('[sweepExpiredClassifieds] Rejected draft cleanup failed', err);
     }
   }
 );

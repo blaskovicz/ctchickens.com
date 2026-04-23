@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useStore } from 'vuex';
-import { BModal, BButton, BFormGroup, BFormInput, BFormSelect, BFormTextarea, BSpinner, useToast } from 'bootstrap-vue-next';
+import { BModal, BButton, BFormGroup, BFormInput, BFormSelect, BFormTextarea, BSpinner, useToast, BFormFile } from 'bootstrap-vue-next';
 import type { ClassifiedCategory } from '../types';
+import { storage } from '../firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const emit = defineEmits<{ submitted: [id: string] }>();
 
@@ -17,8 +19,11 @@ const location = ref('');
 const title = ref('');
 const description = ref('');
 const price = ref('');
+const imageFile = ref<File | null>(null);
+const imagePreview = ref<string | null>(null);
 
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
+const user = computed(() => store.getters.currentUser);
 
 const categoryOptions = [
   { value: 'iso', text: 'In Search Of' },
@@ -44,18 +49,54 @@ const reset = () => {
   title.value = '';
   description.value = '';
   price.value = '';
+  imageFile.value = null;
+  imagePreview.value = null;
 };
+
+watch(imageFile, (newFile) => {
+  if (imagePreview.value) {
+    URL.revokeObjectURL(imagePreview.value);
+    imagePreview.value = null;
+  }
+
+  if (newFile) {
+    if (newFile.size > 10 * 1024 * 1024) {
+      create?.({ body: 'Image must be smaller than 10MB.', variant: 'danger' });
+      imageFile.value = null;
+      return;
+    }
+    if (!newFile.type.startsWith('image/')) {
+      create?.({ body: 'File must be an image.', variant: 'danger' });
+      imageFile.value = null;
+      return;
+    }
+    imagePreview.value = URL.createObjectURL(newFile);
+  }
+});
 
 const handleSubmit = async () => {
   if (!isValid.value || isSubmitting.value) return;
   isSubmitting.value = true;
   try {
+    let imageUrl = undefined;
+    if (imageFile.value && user.value) {
+      const fileExt = imageFile.value.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const path = `classifieds/${user.value.uid}/${fileName}`;
+      const fileRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(fileRef, imageFile.value, {
+        contentType: imageFile.value.type
+      });
+      imageUrl = await getDownloadURL(snapshot.ref);
+    }
+
     const id = await store.dispatch('createDraftClassified', {
       category: category.value,
       location: location.value.trim(),
       title: title.value.trim(),
       description: description.value.trim(),
       price: price.value.trim() || undefined,
+      image_url: imageUrl,
     });
     create?.({ body: 'Your listing has been submitted for review. We\'ll email you when it\'s approved.', variant: 'success' });
     show.value = false;
@@ -63,6 +104,7 @@ const handleSubmit = async () => {
     emit('submitted', id);
   } catch (e: any) {
     create?.({ body: e.message || 'Failed to submit listing.', variant: 'danger' });
+    console.warn(e);
   } finally {
     isSubmitting.value = false;
   }
@@ -124,6 +166,24 @@ const handleSubmit = async () => {
         />
         <div class="text-end small mt-1" :class="description.length < 20 ? 'text-danger' : 'text-muted'">
           {{ description.length }} / 20 min
+        </div>
+      </BFormGroup>
+
+      <BFormGroup label="Photo (Optional)" label-for="photo" description="Add 1 photo of your item (max 10MB)">
+        <BFormFile 
+          id="photo" 
+          v-model="imageFile" 
+          accept="image/*" 
+          placeholder="Choose an image..."
+          drop-placeholder="Drop image here..."
+        />
+        <div v-if="imagePreview" class="mt-2 text-center border rounded p-2 bg-light">
+          <img :src="imagePreview" class="img-fluid rounded" style="max-height: 200px;" />
+          <div class="mt-1">
+            <BButton size="sm" variant="outline-danger" @click="imageFile = null;">
+              <i class="bi bi-trash me-1"></i> Remove
+            </BButton>
+          </div>
         </div>
       </BFormGroup>
     </form>

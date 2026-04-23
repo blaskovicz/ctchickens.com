@@ -217,7 +217,7 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
       request.resource.data.owner_uid == request.auth.uid &&
       request.resource.data.status == 'pending' &&
-      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status']);
+      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status', 'image_url']);
       allow delete: if isSignedIn() && (
       resource == null ||
       isUserAdmin(request.auth.uid) ||

@@ -107,6 +107,7 @@ export interface Review {
     max_renewals: number;
     created_at: any;
     expiry_warning_sent?: boolean;
+    image_url?: string;
   }
 
   export interface DraftClassified {
@@ -120,6 +121,7 @@ export interface Review {
     category: ClassifiedCategory;
     status: 'pending';
     created_at: any;
+    image_url?: string;
   }
 
   export interface InquiryMessage {
