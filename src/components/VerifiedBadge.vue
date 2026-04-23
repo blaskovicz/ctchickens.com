@@ -3,8 +3,11 @@ import { computed } from 'vue';
 import { vBTooltip } from 'bootstrap-vue-next';
 
 const props = defineProps<{
-  verified?: string | number | boolean | null
+  verified?: string | number | boolean | null;
+  variant?: string;
 }>();
+
+const variantClass = computed(() => `bg-${props.variant || 'success'}`);
 
 const show = computed(() => {
   const val = props.verified;
@@ -20,10 +23,12 @@ const show = computed(() => {
 <template>
   <span 
     v-if="show" 
-    v-b-tooltip.hover="'Verified listings confirm the breeder is a known member of our community in good standing.'"
-    class="badge bg-success d-inline-flex align-items-center me-1"
+    class="badge d-inline-flex align-items-center"
+    :class="variantClass"
     style="cursor: help;"
   >
-    <i class="bi bi-check-circle-fill me-1"></i>Verified
+    <span v-b-tooltip.hover="'Verified listings confirm the breeder is a known member of our community in good standing.'" class="d-inline-flex align-items-center">
+      <i class="bi bi-check-circle-fill me-1"></i>Verified
+    </span>
   </span>
 </template>

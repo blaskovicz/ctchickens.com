@@ -102,8 +102,8 @@ const closeModal = () => {
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 
 .gallery-thumbnail {
-  height: 100px;
-  min-width: 100px;
+  height: 120px;
+  min-width: 120px;
   object-fit: cover;
   cursor: pointer;
 }

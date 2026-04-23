@@ -106,19 +106,13 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav ms-auto align-items-center">
             <li class="nav-item">
-              <router-link class="nav-link" to="/about">About</router-link>
-            </li>
-            <li class="nav-item">
               <router-link class="nav-link" to="/directory">Directory</router-link>
             </li>
             <li class="nav-item">
-              <router-link class="nav-link" to="/products">Products</router-link>
+              <router-link class="nav-link" to="/classified">Classifieds</router-link>
             </li>
             <li class="nav-item">
               <router-link class="nav-link" to="/resources">Resources</router-link>
-            </li>
-            <li class="nav-item">
-              <router-link class="nav-link" to="/classified">Classifieds</router-link>
             </li>
             <li v-if="user" class="nav-item">
               <router-link class="nav-link position-relative px-3" to="/inbox">

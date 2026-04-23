@@ -11,7 +11,7 @@ const login = () => store.dispatch('loginWithFacebook');
 </script>
 
 <template>
-  <section id="how-it-works" class="py-5 bg-light">
+  <section id="how-it-works" class="py-5">
     <div class="container">
       <div class="row mb-5">
         <div class="col-lg-8 mx-auto text-center">
@@ -42,13 +42,13 @@ const login = () => store.dispatch('loginWithFacebook');
             <div class="feature-icon mb-3">
               <i class="bi bi-pencil-square text-warning"></i>
             </div>
-            <h3 class="h5 fw-bold mb-2">2. Apply to Get Listed</h3>
+            <h3 class="h5 fw-bold mb-2">2. Start Your Listing</h3>
             <p v-if="!hasApplied" class="flex-grow-1">Fill out a short application with your products, location, and contact info. Listings are reviewed and approved by our admins.</p>
             <div v-if="hasApplied" class="mt-auto text-success fw-semibold">
               <i class="bi bi-check-circle-fill"></i> Applied
             </div>
             <router-link v-else to="/get-listed" class="btn btn-sm btn-outline-primary mt-auto">
-              <i class="bi bi-plus-circle"></i> Start Your Listing
+              <i class="bi bi-plus-lg"></i> Start Your Listing
             </router-link>
           </div>
         </div>
