@@ -99,9 +99,10 @@ describe('Chat System Integration', () => {
   }, 40000);
 
   it('Support Chat: User can contact support and Admin can see/reply', async () => {
-    const userEmail = 'user@example.com';
-    const adminEmail = 'admin@ctchickens.com';
-    await createTestUser(userEmail, 'Normal User');
+    const userEmail = `support-user-${Date.now()}@example.com`;
+    const adminEmail = `admin-${Date.now()}@ctchickens.com`;
+    const displayName = 'Support User';
+    await createTestUser(userEmail, displayName);
     await createTestUser(adminEmail, 'Admin Zach', true);
 
     // 1. User opens inbox and clicks Support — routes to support_new (no thread created yet)
@@ -149,7 +150,7 @@ describe('Chat System Integration', () => {
     await new Promise(r => setTimeout(r, 2000));
     await flushPromises();
 
-    expect(adminInbox.text()).toContain('Normal U.');
+    expect(adminInbox.text()).toContain('Support U.');
     expect(adminInbox.text()).toContain('Hello, I need help with my listing.');
 
     userInbox.unmount();

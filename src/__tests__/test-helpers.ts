@@ -115,21 +115,22 @@ export async function createTestUser(email: string, displayName: string, isAdmin
   const projectId = PROJECT_ID();
   const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 
-  // 1. Verify email via OOB flow (required for claims)
+  // 1. Verify email directly via emulator REST API
   try {
-    await sendEmailVerification(user);
-    const { oobCodes } = await getOobCodes(projectId);
-    const oobCode = oobCodes.find((c: any) => c.email === email && c.requestType === 'VERIFY_EMAIL')?.oobCode;
-    
-    if (oobCode) {
-      const updateUrl = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`;
-      await fetch(updateUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oobCode })
-      });
-      await user.reload();
+    const idToken = await user.getIdToken();
+    const updateUrl = `http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`;
+    const verifRes = await fetch(updateUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        idToken: idToken,
+        emailVerified: true 
+      })
+    });
+    if (!verifRes.ok) {
+      console.warn(`Failed to verify email for ${email} directly:`, await verifRes.text());
     }
+    await user.reload();
   } catch (e) {
     console.warn(`Failed to verify email for ${email}:`, e);
   }
@@ -140,6 +141,7 @@ export async function createTestUser(email: string, displayName: string, isAdmin
     fields: {
       displayName: { stringValue: displayName },
       email: { stringValue: email },
+      localEmail: { stringValue: email },
       isAdmin: { booleanValue: isAdmin },
       lastLogin: { timestampValue: new Date().toISOString() }
     }

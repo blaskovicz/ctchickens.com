@@ -154,9 +154,9 @@ describe('Security Rules: Claim Requests', () => {
   });
 
   it('prevents unauthorized claim requests (email mismatch)', async () => {
-    const ownerEmail = 'owner@example.com';
-    const otherEmail = 'other@example.com';
-    const slug = 'test-farm';
+    const ownerEmail = `owner-${Date.now()}@example.com`;
+    const otherEmail = `other-${Date.now()}@example.com`;
+    const slug = `test-farm-unauth-${Date.now()}`;
 
     await seedTestBreeder(slug, {
       profile: { businessName: 'Test Farm', contactEmail: ownerEmail },
@@ -165,7 +165,6 @@ describe('Security Rules: Claim Requests', () => {
 
     // DEBUG: Verify breeder exists
     const breederSnap = await getDoc(doc(db, 'directory_members', slug));
-    console.log('DEBUG Breeder Data:', JSON.stringify(breederSnap.data(), null, 2));
     expect(breederSnap.exists()).toBe(true);
     expect(breederSnap.data()?.profile?.contactEmail).toBe(ownerEmail);
 
@@ -189,8 +188,8 @@ describe('Security Rules: Claim Requests', () => {
   });
 
   it('allows authorized claim requests', async () => {
-    const ownerEmail = 'owner@example.com';
-    const slug = 'test-farm';
+    const ownerEmail = `owner-auth-${Date.now()}@example.com`;
+    const slug = `test-farm-auth-${Date.now()}`;
 
     await seedTestBreeder(slug, {
       profile: { businessName: 'Test Farm', contactEmail: ownerEmail },
@@ -233,9 +232,9 @@ describe('Security Rules: Claim Requests', () => {
   });
 
   it('prevents strangers from reading someone else\'s claim request', async () => {
-    const ownerEmail = 'owner@example.com';
-    const strangerEmail = 'stranger@example.com';
-    const slug = 'test-farm';
+    const ownerEmail = `owner-read-${Date.now()}@example.com`;
+    const strangerEmail = `stranger-read-${Date.now()}@example.com`;
+    const slug = `test-farm-read-${Date.now()}`;
 
     await seedTestBreeder(slug, {
       profile: { businessName: 'Test Farm', contactEmail: ownerEmail },
