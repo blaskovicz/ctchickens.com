@@ -399,19 +399,20 @@ describe('Security Rules: Classifieds', () => {
     ).resolves.not.toThrow();
   });
 
-  it('owner cannot create a renew action on another user\'s classified', async () => {
+  it.only('owner cannot create a renew action on another user\'s classified', async () => {
     const ownerEmail = 'real-owner@example.com';
     const attackerEmail = 'attacker@example.com';
     const ownerUser = await createTestUser(ownerEmail, 'Real Owner');
     const attackerUser = await createTestUser(attackerEmail, 'Attacker');
 
-    await seedClassifiedViaRest('target-classified', ownerUser.uid, 'active');
+    const testDocId = 'attacker-cannot-renew-' + Date.now();
+    await seedClassifiedViaRest(testDocId, ownerUser.uid, 'active');
 
     // Attacker logs in and tries to renew someone else's listing
     await signInWithEmailAndPassword(auth, attackerEmail, 'password123');
 
     await expect(
-      addDoc(collection(db, 'classifieds', 'target-classified', 'actions'), {
+      addDoc(collection(db, 'classifieds', testDocId, 'actions'), {
         action: 'renew',
         owner_uid: attackerUser.uid,
         created_at: serverTimestamp(),

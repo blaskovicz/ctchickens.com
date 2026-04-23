@@ -26,6 +26,8 @@ const createMockStore = (isLoggedIn = true) =>
     getters: {
       isLoggedIn: (state: any) => !!state.user,
       currentUser: (state: any) => state.user,
+      userTier: () => 'freemium',
+      canPostClassified: () => true,
     },
     actions: {
       createDraftClassified: vi.fn(() => Promise.resolve('new-doc-id')),
@@ -136,18 +138,12 @@ describe('NewClassifiedModal', () => {
       const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['mock content'], 'test.jpg', { type: 'image/jpeg' });
       
-      // Manually trigger the change on imageFile ref via wrapper.vm or simualted input
-      // Since we use v-model on BFormFile, it might be tricky to trigger via DOM in test
-      // Let's try setting the ref directly if possible or using setDocValue equivalent
-      
       const fileList = {
         0: file,
         length: 1,
         item: (_index: number) => file,
       };
 
-      // Vue Test Utils doesn't handle File input v-model perfectly with BFormFile easily, 
-      // but we can trigger the change event
       Object.defineProperty(fileInput, 'files', { value: fileList });
       fileInput.dispatchEvent(new Event('change', { bubbles: true }));
       await flushPromises();
@@ -163,7 +159,6 @@ describe('NewClassifiedModal', () => {
       (wrapper.vm as any).open();
       await flushPromises();
 
-      // Set internal state directly to bypass BFormFile event complexity for this test
       (wrapper.vm as any).imageFile = new File([''], 'test.jpg', { type: 'image/jpeg' });
       await flushPromises();
 
@@ -214,7 +209,6 @@ describe('NewClassifiedModal', () => {
       await flushPromises();
 
       expect((wrapper.vm as any).imageFile).toBeNull();
-      // Should also see a toast, but toast is harder to query in this setup
     });
 
     it('rejects non-image files', async () => {
