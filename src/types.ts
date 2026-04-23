@@ -78,6 +78,20 @@ export interface Review {
   export type ClassifiedCategory = 'iso' | 'for_sale' | 'rehoming' | 'hatching_eggs';
   export type ClassifiedStatus = 'active' | 'expired' | 'discarded';
 
+  export const CATEGORY_LABELS: Record<ClassifiedCategory, string> = {
+    iso: 'In Search Of',
+    for_sale: 'For Sale',
+    rehoming: 'Rehoming',
+    hatching_eggs: 'Hatching Eggs',
+  };
+
+  export const CATEGORY_VARIANTS: Record<ClassifiedCategory, string> = {
+    iso: 'info',
+    for_sale: 'success',
+    rehoming: 'warning',
+    hatching_eggs: 'primary',
+  };
+
   export interface Classified {
     id: string;
     owner_uid: string;

@@ -3,8 +3,11 @@ import { computed } from 'vue';
 import { vBTooltip } from 'bootstrap-vue-next';
 
 const props = defineProps<{
-  count?: number | string | null
+  count?: number | string | null;
+  variant?: string;
 }>();
+
+const variantClass = computed(() => `bg-${props.variant || 'primary'}`);
 
 const show = computed(() => {
   const val = props.count;
@@ -20,10 +23,12 @@ const show = computed(() => {
 <template>
   <span 
     v-if="show" 
-    v-b-tooltip.hover="'Reserved for verified members that joined the directory during the first launch year.'"
-    class="badge bg-primary d-inline-flex align-items-center me-1"
+    class="badge d-inline-flex align-items-center"
+    :class="variantClass"
     style="cursor: help;"
   >
-    <i class="bi bi-award-fill me-1"></i>Founding Member #{{ count }}
+    <span v-b-tooltip.hover="'Reserved for verified members that joined the directory during the first launch year.'" class="d-inline-flex align-items-center">
+      <i class="bi bi-award-fill me-1"></i>Founding Member #{{ count }}
+    </span>
   </span>
 </template>

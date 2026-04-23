@@ -1,5 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
+import DirectoryView from '../views/DirectoryView.vue';
+import ResourcesView from '../views/ResourcesView.vue';
 import { trackEvent } from '../firebase';
 
 const router = createRouter({
@@ -12,23 +14,21 @@ const router = createRouter({
     },
     {
       path: '/about',
-      name: 'about',
-      component: HomeView
+      redirect: '/resources'
     },
     {
       path: '/directory',
       name: 'directory',
-      component: HomeView
+      component: DirectoryView
     },
     {
       path: '/products',
-      name: 'products',
-      component: HomeView
+      redirect: '/resources'
     },
     {
       path: '/resources',
       name: 'resources',
-      component: HomeView
+      component: ResourcesView
     },
     {
       path: '/get-listed/:slug?',
@@ -90,10 +90,10 @@ const router = createRouter({
     if (savedPosition) {
       return savedPosition;
     }
-    if (to.hash) {
+        if (to.hash) {
       return { el: to.hash, behavior: 'smooth' };
     }
-    const sections = ['/about', '/directory', '/products', '/resources'];
+    const sections = ['/resources'];
     if (sections.includes(to.path)) {
       return new Promise((resolve) => {
         setTimeout(() => {

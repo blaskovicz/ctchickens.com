@@ -118,7 +118,7 @@ const handleSend = async () => {
     </div>
     
     <div v-else-if="!user" class="text-center py-3">
-      <p>You must be logged in to send a secure message.</p>
+      <p>You must be logged in to send a message.</p>
       <BButton @click="store.dispatch('loginWithFacebook')" variant="primary">
         <i class="bi bi-facebook me-2"></i> Log in with Facebook
       </BButton>
