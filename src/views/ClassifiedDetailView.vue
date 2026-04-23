@@ -5,10 +5,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot
+  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, getDocs
 } from 'firebase/firestore';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified } from '../types';
+import VerifiedBadge from '../components/VerifiedBadge.vue';
+import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,6 +21,7 @@ const docId = route.params.docId as string;
 
 const classified = ref<Classified | null>(null);
 const draftClassified = ref<DraftClassified | null>(null);
+const ownerFarms = ref<any[]>([]);
 const isLoading = ref(true);
 const isActing = ref(false);
 const showPublishModal = ref(false);
@@ -61,6 +64,20 @@ const formatDate = (ts: any) => {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+const fetchOwnerFarms = async (ownerUid: string) => {
+  try {
+    const q = query(
+      collection(db, 'directory_members'),
+      where('account.ownerUid', '==', ownerUid),
+      where('account.status', '==', 'published')
+    );
+    const snap = await getDocs(q);
+    ownerFarms.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (e) {
+    console.warn('Failed to fetch owner farms:', e);
+  }
+};
+
 onMounted(async () => {
   try {
     // Attach a real-time listener on the classifieds doc so CF-driven updates
@@ -72,6 +89,7 @@ onMounted(async () => {
           const data = snap.data();
           if (data.status === 'active' || store.getters.isAdmin || data.owner_uid === user.value?.uid) {
             classified.value = { id: snap.id, ...data } as Classified;
+            fetchOwnerFarms(data.owner_uid);
           }
         }
         isLoading.value = false;
@@ -90,6 +108,7 @@ onMounted(async () => {
         const data = draftSnap.data();
         if (isAdmin.value || data.owner_uid === user.value.uid) {
           draftClassified.value = { id: draftSnap.id, ...data } as DraftClassified;
+          fetchOwnerFarms(data.owner_uid);
         }
       }
       // The snapshot listener will not fire for a doc that doesn't exist,
@@ -281,41 +300,64 @@ const activeData = computed(() => classified.value || draftClassified.value);
           <div class="row g-0">
             <!-- Description (60%) -->
             <div class="col-12 col-md-7 p-4 border-end description-col">
+              <div v-if="activeData.image_url" class="mb-4 text-center bg-light rounded p-2 border">
+                <img :src="activeData.image_url" class="img-fluid rounded shadow-sm" style="max-height: 500px;" alt="Classified photo" />
+              </div>
               <p v-if="activeData.description" class="mb-0" style="line-height:1.8; white-space: pre-wrap;">{{ activeData.description }}</p>
               <p v-else class="mb-0 text-muted fst-italic" style="line-height:1.8;">Inquire for more info</p>
             </div>
 
             <!-- Meta + actions (40%) -->
-            <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3">
-              <div class="d-flex flex-column gap-2 small">
-                <div class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Location</span>
-                  <span>{{ activeData.location }}</span>
+            <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3 justify-content-center">
+              <div class="d-flex flex-column gap-3 small">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-geo-alt text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Location</span>
+                  <span class="text-dark">{{ activeData.location }}</span>
                 </div>
-                <div class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Posted by</span>
-                  <span>{{ activeData.display_name }}<span v-if="user?.uid === activeData.owner_uid" class="text-muted"> (you)</span></span>
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-person text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Posted by</span>
+                  <span class="text-dark">{{ activeData.display_name }}<span v-if="user?.uid === activeData.owner_uid" class="text-muted"> (you)</span></span>
                 </div>
-                <div class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Posted</span>
-                  <span>{{ formatRelativeTime(activeData.created_at) }}</span>
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-clock text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Posted</span>
+                  <span class="text-dark">{{ formatRelativeTime(activeData.created_at) }}</span>
                 </div>
-                <div v-if="classified?.expires_at" class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Expires</span>
-                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }">
+                <div v-if="classified?.expires_at" class="d-flex align-items-center gap-2">
+                  <i class="bi bi-calendar-event text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Expires</span>
+                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }" class="text-dark">
                     {{ formatDate(classified.expires_at) }}
-                    <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0">({{ daysUntilExpiry }}d)</span>
-                    <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0">(today)</span>
+                    <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0" class="small opacity-75">({{ daysUntilExpiry }}d)</span>
+                    <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0" class="small opacity-75">(today)</span>
                   </span>
                 </div>
-                <div v-if="classified && (isOwner || isAdmin)" class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Renewals</span>
-                  <span>{{ classified.renewal_count }} / {{ classified.max_renewals }} used</span>
+                <div v-if="classified && (isOwner || isAdmin)" class="d-flex align-items-center gap-2">
+                  <i class="bi bi-arrow-repeat text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Renewals</span>
+                  <span class="text-dark">{{ classified.renewal_count }} / {{ classified.max_renewals }} used</span>
                 </div>
               </div>
-              <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted small">
-                Renewal available within 2 days of expiration
+              <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
+                <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
+
+              <!-- About the Seller section -->
+              <div v-if="ownerFarms.length > 0" class="mt-4 pt-4 border-top">
+                <h6 class="text-uppercase small fw-bold text-muted mb-3 letter-spacing-1">About the Seller</h6>
+                <div v-for="farm in ownerFarms" :key="farm.id" class="d-flex flex-column gap-2 mb-3">
+                  <router-link :to="`/directory/${farm.id}`" class="text-decoration-none fw-bold text-primary d-flex align-items-center gap-2">
+                    <i class="bi bi-house-door"></i>
+                    {{ farm.profile.businessName }}
+                  </router-link>
+                  <div class="d-flex flex-wrap gap-2">
+                    <VerifiedBadge :verified="farm.account?.isVerified" />
+                    <FoundingBreederBadge :count="farm.account?.foundingMember" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

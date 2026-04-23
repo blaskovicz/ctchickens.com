@@ -317,7 +317,7 @@ export default createStore({
       }
     },
 
-    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; title: string; description: string; price?: string }) {
+    async createDraftClassified({ state, dispatch }: ActionContext<State, State>, payload: { category: ClassifiedCategory; location: string; title: string; description: string; price?: string; image_url?: string }) {
       if (!state.user) throw new Error('Must be logged in to post a classified.');
       const fullName = state.user.displayName || '';
       const parts = fullName.trim().split(' ');
@@ -336,6 +336,9 @@ export default createStore({
       };
       if (payload.price) {
         docData.price = payload.price;
+      }
+      if (payload.image_url) {
+        docData.image_url = payload.image_url;
       }
       const ref = await addDoc(collection(db, 'draft_classifieds'), docData);
       await dispatch('fetchMyClassifieds', state.user.uid);

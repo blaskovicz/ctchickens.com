@@ -2,12 +2,12 @@
 import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
-import { BButton, BSpinner, BFormInput, BFormSelect, BBadge } from 'bootstrap-vue-next';
+import { BButton, BSpinner, BFormInput, BFormSelect } from 'bootstrap-vue-next';
 import NewClassifiedModal from '../components/NewClassifiedModal.vue';
 import PageHero from '../components/PageHero.vue';
+import ClassifiedCard from '../components/ClassifiedCard.vue';
 import type { Classified, DraftClassified, ClassifiedCategory } from '../types';
-import { CATEGORY_LABELS, CATEGORY_VARIANTS } from '../types';
-import { formatRelativeTime } from '../composables/useBreederUtils';
+import { CATEGORY_LABELS } from '../types';
 
 const store = useStore();
 const router = useRouter();
@@ -98,23 +98,14 @@ onMounted(async () => {
       </div>
 
       <!-- My pending listings -->
-      <div v-if="isLoggedIn && myPendingClassifieds.length > 0" class="mb-4">
-        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Your Pending Listings</h6>
-        <div class="d-flex flex-column gap-2">
-          <div
-            v-for="item in myPendingClassifieds"
-            :key="item.id"
-            class="card border-0 shadow-sm"
-            style="cursor:pointer;"
-            @click="router.push(`/classified/${item.id}`)"
-          >
-            <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
-              <BBadge variant="secondary" pill>{{ CATEGORY_LABELS[item.category] }}</BBadge>
-              <span class="text-dark flex-grow-1 text-truncate small">{{ item.title }}</span>
-              <div class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
-                <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
-              </div>
-            </div>
+      <div v-if="isLoggedIn && myPendingClassifieds.length > 0" class="mb-5">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <h6 class="text-muted text-uppercase small fw-bold mb-0 letter-spacing-1">Your Pending Listings</h6>
+          <hr class="flex-grow-1 my-0 opacity-10">
+        </div>
+        <div class="row g-3">
+          <div v-for="item in myPendingClassifieds" :key="item.id" class="col-md-6 col-lg-4">
+            <ClassifiedCard :item="item" show-owner-label />
           </div>
         </div>
       </div>
@@ -134,33 +125,7 @@ onMounted(async () => {
       <!-- Listings grid -->
       <div v-else class="row g-3">
         <div v-for="item in filteredClassifieds" :key="item.id" class="col-md-6 col-lg-4">
-          <div class="card h-100 border-0 shadow-sm" style="cursor:pointer;" @click="router.push(`/classified/${item.id}`)">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <BBadge :variant="CATEGORY_VARIANTS[item.category]" pill>
-                  {{ CATEGORY_LABELS[item.category] }}
-                </BBadge>
-                <span v-if="item.price" class="text-success fw-semibold small ms-auto">{{ item.price }}</span>
-              </div>
-              <p class="card-title fw-semibold text-dark mb-1" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
-                {{ item.title }}
-              </p>
-              <p class="card-text text-muted small mb-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
-                <span v-if="item.description">{{ item.description }}</span>
-                <span v-else class="fst-italic opacity-50">Inquire for more info</span>
-              </p>
-              <div class="d-flex align-items-center gap-1 text-muted small">
-                <i class="bi bi-geo-alt"></i>
-                <span>{{ item.location }}</span>
-                <span class="mx-1">·</span>
-                <i class="bi bi-person"></i>
-                <span>{{ item.display_name }}<span v-if="store.state.user?.uid === item.owner_uid" class="text-muted"> (you)</span></span>
-              </div>
-              <div class="text-muted small mt-1">
-                <i class="bi bi-clock me-1"></i>Created {{ formatRelativeTime(item.created_at) }}
-              </div>
-            </div>
-          </div>
+          <ClassifiedCard :item="item" show-owner-label />
         </div>
       </div>
 
@@ -168,3 +133,9 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.letter-spacing-1 {
+  letter-spacing: 0.05rem;
+}
+</style>

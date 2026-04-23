@@ -2,10 +2,8 @@
 import { ref, onMounted } from 'vue';
 import { db } from '../firebase';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import ClassifiedCard from './ClassifiedCard.vue';
 import type { Classified } from '../types';
-import { CATEGORY_LABELS, CATEGORY_VARIANTS } from '../types';
-import { formatRelativeTime } from '../composables/useBreederUtils';
-import { BBadge } from 'bootstrap-vue-next';
 
 const classifieds = ref<Classified[]>([]);
 const isLoading = ref(true);
@@ -47,38 +45,7 @@ onMounted(async () => {
 
       <div class="row g-4">
         <div v-for="item in classifieds" :key="item.id" class="col-md-4">
-          <router-link :to="`/classified/${item.id}`" class="text-decoration-none h-100 d-block">
-            <div class="card h-100 border-0 shadow-sm classified-card">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                  <BBadge :variant="CATEGORY_VARIANTS[item.category]" pill>
-                    {{ CATEGORY_LABELS[item.category] }}
-                  </BBadge>
-                  <span v-if="item.price" class="text-success fw-semibold small ms-auto">{{ item.price }}</span>
-                </div>
-                
-                <h5 class="card-title fw-semibold text-dark mb-1 line-clamp-2">
-                  {{ item.title }}
-                </h5>
-                
-                <p class="card-text text-muted small mb-3 line-clamp-2">
-                  <span v-if="item.description">{{ item.description }}</span>
-                  <span v-else class="fst-italic opacity-50">Inquire for more info</span>
-                </p>
-                
-                <div class="mt-auto pt-3 border-top">
-                  <div class="d-flex align-items-center gap-1 text-muted small mb-1">
-                    <i class="bi bi-geo-alt"></i>
-                    <span class="text-truncate">{{ item.location }}</span>
-                  </div>
-                  <div class="d-flex justify-content-between align-items-center text-muted smaller">
-                    <span class="text-truncate"><i class="bi bi-person me-1"></i>{{ item.display_name }}</span>
-                    <span class="text-nowrap ms-2"><i class="bi bi-clock me-1"></i>{{ formatRelativeTime(item.created_at) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </router-link>
+          <ClassifiedCard :item="item" />
         </div>
       </div>
     </div>
@@ -92,6 +59,23 @@ onMounted(async () => {
 .classified-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1) !important;
+}
+
+.classified-thumbnail-wrapper {
+  height: 160px;
+  overflow: hidden;
+  background-color: #f8f9fa;
+}
+
+.classified-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.classified-card:hover .classified-thumbnail {
+  transform: scale(1.05);
 }
 
 .line-clamp-2 {
