@@ -257,12 +257,15 @@ service cloud.firestore {
 
       match /actions/{actionId} {
         allow create: if isSignedIn() &&
-        request.resource.data.owner_uid == request.auth.uid &&
         request.resource.data.action in ['renew', 'discard'] &&
         request.resource.data.keys().hasOnly(['action', 'created_at', 'owner_uid']) &&
-        // Caller must own the parent classified — or be an admin.
-        // Evaluating isUserAdmin last avoids a get() call for the common non-admin path.
-        get(/databases/$(database)/documents/classifieds/$(docId)).data.get('owner_uid', '') == request.auth.uid;
+        // No Spoofing: The actor must sign with their own UID
+        request.resource.data.owner_uid == request.auth.uid &&
+        // Authorization: Caller must own the listing OR be an admin
+        (
+          get(/databases/$(database)/documents/classifieds/$(docId)).data.get('owner_uid', '') == request.auth.uid ||
+          isUserAdmin(request.auth.uid)
+        );
         allow read: if false;
       }
     }

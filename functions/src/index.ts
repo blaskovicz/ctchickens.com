@@ -23,6 +23,7 @@ import {
   sendClassifiedExpiryWarningEmail,
   sendClassifiedExpiredEmail,
   sendClassifiedRenewedEmail,
+  sendClassifiedClosedEmail,
   sendInquiryBuyerEmail,
   sendInquirySellerEmail,
   sendInquiryAdminUnclaimedEmail,
@@ -845,14 +846,44 @@ export const onClassifiedAction = onDocumentCreated(
     }
 
     const classified = classifiedSnap.data()!;
-    if (classified.owner_uid !== actionOwnerUid) {
-      console.error('[onClassifiedAction] Action owner mismatch', { classifiedId, actionOwnerUid });
+    let isAllowed = classified.owner_uid === actionOwnerUid;
+
+    // Allow admins to perform actions on any classified
+    if (!isAllowed) {
+      const actorDoc = await db.collection('users').doc(actionOwnerUid).get();
+      if (actorDoc.data()?.isAdmin === true) {
+        isAllowed = true;
+      }
+    }
+
+    if (!isAllowed) {
+      console.error('[onClassifiedAction] Permission denied', { classifiedId, actionOwnerUid });
       return;
     }
 
     if (action === 'discard') {
       await classifiedRef.update({ status: 'discarded' });
-      console.log(`[onClassifiedAction] Classified ${classifiedId} discarded`);
+      console.log(`[onClassifiedAction] Classified ${classifiedId} discarded by ${actionOwnerUid}`);
+
+      // Notify the original owner
+      try {
+        const resend = new Resend(resendApiKey.value());
+        const ownerDoc = await db.collection('users').doc(classified.owner_uid).get();
+        if (ownerDoc.exists) {
+          const ownerEmail = resolveEmail(ownerDoc.data()!);
+          if (ownerEmail) {
+            const firstName = (ownerDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+            const category = (classified.category as string) || 'iso';
+            await sendClassifiedClosedEmail(ownerEmail, {
+              firstName,
+              categoryLabel: CATEGORY_LABELS[category] || category,
+            }, resend);
+            console.log(`[onClassifiedAction] Closure email sent to ${ownerEmail} for ${classifiedId}`);
+          }
+        }
+      } catch (err) {
+        console.error('[onClassifiedAction] Failed to send closure email', { classifiedId, err });
+      }
       return;
     }
 

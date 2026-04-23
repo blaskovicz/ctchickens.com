@@ -310,6 +310,20 @@ export async function sendClassifiedRenewedEmail(
   });
 }
 
+export async function sendClassifiedClosedEmail(
+  to: string,
+  vars: { firstName: string; categoryLabel: string },
+  resend: Resend
+): Promise<void> {
+  const subject = 'Your classified listing has been closed — CT Chickens';
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('classified-closed-body.html', { subject, ...vars }),
+  });
+}
+
 export async function sendAnnouncementEmail(
   to: string,
   vars: {

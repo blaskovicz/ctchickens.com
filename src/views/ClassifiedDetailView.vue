@@ -29,6 +29,7 @@ const isLoading = ref(true);
 const isActing = ref(false);
 const showPublishModal = ref(false);
 const showDiscardModal = ref(false);
+const showArchiveModal = ref(false);
 const showMessageModal = ref(false);
 const isOpeningThread = ref(false);
 let unsubscribeClassified: (() => void) | null = null;
@@ -60,17 +61,45 @@ const formatDate = (ts: any) => {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
-const fetchOwnerFarms = async (ownerUid: string) => {
+const fetchOwnerSidebarData = async (ownerUid: string) => {
   try {
-    const q = query(
+    // 1. Fetch user document (for explicit tier/admin status)
+    const userDoc = await getDoc(doc(db, 'users', ownerUid));
+    let baseTier: UserTier = 'freemium';
+    let userIsAdmin = false;
+    if (userDoc.exists()) {
+      const uData = userDoc.data();
+      baseTier = uData.tier || 'freemium';
+      userIsAdmin = uData.isAdmin || false;
+    }
+
+    // 2. Fetch all published farms for this user
+    const farmsQ = query(
       collection(db, 'directory_members'),
       where('account.ownerUid', '==', ownerUid),
       where('account.status', '==', 'published')
     );
-    const snap = await getDocs(q);
-    ownerFarms.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const farmsSnap = await getDocs(farmsQ);
+    const farms = farmsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    ownerFarms.value = farms;
+
+    // 3. Determine final tier (Premium if admin, has explicit tier, or owns a verified farm)
+    const hasVerifiedFarm = farms.some(f => f.account?.isVerified === true);
+    if (userIsAdmin || baseTier === 'premium' || hasVerifiedFarm) {
+      ownerTier.value = 'premium';
+    } else {
+      ownerTier.value = 'freemium';
+    }
+
+    // 4. Count active/pending classifieds (for admin visibility)
+    if (isAdmin.value) {
+      const liveQ = query(collection(db, 'classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'active'));
+      const draftQ = query(collection(db, 'draft_classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'pending'));
+      const [liveSnap, draftSnap] = await Promise.all([getDocs(liveQ), getDocs(draftQ)]);
+      ownerActiveCount.value = liveSnap.size + draftSnap.size;
+    }
   } catch (e) {
-    console.warn('Failed to fetch owner farms:', e);
+    console.warn('Failed to fetch owner sidebar data:', e);
   }
 };
 
@@ -85,7 +114,7 @@ onMounted(async () => {
           const data = snap.data();
           if (data.status === 'active' || store.getters.isAdmin || data.owner_uid === user.value?.uid) {
             classified.value = { id: snap.id, ...data } as Classified;
-            fetchOwnerFarms(data.owner_uid);
+            fetchOwnerSidebarData(data.owner_uid);
           }
         }
         isLoading.value = false;
@@ -104,7 +133,7 @@ onMounted(async () => {
         const data = draftSnap.data();
         if (isAdmin.value || data.owner_uid === user.value.uid) {
           draftClassified.value = { id: draftSnap.id, ...data } as DraftClassified;
-          fetchOwnerFarms(data.owner_uid);
+          fetchOwnerSidebarData(data.owner_uid);
         }
       }
       // The snapshot listener will not fire for a doc that doesn't exist,
@@ -141,7 +170,7 @@ const handleRenew = async () => {
 };
 
 const handleDiscard = async () => {
-  if (!isOwner.value || isActing.value || !classified.value) return;
+  if ((!isOwner.value && !isAdmin.value) || isActing.value || !classified.value) return;
   isActing.value = true;
   try {
     await addDoc(collection(db, 'classifieds', docId, 'actions'), {
@@ -151,7 +180,10 @@ const handleDiscard = async () => {
     });
     classified.value = { ...classified.value!, status: 'discarded' };
     store.commit('SET_CLASSIFIEDS', store.state.classifieds.filter((c: Classified) => c.id !== docId));
-    create?.({ body: 'Listing closed.', variant: 'info' });
+    create?.({
+      body: isAdmin.value && !isOwner.value ? 'Listing archived.' : 'Listing closed.',
+      variant: 'info'
+    });
     isActing.value = false;
   } catch (e: any) {
     create?.({ body: `Failed to close listing: ${e.message}`, variant: 'danger' });
@@ -238,10 +270,10 @@ const activeData = computed(() => classified.value || draftClassified.value);
           <i class="bi bi-arrow-left me-1"></i> All Classifieds
         </BButton>
 
-        <!-- Owner actions -->
-        <div v-if="isOwner && classified?.status === 'active'" class="d-flex gap-2">
+        <!-- Owner or Admin actions -->
+        <div v-if="(isOwner || isAdmin) && classified?.status === 'active'" class="d-flex gap-2">
           <BButton
-            v-if="canRenew"
+            v-if="isOwner && canRenew"
             variant="outline-primary"
             size="sm"
             @click="handleRenew"
@@ -251,8 +283,9 @@ const activeData = computed(() => classified.value || draftClassified.value);
             <i v-else class="bi bi-arrow-repeat me-1"></i>
             Renew ({{ classified!.max_renewals - classified!.renewal_count }} left)
           </BButton>
-          <BButton variant="outline-danger" size="sm" @click="handleDiscard" :disabled="isActing">
-            <i class="bi bi-x-circle me-1"></i> Close Listing
+          <BButton variant="outline-danger" size="sm" @click="showArchiveModal = true" :disabled="isActing">
+            <i class="bi bi-x-circle me-1"></i>
+            {{ isAdmin && !isOwner ? 'Archive Listing...' : 'Close Listing...' }}
           </BButton>
         </div>
 
@@ -407,6 +440,19 @@ const activeData = computed(() => classified.value || draftClassified.value);
     <!-- DISCARD CONFIRMATION MODAL -->
     <BModal v-model="showDiscardModal" title="Discard Draft?" @ok="handleReject" :ok-disabled="isActing" ok-title="Discard Draft" ok-variant="danger">
       <p>Are you sure you want to discard this classified? This action cannot be undone.</p>
+    </BModal>
+
+    <!-- ARCHIVE/CLOSE CONFIRMATION MODAL -->
+    <BModal
+      v-model="showArchiveModal"
+      :title="isAdmin && !isOwner ? 'Archive Listing?' : 'Close Listing?'"
+      @ok="handleDiscard"
+      :ok-disabled="isActing"
+      :ok-title="isAdmin && !isOwner ? 'Archive Listing' : 'Close Listing'"
+      ok-variant="danger"
+    >
+      <p v-if="isAdmin && !isOwner">Are you sure you want to archive this listing? It will be removed from the public directory immediately.</p>
+      <p v-else>Are you sure you want to close this listing? It will no longer be visible to others.</p>
     </BModal>
 
     <!-- MESSAGE AS MODAL -->
