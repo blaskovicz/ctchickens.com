@@ -5,7 +5,7 @@ import { useStore } from 'vuex';
 import { db, trackEvent } from '../firebase';
 import BreederGallery from '../components/BreederGallery.vue';
 import { 
-  doc, getDoc, setDoc, deleteDoc, serverTimestamp,
+  doc, getDoc, setDoc, deleteDoc, serverTimestamp, writeBatch,
   Timestamp, collection, query, where, orderBy, getDocs, limit
 } from 'firebase/firestore';
 import { 
@@ -495,7 +495,24 @@ const handleSave = async (): Promise<boolean> => {
       };
       delete (livePayload as any).draft_owner_uid;
       delete (livePayload as any).updatedAt;
-      await setDoc(doc(db, 'directory_members', slug), livePayload, { merge: true });
+
+      // Atomically write live doc + delete draft so partial completion is impossible.
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'directory_members', slug), livePayload, { merge: true });
+      if (hasPendingDraft.value) {
+        batch.delete(doc(db, 'draft_profiles', slug));
+      }
+      await batch.commit();
+
+      // Clear local draft flag immediately — before any further async work —
+      // so the UI can't get stuck in "draft pending" if navigation or store
+      // refresh is slow/interrupted on mobile.
+      hasPendingDraft.value = false;
+      store.commit('REMOVE_DRAFT', slug);
+
+      // History write (triggers approval email) runs after the atomic batch so
+      // it only fires once both writes have committed. Best-effort — a failure
+      // here doesn't roll back the publish.
       try {
         await recordDraftProfileHistory(slug, draftSnapshotForHistory ?? livePayload, { status: 'published' });
       } catch (histErr: any) {
@@ -505,15 +522,9 @@ const handleSave = async (): Promise<boolean> => {
           variant: 'warning'
         });
       }
-      if (hasPendingDraft.value) {
-        await deleteDoc(doc(db, 'draft_profiles', slug));
-      }
 
       // REFRESH STORE: Update the local Vuex store with the newly published data.
       await store.dispatch('fetchBreeder', slug);
-      
-      // FIX: Clear local pending state immediately after publishing
-      store.commit('REMOVE_DRAFT', slug);
 
       create?.({ body: "Changes published successfully!", variant: 'success' });
     } else {
