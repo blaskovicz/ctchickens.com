@@ -5,10 +5,15 @@ import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot
+  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, getDocs, deleteDoc
 } from 'firebase/firestore';
+import { storage } from '../firebase';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified } from '../types';
+import { TIER_LIMITS, CATEGORY_LABELS } from '../types';
+import VerifiedBadge from '../components/VerifiedBadge.vue';
+import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,10 +24,13 @@ const docId = route.params.docId as string;
 
 const classified = ref<Classified | null>(null);
 const draftClassified = ref<DraftClassified | null>(null);
+const ownerActiveCount = ref(0);
 const isLoading = ref(true);
 const isActing = ref(false);
 const showPublishModal = ref(false);
 const showDiscardModal = ref(false);
+const showArchiveModal = ref(false);
+const showDeleteDraftModal = ref(false);
 const showMessageModal = ref(false);
 const isOpeningThread = ref(false);
 let unsubscribeClassified: (() => void) | null = null;
@@ -34,12 +42,18 @@ const isOwner = computed(() => !!user.value && (classified.value?.owner_uid === 
 const isDraft = computed(() => !!draftClassified.value && !classified.value);
 const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter((b: any) => b.status === 'published'));
 
-const CATEGORY_LABELS: Record<string, string> = {
-  iso: 'In Search Of',
-  for_sale: 'For Sale',
-  rehoming: 'Rehoming',
-  hatching_eggs: 'Hatching Eggs',
-};
+// Get all farms owned by this seller from the store
+const ownerFarms = computed(() => {
+  const uid = classified.value?.owner_uid || draftClassified.value?.owner_uid;
+  if (!uid) return [];
+  return (store.state.breeders as any[] || []).filter(b => b.ownerUid === uid);
+});
+
+// Determine tier based on farm verification
+const ownerTier = computed(() => {
+  const hasVerified = ownerFarms.value.some(f => f.verified);
+  return hasVerified ? 'premium' : 'freemium';
+});
 
 const daysUntilExpiry = computed(() => {
   if (!classified.value?.expires_at) return null;
@@ -61,10 +75,21 @@ const formatDate = (ts: any) => {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+const fetchAdminInsights = async (ownerUid: string) => {
+  if (!isAdmin.value) return;
+  try {
+    const liveQ = query(collection(db, 'classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'active'));
+    const draftQ = query(collection(db, 'draft_classifieds'), where('owner_uid', '==', ownerUid), where('status', '==', 'pending'));
+    const [liveSnap, draftSnap] = await Promise.all([getDocs(liveQ), getDocs(draftQ)]);
+    ownerActiveCount.value = liveSnap.size + draftSnap.size;
+  } catch (e) {
+    console.warn('Failed to fetch admin insights:', e);
+  }
+};
+
 onMounted(async () => {
   try {
-    // Attach a real-time listener on the classifieds doc so CF-driven updates
-    // (e.g. renewal) are reflected automatically without optimistic writes.
+    // Attach a real-time listener on the classifieds doc
     unsubscribeClassified = onSnapshot(
       doc(db, 'classifieds', docId),
       (snap) => {
@@ -72,6 +97,7 @@ onMounted(async () => {
           const data = snap.data();
           if (data.status === 'active' || store.getters.isAdmin || data.owner_uid === user.value?.uid) {
             classified.value = { id: snap.id, ...data } as Classified;
+            fetchAdminInsights(data.owner_uid);
           }
         }
         isLoading.value = false;
@@ -82,7 +108,7 @@ onMounted(async () => {
       },
     );
 
-    // If no live doc exists (or access is denied), fall back to draft lookup.
+    // If no live doc exists, fall back to draft lookup
     const liveSnap = await getDoc(doc(db, 'classifieds', docId));
     if (!liveSnap.exists() && user.value) {
       const draftSnap = await getDoc(doc(db, 'draft_classifieds', docId));
@@ -90,10 +116,9 @@ onMounted(async () => {
         const data = draftSnap.data();
         if (isAdmin.value || data.owner_uid === user.value.uid) {
           draftClassified.value = { id: draftSnap.id, ...data } as DraftClassified;
+          fetchAdminInsights(data.owner_uid);
         }
       }
-      // The snapshot listener will not fire for a doc that doesn't exist,
-      // so clear the loading state here for the draft path.
       isLoading.value = false;
     }
   } catch (e: any) {
@@ -126,7 +151,7 @@ const handleRenew = async () => {
 };
 
 const handleDiscard = async () => {
-  if (!isOwner.value || isActing.value || !classified.value) return;
+  if ((!isOwner.value && !isAdmin.value) || isActing.value || !classified.value) return;
   isActing.value = true;
   try {
     await addDoc(collection(db, 'classifieds', docId, 'actions'), {
@@ -136,7 +161,10 @@ const handleDiscard = async () => {
     });
     classified.value = { ...classified.value!, status: 'discarded' };
     store.commit('SET_CLASSIFIEDS', store.state.classifieds.filter((c: Classified) => c.id !== docId));
-    create?.({ body: 'Listing closed.', variant: 'info' });
+    create?.({
+      body: isAdmin.value && !isOwner.value ? 'Listing archived.' : 'Listing closed.',
+      variant: 'info'
+    });
     isActing.value = false;
   } catch (e: any) {
     create?.({ body: `Failed to close listing: ${e.message}`, variant: 'danger' });
@@ -184,6 +212,32 @@ const handleReject = async () => {
   }
 };
 
+const handleDeleteDraft = async () => {
+  if (!isDraft.value || !isOwner.value || isActing.value || !draftClassified.value) return;
+  isActing.value = true;
+  try {
+    const imageUrl = draftClassified.value.image_url;
+    if (imageUrl) {
+      try {
+        const url = new URL(imageUrl);
+        const pathEncoded = url.pathname.split('/o/')[1]?.split('?')[0];
+        if (pathEncoded) {
+          const path = decodeURIComponent(pathEncoded);
+          await deleteObject(storageRef(storage, path));
+        }
+      } catch {
+        // Storage deletion is best-effort; proceed with doc deletion regardless
+      }
+    }
+    await deleteDoc(doc(db, 'draft_classifieds', docId));
+    create?.({ body: 'Draft deleted.', variant: 'info' });
+    router.push('/classified');
+  } catch (e: any) {
+    create?.({ body: `Failed to delete draft: ${e.message}`, variant: 'danger' });
+    isActing.value = false;
+  }
+};
+
 const handleMessage = async (farmSlug?: string | null) => {
   if (!classified.value || isOpeningThread.value) return;
   showMessageModal.value = false;
@@ -223,10 +277,10 @@ const activeData = computed(() => classified.value || draftClassified.value);
           <i class="bi bi-arrow-left me-1"></i> All Classifieds
         </BButton>
 
-        <!-- Owner actions -->
-        <div v-if="isOwner && classified?.status === 'active'" class="d-flex gap-2">
+        <!-- Owner or Admin actions -->
+        <div v-if="(isOwner || isAdmin) && classified?.status === 'active'" class="d-flex gap-2">
           <BButton
-            v-if="canRenew"
+            v-if="isOwner && canRenew"
             variant="outline-primary"
             size="sm"
             @click="handleRenew"
@@ -236,13 +290,21 @@ const activeData = computed(() => classified.value || draftClassified.value);
             <i v-else class="bi bi-arrow-repeat me-1"></i>
             Renew ({{ classified!.max_renewals - classified!.renewal_count }} left)
           </BButton>
-          <BButton variant="outline-danger" size="sm" @click="handleDiscard" :disabled="isActing">
-            <i class="bi bi-x-circle me-1"></i> Close Listing
+          <BButton variant="outline-danger" size="sm" @click="showArchiveModal = true" :disabled="isActing">
+            <i class="bi bi-x-circle me-1"></i>
+            {{ isAdmin && !isOwner ? 'Archive Listing...' : 'Close Listing...' }}
           </BButton>
         </div>
 
         <!-- Admin approve/reject only in the header row; message button moved to card footer -->
 
+
+        <!-- Owner: delete own pending draft -->
+        <div v-else-if="isDraft && isOwner && !isAdmin">
+          <BButton variant="outline-danger" size="sm" @click="showDeleteDraftModal = true" :disabled="isActing">
+            <i class="bi bi-trash me-1"></i> Delete Draft
+          </BButton>
+        </div>
 
         <!-- Admin approve/reject -->
         <div v-else-if="isAdmin && isDraft" class="d-flex gap-2">
@@ -281,41 +343,88 @@ const activeData = computed(() => classified.value || draftClassified.value);
           <div class="row g-0">
             <!-- Description (60%) -->
             <div class="col-12 col-md-7 p-4 border-end description-col">
+              <div v-if="activeData.image_url" class="mb-4 text-center bg-light rounded p-2 border">
+                <img :src="activeData.image_url" class="img-fluid rounded shadow-sm" style="max-height: 500px;" alt="Classified photo" />
+              </div>
               <p v-if="activeData.description" class="mb-0" style="line-height:1.8; white-space: pre-wrap;">{{ activeData.description }}</p>
               <p v-else class="mb-0 text-muted fst-italic" style="line-height:1.8;">Inquire for more info</p>
             </div>
 
             <!-- Meta + actions (40%) -->
-            <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3">
-              <div class="d-flex flex-column gap-2 small">
-                <div class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Location</span>
-                  <span>{{ activeData.location }}</span>
+            <div class="col-12 col-md-5 p-4 bg-light d-flex flex-column gap-3 justify-content-center">
+              <div class="d-flex flex-column gap-3 small">
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-geo-alt text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Location</span>
+                  <span class="text-dark">{{ activeData.location }}</span>
                 </div>
-                <div class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Posted by</span>
-                  <span>{{ activeData.display_name }}<span v-if="user?.uid === activeData.owner_uid" class="text-muted"> (you)</span></span>
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-person text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Posted by</span>
+                  <span class="text-dark">{{ activeData.display_name }}<span v-if="user?.uid === activeData.owner_uid" class="text-muted"> (you)</span></span>
                 </div>
-                <div class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Posted</span>
-                  <span>{{ formatRelativeTime(activeData.created_at) }}</span>
+                <div class="d-flex align-items-center gap-2">
+                  <i class="bi bi-clock text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Posted</span>
+                  <span class="text-dark">{{ formatRelativeTime(activeData.created_at) }}</span>
                 </div>
-                <div v-if="classified?.expires_at" class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Expires</span>
-                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }">
+                <div v-if="classified?.expires_at" class="d-flex align-items-center gap-2">
+                  <i class="bi bi-calendar-event text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Expires</span>
+                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }" class="text-dark">
                     {{ formatDate(classified.expires_at) }}
-                    <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0">({{ daysUntilExpiry }}d)</span>
-                    <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0">(today)</span>
+                    <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0" class="small opacity-75">({{ daysUntilExpiry }}d)</span>
+                    <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0" class="small opacity-75">(today)</span>
                   </span>
                 </div>
-                <div v-if="classified && (isOwner || isAdmin)" class="d-flex gap-2">
-                  <span class="text-muted" style="min-width:64px;">Renewals</span>
-                  <span>{{ classified.renewal_count }} / {{ classified.max_renewals }} used</span>
+                <div v-if="classified && (isOwner || isAdmin)" class="d-flex align-items-center gap-2">
+                  <i class="bi bi-arrow-repeat text-muted"></i>
+                  <span class="text-muted" style="min-width:75px;">Renewals</span>
+                  <span class="text-dark">{{ classified.renewal_count }} / {{ classified.max_renewals }} used</span>
                 </div>
               </div>
-              <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted small">
-                Renewal available within 2 days of expiration
+              <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
+                <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
+
+              <!-- Admin context section -->
+              <div v-if="isAdmin" class="mt-4 pt-4 border-top">
+                <h6 class="text-uppercase small fw-bold text-danger mb-3 letter-spacing-1">
+                  <i class="bi bi-shield-lock me-1"></i> Admin: User Insights
+                </h6>
+                <div class="bg-white border rounded p-3 shadow-sm d-flex flex-column gap-2 small">
+                  <div class="d-flex justify-content-between border-bottom pb-2 mb-1">
+                    <span class="text-muted">Tier</span>
+                    <BBadge :variant="ownerTier === 'premium' ? 'success' : 'secondary'" pill>
+                      {{ ownerTier.toUpperCase() }}
+                    </BBadge>
+                  </div>
+                  <div class="d-flex justify-content-between">
+                    <span class="text-muted">Active Posts</span>
+                    <span :class="ownerActiveCount >= TIER_LIMITS[ownerTier] ? 'text-danger fw-bold' : 'text-dark'">
+                      {{ ownerActiveCount }} / {{ TIER_LIMITS[ownerTier] }}
+                    </span>
+                  </div>
+                  <div v-if="ownerActiveCount >= TIER_LIMITS[ownerTier]" class="text-danger smaller mt-1">
+                    <i class="bi bi-exclamation-circle me-1"></i> User has reached their limit
+                  </div>
+                </div>
+              </div>
+
+              <!-- About the Seller section -->
+              <div v-if="ownerFarms.length > 0" class="mt-4 pt-4 border-top">
+                <h6 class="text-uppercase small fw-bold text-muted mb-3 letter-spacing-1">About the Seller</h6>
+                <div v-for="farm in ownerFarms" :key="farm.id" class="d-flex flex-column gap-2 mb-3">
+                  <router-link :to="`/directory/${farm.id}`" class="text-decoration-none fw-bold text-primary d-flex align-items-center gap-2">
+                    <i class="bi bi-house-door"></i>
+                    {{ farm.name }}
+                  </router-link>
+                  <div class="d-flex flex-wrap gap-2">
+                    <VerifiedBadge :verified="farm.verified" />
+                    <FoundingBreederBadge :count="farm.founding_breeder" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -345,6 +454,24 @@ const activeData = computed(() => classified.value || draftClassified.value);
     <!-- DISCARD CONFIRMATION MODAL -->
     <BModal v-model="showDiscardModal" title="Discard Draft?" @ok="handleReject" :ok-disabled="isActing" ok-title="Discard Draft" ok-variant="danger">
       <p>Are you sure you want to discard this classified? This action cannot be undone.</p>
+    </BModal>
+
+    <!-- ARCHIVE/CLOSE CONFIRMATION MODAL -->
+    <BModal
+      v-model="showArchiveModal"
+      :title="isAdmin && !isOwner ? 'Archive Listing?' : 'Close Listing?'"
+      @ok="handleDiscard"
+      :ok-disabled="isActing"
+      :ok-title="isAdmin && !isOwner ? 'Archive Listing' : 'Close Listing'"
+      ok-variant="danger"
+    >
+      <p v-if="isAdmin && !isOwner">Are you sure you want to archive this listing? It will be removed from the public directory immediately.</p>
+      <p v-else>Are you sure you want to close this listing? It will no longer be visible to others.</p>
+    </BModal>
+
+    <!-- DELETE DRAFT CONFIRMATION MODAL -->
+    <BModal v-model="showDeleteDraftModal" title="Delete Draft?" @ok="handleDeleteDraft" :ok-disabled="isActing" ok-title="Delete Draft" ok-variant="danger">
+      <p>Are you sure you want to delete this draft? This cannot be undone.</p>
     </BModal>
 
     <!-- MESSAGE AS MODAL -->

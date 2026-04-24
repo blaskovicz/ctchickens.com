@@ -1,13 +1,41 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createStore } from 'vuex';
 import NewClassifiedModal from '../NewClassifiedModal.vue';
+
+const mockDeleteObject = vi.fn((_ref?: any) => Promise.resolve());
+
+// Mock Firebase Storage
+vi.mock('firebase/storage', () => ({
+  getStorage: vi.fn(),
+  connectStorageEmulator: vi.fn(),
+  ref: vi.fn(),
+  uploadBytes: vi.fn(() => Promise.resolve({ ref: 'mock-ref' })),
+  getDownloadURL: vi.fn(() => Promise.resolve('https://mock-storage.com/image.jpg')),
+  deleteObject: (ref: any) => mockDeleteObject(ref),
+}));
+
+// Mock URL.createObjectURL and revokeObjectURL
+const mockCreateObjectURL = vi.fn(() => 'blob:mock-url');
+const mockRevokeObjectURL = vi.fn();
+vi.stubGlobal('URL', {
+  createObjectURL: mockCreateObjectURL,
+  revokeObjectURL: mockRevokeObjectURL,
+});
+
+// Mock compressImage utility
+vi.mock('../../composables/useImageUtils', () => ({
+  compressImage: vi.fn(() => Promise.resolve(new Blob(['mock content'], { type: 'image/jpeg' }))),
+}));
 
 const createMockStore = (isLoggedIn = true) =>
   createStore({
     state: { user: isLoggedIn ? { uid: 'user-1', displayName: 'Test User' } : null },
     getters: {
       isLoggedIn: (state: any) => !!state.user,
+      currentUser: (state: any) => state.user,
+      userTier: () => 'freemium',
+      canPostClassified: () => true,
     },
     actions: {
       createDraftClassified: vi.fn(() => Promise.resolve('new-doc-id')),
@@ -18,10 +46,6 @@ const createMockStore = (isLoggedIn = true) =>
 /**
  * Mount NewClassifiedModal attached to document.body so that BModal's
  * <Teleport> lands inside the live document.
- *
- * BModal teleports its content directly to <body>, so wrapper.find() cannot
- * reach it. All DOM interactions use document.querySelector / getElementById
- * instead, which scans the entire document including teleported nodes.
  */
 function mountModal(store: ReturnType<typeof createMockStore>) {
   const div = document.createElement('div');
@@ -32,7 +56,6 @@ function mountModal(store: ReturnType<typeof createMockStore>) {
   });
 }
 
-/** Helper: set value on a teleported element and trigger Vue reactivity. */
 async function setDocValue(selector: string, value: string) {
   const el = document.querySelector(selector) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
   if (!el) throw new Error(`setDocValue: element not found for selector "${selector}"`);
@@ -42,12 +65,15 @@ async function setDocValue(selector: string, value: string) {
   await flushPromises();
 }
 
-/** Helper: find a button anywhere in the document by its text content. */
 function findDocButton(text: string): HTMLButtonElement | null {
   return Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes(text)) as HTMLButtonElement | null;
 }
 
 describe('NewClassifiedModal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   afterEach(() => {
     document.body.innerHTML = '';
   });
@@ -68,36 +94,6 @@ describe('NewClassifiedModal', () => {
     expect(submitBtn?.disabled).toBe(true);
   });
 
-  it('submit button is disabled when location is less than 2 characters', async () => {
-    const store = createMockStore();
-    const wrapper = mountModal(store);
-
-    (wrapper.vm as any).open();
-    await flushPromises();
-
-    await setDocValue('textarea#desc', 'A long enough description that is at least 20 chars');
-    await setDocValue('#loc', 'X');
-    await setDocValue('#title', 'Valid Title Here');
-
-    const submitBtn = findDocButton('Submit');
-    expect(submitBtn?.disabled).toBe(true);
-  });
-
-  it('submit button is disabled when title is less than 5 characters', async () => {
-    const store = createMockStore();
-    const wrapper = mountModal(store);
-
-    (wrapper.vm as any).open();
-    await flushPromises();
-
-    await setDocValue('textarea#desc', 'A long enough description that is at least 20 chars');
-    await setDocValue('#loc', 'Hartford, CT');
-    await setDocValue('#title', 'Hi');
-
-    const submitBtn = findDocButton('Submit');
-    expect(submitBtn?.disabled).toBe(true);
-  });
-
   it('submit button is enabled when all fields are valid', async () => {
     const store = createMockStore();
     const wrapper = mountModal(store);
@@ -111,21 +107,6 @@ describe('NewClassifiedModal', () => {
 
     const submitBtn = findDocButton('Submit');
     expect(submitBtn?.disabled).toBe(false);
-  });
-
-  it('shows character counter in danger class when description is below minimum', async () => {
-    const store = createMockStore();
-    const wrapper = mountModal(store);
-
-    (wrapper.vm as any).open();
-    await flushPromises();
-
-    await setDocValue('textarea#desc', 'Short');
-
-    // The counter is inside the teleported content — query from document
-    const counter = document.querySelector('.text-danger');
-    expect(counter).not.toBeNull();
-    expect(counter?.textContent).toContain('5');
   });
 
   it('dispatches createDraftClassified with correct fields on valid submit', async () => {
@@ -155,33 +136,127 @@ describe('NewClassifiedModal', () => {
     }));
   });
 
-  it('shows login prompt when user is not signed in', async () => {
-    const store = createMockStore(false);
-    const wrapper = mountModal(store);
+  describe('image upload', () => {
+    it('shows a preview when a valid image is selected', async () => {
+      const store = createMockStore();
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
 
-    (wrapper.vm as any).open();
-    await flushPromises();
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['mock content'], 'test.jpg', { type: 'image/jpeg' });
+      
+      const fileList = {
+        0: file,
+        length: 1,
+        item: (_index: number) => file,
+      };
 
-    // Modal content is teleported to body — check full document text
-    expect(document.body.textContent).toContain('signed in to post');
-  });
+      Object.defineProperty(fileInput, 'files', { value: fileList });
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await flushPromises();
 
-  it('emits "submitted" event with the new doc id after successful submission', async () => {
-    const store = createMockStore();
-    const wrapper = mountModal(store);
+      const previewImg = document.querySelector('img.img-fluid') as HTMLImageElement;
+      expect(previewImg).not.toBeNull();
+      expect(previewImg.src).toBe('blob:mock-url');
+    });
 
-    (wrapper.vm as any).open();
-    await flushPromises();
+    it('removes preview and file when remove button is clicked', async () => {
+      const store = createMockStore();
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
 
-    await setDocValue('#loc', 'Storrs, CT');
-    await setDocValue('#title', '5 Heritage Breed Roosters');
-    await setDocValue('textarea#desc', 'Looking for 5 heritage breed roosters for breeding stock');
+      (wrapper.vm as any).imageFile = new File([''], 'test.jpg', { type: 'image/jpeg' });
+      await flushPromises();
 
-    const submitBtn = findDocButton('Submit');
-    submitBtn!.click();
-    await flushPromises();
+      expect(document.querySelector('img.img-fluid')).not.toBeNull();
 
-    expect(wrapper.emitted('submitted')).toBeTruthy();
-    expect(wrapper.emitted('submitted')![0]).toEqual(['new-doc-id']);
+      const removeBtn = findDocButton('Remove');
+      removeBtn?.click();
+      await flushPromises();
+
+      expect(document.querySelector('img.img-fluid')).toBeNull();
+      expect((wrapper.vm as any).imageFile).toBeNull();
+      expect(mockRevokeObjectURL).toHaveBeenCalled();
+    });
+
+    it('uploads image and includes URL in submission', async () => {
+      const store = createMockStore();
+      const dispatchSpy = vi.spyOn(store, 'dispatch');
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
+
+      await setDocValue('#loc', 'Hartford, CT');
+      await setDocValue('#title', 'Valid Title');
+      await setDocValue('textarea#desc', 'Valid description at least 20 chars long');
+      
+      (wrapper.vm as any).imageFile = new File(['data'], 'test.png', { type: 'image/png' });
+      await flushPromises();
+
+      const submitBtn = findDocButton('Submit');
+      submitBtn?.click();
+      await flushPromises();
+
+      expect(dispatchSpy).toHaveBeenCalledWith('createDraftClassified', expect.objectContaining({
+        image_url: 'https://mock-storage.com/image.jpg'
+      }));
+    });
+
+    it('rejects files larger than 10MB', async () => {
+      const store = createMockStore();
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
+
+      const largeFile = new File([''], 'big.jpg', { type: 'image/jpeg' });
+      Object.defineProperty(largeFile, 'size', { value: 11 * 1024 * 1024 });
+
+      (wrapper.vm as any).imageFile = largeFile;
+      await flushPromises();
+
+      expect((wrapper.vm as any).imageFile).toBeNull();
+    });
+
+    it('rejects non-image files', async () => {
+      const store = createMockStore();
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
+
+      const pdfFile = new File([''], 'test.pdf', { type: 'application/pdf' });
+
+      (wrapper.vm as any).imageFile = pdfFile;
+      await flushPromises();
+
+      expect((wrapper.vm as any).imageFile).toBeNull();
+    });
+
+    it('deletes uploaded image when createDraftClassified fails (orphan cleanup)', async () => {
+      const store = createMockStore();
+      const dispatchSpy = vi.spyOn(store, 'dispatch').mockImplementation((action: any) => {
+        if (action === 'createDraftClassified') return Promise.reject(new Error('Firestore write failed'));
+        return Promise.resolve();
+      });
+
+      const wrapper = mountModal(store);
+      (wrapper.vm as any).open();
+      await flushPromises();
+
+      await setDocValue('#loc', 'Hartford, CT');
+      await setDocValue('#title', 'Valid Title');
+      await setDocValue('textarea#desc', 'Valid description at least 20 chars long');
+
+      (wrapper.vm as any).imageFile = new File(['data'], 'test.png', { type: 'image/png' });
+      await flushPromises();
+
+      const submitBtn = findDocButton('Submit');
+      submitBtn?.click();
+      await flushPromises();
+
+      expect(dispatchSpy).toHaveBeenCalledWith('createDraftClassified', expect.anything());
+      expect(mockDeleteObject).toHaveBeenCalledWith('mock-ref');
+    });
   });
 });

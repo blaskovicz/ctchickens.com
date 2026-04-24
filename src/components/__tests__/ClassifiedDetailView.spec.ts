@@ -14,12 +14,21 @@ const mockOnSnapshot = vi.fn();
 const mockAddDoc = vi.fn();
 const mockWriteBatch = vi.fn();
 
+const mockDeleteObject = vi.fn((_ref?: any) => Promise.resolve());
+const mockStorageRef = vi.fn((_storage: any, _path: string) => ({ path: _path }));
+
 vi.mock('../../firebase', () => ({
   db: {},
   auth: { currentUser: null },
+  storage: {},
   functions: {},
   facebookProvider: {},
   trackEvent: vi.fn(),
+}));
+
+vi.mock('firebase/storage', () => ({
+  ref: (storage: any, path: string) => mockStorageRef(storage, path),
+  deleteObject: (ref: any) => mockDeleteObject(ref),
 }));
 
 vi.mock('firebase/firestore', async (importOriginal) => {
@@ -28,11 +37,11 @@ vi.mock('firebase/firestore', async (importOriginal) => {
     ...actual,
     doc: vi.fn((_db: any, ...segments: string[]) => ({ path: segments.join('/') })),
     collection: vi.fn((_db: any, ...segments: string[]) => ({ path: segments.join('/') })),
-    getDoc: (...args: any[]) => mockGetDoc(...args),
-    onSnapshot: (...args: any[]) => mockOnSnapshot(...args),
-    addDoc: (...args: any[]) => mockAddDoc(...args),
+    getDoc: (ref: any) => mockGetDoc(ref),
+    onSnapshot: (ref: any, successCb: any, errCb: any) => mockOnSnapshot(ref, successCb, errCb),
+    addDoc: (ref: any, data: any) => mockAddDoc(ref, data),
     serverTimestamp: vi.fn(() => new Date()),
-    writeBatch: (...args: any[]) => mockWriteBatch(...args),
+    writeBatch: () => mockWriteBatch(),
     query: vi.fn(),
     where: vi.fn(),
     orderBy: vi.fn(),
@@ -85,11 +94,13 @@ const createMockStore = (opts: {
   user?: any;
   isAdmin?: boolean;
   myBreeders?: any[];
+  breeders?: any[];
 } = {}) =>
   createStore({
     state: {
       user: opts.user ?? null,
       classifieds: [],
+      breeders: opts.breeders ?? [],
     },
     getters: {
       isLoggedIn: (state: any) => !!state.user,
@@ -287,6 +298,67 @@ describe('ClassifiedDetailView', () => {
     const wrapper = await mountDetail('draft-1', adminStore, null, draft);
 
     expect(wrapper.text()).toContain('Pending Approval');
+  });
+
+  it('owner sees Delete Draft button on a pending draft', async () => {
+    const ownerId = 'owner-1';
+    const store = createMockStore({ user: { uid: ownerId } });
+    const draft = makeDraft({ id: 'draft-1', owner_uid: ownerId });
+    const wrapper = await mountDetail('draft-1', store, null, draft);
+
+    const allBtnText = wrapper.findAll('button').map(b => b.text());
+    expect(allBtnText.some(t => t.includes('Delete Draft'))).toBe(true);
+  });
+
+  it('non-owner does not see Delete Draft button on a pending draft', async () => {
+    const store = createMockStore({ user: { uid: 'stranger-uid' } });
+    const draft = makeDraft({ id: 'draft-1', owner_uid: 'owner-1' });
+    const wrapper = await mountDetail('draft-1', store, null, draft);
+
+    const allBtnText = wrapper.findAll('button').map(b => b.text());
+    expect(allBtnText.some(t => t.includes('Delete Draft'))).toBe(false);
+  });
+
+  it('admin sees Publish/Discard but not Delete Draft on a draft they do not own', async () => {
+    const adminStore = createMockStore({ user: { uid: 'admin-uid' }, isAdmin: true });
+    const draft = makeDraft({ id: 'draft-1', owner_uid: 'other-user' });
+    const wrapper = await mountDetail('draft-1', adminStore, null, draft);
+
+    const allBtnText = wrapper.findAll('button').map(b => b.text());
+    expect(allBtnText.some(t => t.includes('Publish Live'))).toBe(true);
+    expect(allBtnText.some(t => t.includes('Delete Draft'))).toBe(false);
+  });
+
+  it('handleDeleteDraft deletes the Firestore document', async () => {
+    const ownerId = 'owner-1';
+    const store = createMockStore({ user: { uid: ownerId } });
+    const mockDeleteDoc = vi.fn(() => Promise.resolve());
+
+    // Patch deleteDoc in the firestore mock
+    const firestoreMod = await import('firebase/firestore');
+    vi.spyOn(firestoreMod, 'deleteDoc').mockImplementation(mockDeleteDoc);
+
+    const draft = makeDraft({ id: 'draft-1', owner_uid: ownerId });
+    const wrapper = await mountDetail('draft-1', store, null, draft);
+
+    await (wrapper.vm as any).handleDeleteDraft();
+    await flushPromises();
+
+    expect(mockDeleteDoc).toHaveBeenCalled();
+  });
+
+  it('handleDeleteDraft calls deleteObject for image_url if present', async () => {
+    const ownerId = 'owner-1';
+    const store = createMockStore({ user: { uid: ownerId } });
+
+    const imageUrl = `https://firebasestorage.googleapis.com/v0/b/project.appspot.com/o/classifieds%2F${ownerId}%2Fimage.jpg?alt=media&token=abc`;
+    const draft = makeDraft({ id: 'draft-1', owner_uid: ownerId, image_url: imageUrl });
+    const wrapper = await mountDetail('draft-1', store, null, draft);
+
+    await (wrapper.vm as any).handleDeleteDraft();
+    await flushPromises();
+
+    expect(mockDeleteObject).toHaveBeenCalled();
   });
 
   it('handleRenew writes a renew action doc', async () => {

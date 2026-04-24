@@ -92,6 +92,13 @@ export interface Review {
     hatching_eggs: 'primary',
   } as const;
 
+  export type UserTier = 'freemium' | 'premium';
+
+  export const TIER_LIMITS: Record<UserTier, number> = {
+    freemium: 2,
+    premium: 10,
+  };
+
   export interface Classified {
     id: string;
     owner_uid: string;
@@ -107,6 +114,7 @@ export interface Review {
     max_renewals: number;
     created_at: any;
     expiry_warning_sent?: boolean;
+    image_url?: string;
   }
 
   export interface DraftClassified {
@@ -120,6 +128,7 @@ export interface Review {
     category: ClassifiedCategory;
     status: 'pending';
     created_at: any;
+    image_url?: string;
   }
 
   export interface InquiryMessage {

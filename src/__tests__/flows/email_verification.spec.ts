@@ -14,8 +14,15 @@ const HMAC_SECRET = 'local-dev-secret';
  */
 let functionsEmulatorAvailable = false;
 try {
-  const res = await fetch('http://127.0.0.1:5001/', { signal: AbortSignal.timeout(2000) });
-  functionsEmulatorAvailable = res.status < 500;
+  const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
+  // POST to the actual function — 404 means not deployed, any other status means running
+  const res = await fetch(`http://127.0.0.1:5001/${projectId}/us-central1/setLocalEmail`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: {} }),
+    signal: AbortSignal.timeout(2000),
+  });
+  functionsEmulatorAvailable = res.status !== 404;
 } catch {
   /* emulator not running */
 }
@@ -39,7 +46,9 @@ async function seedUserFields(uid: string, fields: Record<string, string | null>
   const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?${fieldPaths}`;
   const payload = {
     fields: Object.fromEntries(
-      Object.entries(fields).map(([k, v]) => [k, v === null ? { nullValue: null } : { stringValue: v }])
+      Object.entries(fields)
+        .filter(([_, v]) => v !== null)
+        .map(([k, v]) => [k, { stringValue: v }])
     ),
   };
   const res = await fetch(url, {
@@ -58,8 +67,10 @@ describe('setLocalEmail callable', () => {
   });
 
   maybeIt('sets pendingLocalEmail and returns verification_sent for a valid email', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
+    // Ensure localEmail is not seeded by createTestUser
+    await seedUserFields(user.uid, { localEmail: null });
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
 
     const result = await httpsCallable(functions, 'setLocalEmail')({ email: 'notify@example.com' });
@@ -71,7 +82,7 @@ describe('setLocalEmail callable', () => {
   });
 
   maybeIt('clears both localEmail and pendingLocalEmail when email is empty', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
     await seedUserFields(user.uid, { localEmail: 'old@example.com', pendingLocalEmail: 'pending@example.com' });
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
@@ -85,7 +96,7 @@ describe('setLocalEmail callable', () => {
   });
 
   maybeIt('rejects an invalid email format', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     await createTestUser(fbEmail, 'Test User');
     await signInWithEmailAndPassword(auth, fbEmail, 'password123');
 
@@ -107,9 +118,9 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('promotes pendingLocalEmail to localEmail on a valid token', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
-    await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'notify@example.com' });
 
     const ts = String(Date.now());
     const token = await makeToken(user.uid, 'notify@example.com', ts);
@@ -123,9 +134,9 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('rejects an expired token and leaves pending email unchanged', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
-    await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'notify@example.com' });
 
     const expiredTs = String(Date.now() - 25 * 60 * 60 * 1000);
     const token = await makeToken(user.uid, 'notify@example.com', expiredTs);
@@ -139,9 +150,9 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('rejects a tampered token and leaves pending email unchanged', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
-    await seedUserFields(user.uid, { pendingLocalEmail: 'notify@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'notify@example.com' });
 
     const ts = String(Date.now());
     const badToken = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
@@ -154,14 +165,14 @@ describe('verifyLocalEmail callable', () => {
   });
 
   maybeIt('rejects when pending email no longer matches the token', async () => {
-    const fbEmail = 'user@example.com';
+    const fbEmail = `user-${Date.now()}@example.com`;
     const user = await createTestUser(fbEmail, 'Test User');
 
     const ts = String(Date.now());
     const token = await makeToken(user.uid, 'notify@example.com', ts);
 
     // User changed their mind — pending is now a different address
-    await seedUserFields(user.uid, { pendingLocalEmail: 'different@example.com' });
+    await seedUserFields(user.uid, { localEmail: null, pendingLocalEmail: 'different@example.com' });
 
     await expect(httpsCallable(functions, 'verifyLocalEmail')({ uid: user.uid, email: 'notify@example.com', ts, token }))
       .rejects.toThrow();

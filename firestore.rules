@@ -1,4 +1,4 @@
-// Rules Version: 2026-04-21-02
+// Rules Version: 2026-04-23-01
 rules_version = '2';
 
 service cloud.firestore {
@@ -144,7 +144,6 @@ service cloud.firestore {
       )
         && request.resource.data.status == 'pending'
         && request.resource.data.businessSlug == requestId
-        && request.resource.data.createdAt == request.time
       // Authorization: requesterEmail is already proven to be the user's own verified email
     // above, so we just need it to match the farm's contact email.
         && farmContactEmail(requestId).lower() == request.resource.data.requesterEmail.lower()
@@ -217,7 +216,14 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
       request.resource.data.owner_uid == request.auth.uid &&
       request.resource.data.status == 'pending' &&
-      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status']);
+      request.resource.data.keys().hasOnly(['owner_uid', 'display_name', 'location', 'title', 'description', 'price', 'category', 'created_at', 'status', 'image_url']) &&
+      // image_url must embed the caller's own UID in the storage path (no cross-user spoofing).
+      // Use .get() with a safe default so split() is never called on null, even if the emulator
+      // does not short-circuit || before evaluating both sides.
+      (request.resource.data.get('image_url', null) == null ||
+        (request.resource.data.get('image_url', 'classifieds%2Fplaceholder%2Ffile').split('classifieds%2F').size() == 2 &&
+         request.resource.data.get('image_url', 'classifieds%2Fplaceholder%2Ffile').split('classifieds%2F')[1].split('%2F').size() >= 2 &&
+         request.resource.data.get('image_url', 'classifieds%2Fplaceholder%2Ffile').split('classifieds%2F')[1].split('%2F')[0] == request.auth.uid));
       allow delete: if isSignedIn() && (
       resource == null ||
       isUserAdmin(request.auth.uid) ||
@@ -246,12 +252,16 @@ service cloud.firestore {
 
       match /actions/{actionId} {
         allow create: if isSignedIn() &&
-        request.resource.data.owner_uid == request.auth.uid &&
         request.resource.data.action in ['renew', 'discard'] &&
         request.resource.data.keys().hasOnly(['action', 'created_at', 'owner_uid']) &&
-        // Caller must own the parent classified — or be an admin.
-        // Evaluating isUserAdmin last avoids a get() call for the common non-admin path.
-        get(/databases/$(database)/documents/classifieds/$(docId)).data.get('owner_uid', '') == request.auth.uid;
+        // No Spoofing: The actor must sign with their own UID
+        request.resource.data.owner_uid == request.auth.uid &&
+        // Authorization: Caller must own the listing OR be an admin
+        (
+          (exists(/databases/$(database)/documents/classifieds/$(docId)) &&
+           get(/databases/$(database)/documents/classifieds/$(docId)).data.owner_uid == request.auth.uid) ||
+          isUserAdmin(request.auth.uid)
+        );
         allow read: if false;
       }
     }
