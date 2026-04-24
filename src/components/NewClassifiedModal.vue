@@ -7,6 +7,7 @@ import { TIER_LIMITS } from '../types';
 import { storage } from '../firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import type { StorageReference } from 'firebase/storage';
+import { compressImage } from '../composables/useImageUtils';
 
 const emit = defineEmits<{ submitted: [id: string] }>();
 
@@ -123,50 +124,6 @@ const handleSubmit = async () => {
   } finally {
     isSubmitting.value = false;
   }
-};
-
-/**
- * Client-side image compression using Canvas
- */
-const compressImage = (file: File): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 1200;
-
-        if (width > height && width > maxDim) {
-          height *= maxDim / width;
-          width = maxDim;
-        } else if (height > maxDim) {
-          width *= maxDim / height;
-          height = maxDim;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob(
-          (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Compression failed'));
-          },
-          'image/jpeg',
-          0.6
-        );
-      };
-      img.onerror = reject;
-    };
-    reader.onerror = reject;
-  });
 };
 </script>
 

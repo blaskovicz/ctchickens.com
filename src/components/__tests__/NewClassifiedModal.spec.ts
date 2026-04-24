@@ -23,6 +23,11 @@ vi.stubGlobal('URL', {
   revokeObjectURL: mockRevokeObjectURL,
 });
 
+// Mock compressImage utility
+vi.mock('../../composables/useImageUtils', () => ({
+  compressImage: vi.fn(() => Promise.resolve(new Blob(['mock content'], { type: 'image/jpeg' }))),
+}));
+
 const createMockStore = (isLoggedIn = true) =>
   createStore({
     state: { user: isLoggedIn ? { uid: 'user-1', displayName: 'Test User' } : null },

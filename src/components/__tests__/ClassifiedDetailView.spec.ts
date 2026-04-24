@@ -94,11 +94,13 @@ const createMockStore = (opts: {
   user?: any;
   isAdmin?: boolean;
   myBreeders?: any[];
+  breeders?: any[];
 } = {}) =>
   createStore({
     state: {
       user: opts.user ?? null,
       classifieds: [],
+      breeders: opts.breeders ?? [],
     },
     getters: {
       isLoggedIn: (state: any) => !!state.user,

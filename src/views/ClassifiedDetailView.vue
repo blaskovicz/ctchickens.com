@@ -46,7 +46,7 @@ const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter
 const ownerFarms = computed(() => {
   const uid = classified.value?.owner_uid || draftClassified.value?.owner_uid;
   if (!uid) return [];
-  return (store.state.breeders as any[]).filter(b => b.ownerUid === uid);
+  return (store.state.breeders as any[] || []).filter(b => b.ownerUid === uid);
 });
 
 // Determine tier based on farm verification
