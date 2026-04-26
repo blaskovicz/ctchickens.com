@@ -19,7 +19,7 @@ const isPending = props.item.status === 'pending';
 const isOwner = store.state.user?.uid === props.item.owner_uid;
 
 const verifiedFarms = computed(() =>
-  (store.state.breeders as any[]).filter(b => b.ownerUid === props.item.owner_uid && b.verified)
+  ((store.state.breeders as any[]) ?? []).filter(b => b.ownerUid === props.item.owner_uid && b.verified)
 );
 </script>
 

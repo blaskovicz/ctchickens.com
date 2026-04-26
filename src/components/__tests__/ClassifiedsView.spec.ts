@@ -53,6 +53,7 @@ const createMockStore = (opts: {
   return createStore({
     state: {
       user: opts.user ?? null,
+      breeders: [],
       classifieds: opts.classifieds ?? [],
       myClassifieds: opts.myClassifieds ?? [],
     },
