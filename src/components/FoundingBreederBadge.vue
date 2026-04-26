@@ -27,7 +27,7 @@ const show = computed(() => {
     :class="variantClass"
     style="cursor: help;"
   >
-    <span v-b-tooltip.hover="'Reserved for verified members that joined the directory during the first launch year.'" class="d-inline-flex align-items-center">
+    <span v-b-tooltip.hover="'Recognized for supporting the directory in its founding year, 2026.'" class="d-inline-flex align-items-center">
       <i class="bi bi-award-fill me-1"></i>Founding Member #{{ count }}
     </span>
   </span>
