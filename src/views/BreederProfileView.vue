@@ -286,7 +286,7 @@ const formatDate = (dateString: string) => {
               </div>
               <div class="d-flex align-items-center">
                 <i class="bi bi-unlock-fill me-2 text-primary"></i>
-                Up to 10 Classified Ads &amp; more renewals per listing (free accounts are limited to 2)
+                Up to 10 Classified Ads &amp; more renewals per listing
               </div>
             </div>
             <hr class="my-2 opacity-25">
