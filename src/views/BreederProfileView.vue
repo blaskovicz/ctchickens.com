@@ -284,6 +284,10 @@ const formatDate = (dateString: string) => {
                 <i class="bi bi-unlock-fill me-2 text-primary"></i>
                 Featured Listing status
               </div>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-unlock-fill me-2 text-primary"></i>
+                Up to 10 Classified Ads &amp; more renewals per listing (free accounts are limited to 2)
+              </div>
             </div>
             <hr class="my-2 opacity-25">
             <div class="d-flex flex-wrap align-items-center gap-2 gap-md-3">
