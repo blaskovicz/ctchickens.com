@@ -9,6 +9,7 @@ import BreederGallery from '../components/BreederGallery.vue';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
 import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 import ContactButton from '../components/ContactButton.vue';
+import BreederClassifiedsPreview from '../components/BreederClassifiedsPreview.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
 import { useBreederUtils, formatRelativeTime } from '../composables/useBreederUtils';
@@ -299,7 +300,7 @@ const formatDate = (dateString: string) => {
                 <i class="bi bi-chat-right-text me-1"></i> Check inbox for leads
               </router-link>
               <span class="text-muted small d-none d-md-inline">|</span>
-              <a href="#" @click.prevent="contactSupport" class="fw-bold text-primary text-decoration-none small">
+              <a href="#" @click.prevent="contactSupport" class="fw-bold text-primary text-decoration-none small get-verified-link">
                 <i class="bi bi-headset me-1"></i> Contact support to get verified
               </a>
             </div>
@@ -380,6 +381,15 @@ const formatDate = (dateString: string) => {
           <BreederGallery :logo="breeder.logo" :images="breeder.images" />
         </div>
         
+        <!-- Active Classifieds -->
+        <div v-if="breeder.ownerUid" class="mt-4 pt-4 border-top">
+          <h5 class="fw-bold mb-2 text-dark d-flex align-items-center">
+            <span class="icon-circle me-2 bg-light text-muted"><i class="bi bi-tag-fill"></i></span>
+            Active Classifieds
+          </h5>
+          <BreederClassifiedsPreview :owner-uid="breeder.ownerUid" />
+        </div>
+
         <div class="text-end mt-3 pt-2 border-top">
           <small class="text-muted smaller">Last updated: {{ formatDate(breeder.updated) }}</small>
         </div>
@@ -396,6 +406,18 @@ const formatDate = (dateString: string) => {
 
 <style scoped>
 .uc-first { text-transform: capitalize; }
+
+@keyframes verify-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.get-verified-link {
+  animation: verify-pulse 2s ease-in-out infinite;
+}
+.get-verified-link:hover {
+  animation: none;
+  opacity: 1;
+}
 .last-border-0:last-child { border-bottom: none !important; margin-bottom: 0 !important; padding-bottom: 0 !important; }
 .reviews-list { max-height: 400px; overflow-y: auto; padding-right: 10px; }
 .reviews-list::-webkit-scrollbar { width: 6px; }

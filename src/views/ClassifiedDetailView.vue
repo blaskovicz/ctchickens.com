@@ -389,10 +389,10 @@ const activeData = computed(() => classified.value || draftClassified.value);
               <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
                 <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
-              <div v-if="isOwner && classified && classified.renewal_count >= classified.max_renewals && userTier === 'freemium'" class="alert alert-warning border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
+              <div v-if="isOwner && activeData && userTier === 'freemium'" class="alert alert-warning border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
                 <i class="bi bi-stars fs-5 flex-shrink-0"></i>
                 <div>
-                  <p class="mb-1 fw-bold">Renewal limit reached</p>
+                  <p class="mb-1 fw-bold">Get more out of your listings</p>
                   <p class="mb-1">Get verified to unlock up to 10 active posts and more renewals per listing.</p>
                   <button class="btn btn-sm btn-warning fw-semibold" @click="contactSupport">Contact support to get verified</button>
                 </div>
@@ -419,6 +419,16 @@ const activeData = computed(() => classified.value || draftClassified.value);
                   <div v-if="ownerActiveCount >= TIER_LIMITS[ownerTier]" class="text-danger smaller mt-1">
                     <i class="bi bi-exclamation-circle me-1"></i> User has reached their limit
                   </div>
+                </div>
+              </div>
+
+              <!-- No farm nudge -->
+              <div v-if="isOwner && ownerFarms.length === 0" class="alert alert-light border shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
+                <i class="bi bi-house-door fs-5 flex-shrink-0 text-muted"></i>
+                <div>
+                  <p class="mb-1 fw-bold">Buyers can't find you outside this listing</p>
+                  <p class="mb-1">Create a free farm profile to get listed in the directory and start building your reputation.</p>
+                  <router-link to="/get-listed" class="btn btn-sm btn-outline-primary fw-semibold">Create a farm profile</router-link>
                 </div>
               </div>
 
