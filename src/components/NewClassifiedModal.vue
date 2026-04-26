@@ -61,6 +61,12 @@ const reset = () => {
   imagePreview.value = null;
 };
 
+const removeImage = () => {
+  if (imagePreview.value) URL.revokeObjectURL(imagePreview.value);
+  imagePreview.value = null;
+  imageFile.value = null;
+};
+
 watch(imageFile, (newFile) => {
   if (imagePreview.value) {
     URL.revokeObjectURL(imagePreview.value);
@@ -216,7 +222,7 @@ const handleSubmit = async () => {
           <div v-if="imagePreview" class="mt-2 text-center border rounded p-2 bg-light">
             <img :src="imagePreview" class="img-fluid rounded" style="max-height: 200px;" />
             <div class="mt-1">
-              <BButton size="sm" variant="outline-danger" @click="imageFile = null">
+              <BButton size="sm" variant="outline-danger" @click="removeImage">
                 <i class="bi bi-trash me-1"></i> Remove
               </BButton>
             </div>
