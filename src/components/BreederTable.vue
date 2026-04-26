@@ -167,7 +167,7 @@
                       style="cursor: pointer;"
                     >
                     <label class="form-check-label small ms-2 text-nowrap" for="verifiedSwitch" style="cursor: pointer;">
-                      Verified Only
+                      <i class="bi bi-patch-check-fill text-success me-1"></i>Verified
                     </label>
                   </div>
                 </div>
