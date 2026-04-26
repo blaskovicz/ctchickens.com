@@ -5,7 +5,7 @@ import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import ClassifiedCard from './ClassifiedCard.vue';
 import type { Classified } from '../types';
 
-const props = defineProps<{ ownerUid: string }>();
+const props = defineProps<{ ownerUid: string; isOwner?: boolean }>();
 
 const classifieds = ref<Classified[]>([]);
 const isLoading = ref(true);
@@ -39,4 +39,10 @@ onMounted(async () => {
       </div>
     </div>
   </template>
+  <div v-else-if="isOwner" class="text-center py-3">
+    <p class="text-muted small mb-2">You haven't posted any classifieds yet.</p>
+    <router-link to="/classified/new" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-plus-lg me-1"></i> Post a Classified
+    </router-link>
+  </div>
 </template>

@@ -387,7 +387,7 @@ const formatDate = (dateString: string) => {
             <span class="icon-circle me-2 bg-light text-muted"><i class="bi bi-tag-fill"></i></span>
             Active Classifieds
           </h5>
-          <BreederClassifiedsPreview :owner-uid="breeder.ownerUid" />
+          <BreederClassifiedsPreview :owner-uid="breeder.ownerUid" :is-owner="isRealOwner" />
         </div>
 
         <div class="text-end mt-3 pt-2 border-top">

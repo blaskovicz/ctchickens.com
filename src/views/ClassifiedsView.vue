@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
 import { BButton, BSpinner, BFormInput, BFormSelect } from 'bootstrap-vue-next';
-import NewClassifiedModal from '../components/NewClassifiedModal.vue';
 import PageHero from '../components/PageHero.vue';
 import ClassifiedCard from '../components/ClassifiedCard.vue';
 import type { Classified, DraftClassified, ClassifiedCategory } from '../types';
 import { CATEGORY_LABELS } from '../types';
 
 const store = useStore();
+const router = useRouter();
 
 const isLoading = ref(true);
 const textFilter = ref('');
@@ -16,7 +17,6 @@ const locationFilter = ref('');
 const categoryFilter = ref<ClassifiedCategory | ''>('');
 const showMyOnly = ref(false);
 const verifiedOnly = ref(false);
-const modalRef = ref<InstanceType<typeof NewClassifiedModal> | null>(null);
 
 const categoryOptions = [
   { value: '', text: 'All Categories' },
@@ -63,7 +63,7 @@ onMounted(async () => {
       icon="bi-megaphone-fill"
     >
       <template #actions>
-        <BButton variant="light" class="fw-bold shadow-sm px-4" @click="modalRef?.open()">
+        <BButton variant="light" class="fw-bold shadow-sm px-4" @click="router.push('/classified/new')">
           <i class="bi bi-plus-lg me-1"></i> Post a Classified
         </BButton>
       </template>
@@ -134,7 +134,7 @@ onMounted(async () => {
       <div v-else-if="filteredClassifieds.length === 0" class="text-center py-5 text-muted">
         <i class="bi bi-search fs-1 d-block mb-3"></i>
         <p class="mb-0">No active classifieds found{{ textFilter || locationFilter || categoryFilter ? ' matching your filters' : '' }}.</p>
-        <BButton variant="outline-primary" class="mt-3" @click="modalRef?.open()">Be the first to post</BButton>
+        <BButton variant="outline-primary" class="mt-3" @click="router.push('/classified/new')">Post a Classified</BButton>
       </div>
 
       <!-- Listings grid -->
@@ -144,7 +144,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <NewClassifiedModal ref="modalRef" @submitted="store.dispatch('fetchClassifieds')" />
     </div>
   </div>
 </template>
