@@ -111,7 +111,7 @@ router.onError((error, to) => {
     error.message.includes('Importing a module script failed') ||
     error.message.includes('Unable to preload CSS');
   if (isChunkLoadError) {
-    window.location.href = to.fullPath;
+    window.location.href = '/#' + to.fullPath;
   }
 });
 
