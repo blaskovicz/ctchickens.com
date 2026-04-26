@@ -44,7 +44,7 @@ import PageHero from '../components/PageHero.vue';
                   <h6 class="mb-0 fw-bold">Founding Member</h6>
                 </div>
                 <p class="small text-muted mb-0 text-start">
-                  Reserved for verified members who supported the directory by joining during its first launch year (2025).
+                  Recognized for supporting the directory in its founding year, 2026.
                 </p>
               </div>
             </div>
