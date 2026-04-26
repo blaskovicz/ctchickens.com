@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { formatRelativeTime } from '../composables/useBreederUtils';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
+import { useSupport } from '../composables/useSupport';
 import { db } from '../firebase';
 import {
   doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, getDocs, deleteDoc
@@ -19,6 +20,7 @@ const route = useRoute();
 const router = useRouter();
 const store = useStore();
 const { create } = useToast();
+const { contactSupport } = useSupport();
 
 const docId = route.params.docId as string;
 
@@ -38,6 +40,7 @@ let unsubscribeClassified: (() => void) | null = null;
 const user = computed(() => store.state.user);
 const isAdmin = computed(() => store.getters.isAdmin);
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
+const userTier = computed(() => store.getters.userTier);
 const isOwner = computed(() => !!user.value && (classified.value?.owner_uid === user.value.uid || draftClassified.value?.owner_uid === user.value.uid));
 const isDraft = computed(() => !!draftClassified.value && !classified.value);
 const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter((b: any) => b.status === 'published'));
@@ -386,6 +389,14 @@ const activeData = computed(() => classified.value || draftClassified.value);
               <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
                 <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
+              <div v-if="isOwner && classified && classified.renewal_count >= classified.max_renewals && userTier === 'freemium'" class="alert alert-warning border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
+                <i class="bi bi-stars fs-5 flex-shrink-0"></i>
+                <div>
+                  <p class="mb-1 fw-bold">Renewal limit reached</p>
+                  <p class="mb-1">Get verified to unlock up to 10 active posts and more renewals per listing.</p>
+                  <button class="btn btn-sm btn-warning fw-semibold" @click="contactSupport">Contact support to get verified</button>
+                </div>
+              </div>
 
               <!-- Admin context section -->
               <div v-if="isAdmin" class="mt-4 pt-4 border-top">
