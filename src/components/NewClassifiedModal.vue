@@ -8,11 +8,13 @@ import { storage } from '../firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import type { StorageReference } from 'firebase/storage';
 import { compressImage } from '../composables/useImageUtils';
+import { useSupport } from '../composables/useSupport';
 
 const emit = defineEmits<{ submitted: [id: string] }>();
 
 const store = useStore();
 const { create } = useToast();
+const { contactSupport } = useSupport();
 
 const show = ref(false);
 const isSubmitting = ref(false);
@@ -64,7 +66,6 @@ watch(imageFile, (newFile) => {
     URL.revokeObjectURL(imagePreview.value);
     imagePreview.value = null;
   }
-
   if (newFile) {
     if (newFile.size > 10 * 1024 * 1024) {
       create?.({ body: 'Image must be smaller than 10MB.', variant: 'danger' });
@@ -138,14 +139,19 @@ const handleSubmit = async () => {
     </div>
 
     <form v-else @submit.prevent="handleSubmit" class="d-flex flex-column gap-3">
-      <div v-if="!canPost" class="alert alert-warning mb-0 border-0 shadow-sm d-flex align-items-center gap-3">
+      <div v-if="!canPost && userTier === 'premium'" class="alert alert-warning mb-0 border-0 shadow-sm d-flex align-items-center gap-3">
         <i class="bi bi-exclamation-triangle-fill fs-4"></i>
         <div>
           <p class="mb-0 fw-bold">Post Limit Reached</p>
-          <p class="small mb-0">
-            {{ userTier === 'freemium' ? 'Freemium' : 'Premium' }} users are limited to {{ tierLimit }} active posts. 
-            Close an existing listing to post a new one.
-          </p>
+          <p class="small mb-0">Premium users are limited to {{ tierLimit }} active posts. Close an existing listing to post a new one.</p>
+        </div>
+      </div>
+      <div v-if="!canPost && userTier === 'freemium'" class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3">
+        <i class="bi bi-stars fs-4 flex-shrink-0"></i>
+        <div>
+          <p class="mb-1 fw-bold">Post Limit Reached</p>
+          <p class="small mb-1">Free accounts are limited to {{ tierLimit }} active posts. Get verified to unlock up to 10 active posts and more renewals per listing.</p>
+          <button class="btn btn-sm btn-warning fw-semibold" @click="contactSupport">Contact support to get verified</button>
         </div>
       </div>
 
@@ -198,17 +204,19 @@ const handleSubmit = async () => {
         </BFormGroup>
 
         <BFormGroup label="Photo (Optional)" label-for="photo" description="Add 1 photo of your item (max 10MB)">
-          <BFormFile 
-            id="photo" 
-            v-model="imageFile" 
-            accept="image/*" 
-            placeholder="Choose an image..."
-            drop-placeholder="Drop image here..."
+          <BFormFile
+            id="photo"
+            v-model="imageFile"
+            accept="image/*"
+            placeholder="No photo selected"
+            browse-text="Choose photo"
+            class="classified-file-input"
+            :disabled="!canPost"
           />
           <div v-if="imagePreview" class="mt-2 text-center border rounded p-2 bg-light">
             <img :src="imagePreview" class="img-fluid rounded" style="max-height: 200px;" />
             <div class="mt-1">
-              <BButton size="sm" variant="outline-danger" @click="imageFile = null;">
+              <BButton size="sm" variant="outline-danger" @click="imageFile = null">
                 <i class="bi bi-trash me-1"></i> Remove
               </BButton>
             </div>
@@ -229,3 +237,28 @@ const handleSubmit = async () => {
     </template>
   </BModal>
 </template>
+
+<style scoped>
+:deep(.classified-file-input .b-form-file-button) {
+  background-color: var(--bs-primary);
+  color: #fff;
+  border: 0;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+:deep(.classified-file-input .b-form-file-button:hover) {
+  background-color: #0b5ed7;
+}
+
+:deep(.classified-file-input .b-form-file-button:disabled),
+:deep(.classified-file-input .b-form-file-button[disabled]) {
+  opacity: 0.65;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+</style>
