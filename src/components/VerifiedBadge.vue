@@ -27,7 +27,7 @@ const show = computed(() => {
     :class="variantClass"
     style="cursor: help;"
   >
-    <span v-b-tooltip.hover="'Verified listings confirm the breeder is a known member of our community in good standing.'" class="d-inline-flex align-items-center">
+    <span v-b-tooltip.hover="'Verified listings confirm the member is known in our community and in good standing.'" class="d-inline-flex align-items-center">
       <i class="bi bi-check-circle-fill me-1"></i>Verified
     </span>
   </span>

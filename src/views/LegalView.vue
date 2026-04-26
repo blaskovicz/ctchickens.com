@@ -17,7 +17,7 @@
             <h3>2. DIRECTORY LISTINGS AND "VERIFIED" STATUS</h3>
             <p>
               The Site provides a directory of third-party breeders and suppliers. 
-              <strong>"Verified"</strong> listings confirm the breeder is a known member of our community in good standing. This "Verified" status is for community identification purposes only and <strong>DOES NOT</strong> constitute an endorsement, inspection, or guarantee of the breeder's business practices, livestock health, or egg quality.
+              <strong>"Verified"</strong> listings confirm the member is known in our community and in good standing. This "Verified" status is for community identification purposes only and <strong>DOES NOT</strong> constitute an endorsement, inspection, or guarantee of the member's business practices, product quality, or livestock health.
             </p>
           </section>
 
