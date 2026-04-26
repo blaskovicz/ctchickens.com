@@ -113,4 +113,4 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy Firestore rules and indexes
-        run: npx firebase deploy --only firestore --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: npx firebase deploy --only firestore --force --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
