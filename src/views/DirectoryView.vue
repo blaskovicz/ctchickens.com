@@ -33,7 +33,7 @@ import PageHero from '../components/PageHero.vue';
                   <h6 class="mb-0 fw-bold">Verified Member</h6>
                 </div>
                 <p class="small text-muted mb-0 text-start">
-                  Confirms the breeder is a known member of our community in good standing with a verified history of safe transactions.
+                  Confirms the listing is from a known member of our community in good standing.
                 </p>
               </div>
             </div>
