@@ -15,6 +15,7 @@ const textFilter = ref('');
 const locationFilter = ref('');
 const categoryFilter = ref<ClassifiedCategory | ''>('');
 const showMyOnly = ref(false);
+const verifiedOnly = ref(false);
 const modalRef = ref<InstanceType<typeof NewClassifiedModal> | null>(null);
 
 const categoryOptions = [
@@ -33,11 +34,13 @@ const filteredClassifieds = computed(() => {
   const text = textFilter.value.toLowerCase();
   const loc = locationFilter.value.toLowerCase();
   const cat = categoryFilter.value;
+  const breeders = store.state.breeders as any[];
   return classifieds.value.filter(c => {
     if (showMyOnly.value && c.owner_uid !== user.value?.uid) return false;
     if (cat && c.category !== cat) return false;
     if (loc && !c.location.toLowerCase().includes(loc)) return false;
     if (text && !c.title.toLowerCase().includes(text) && !c.description.toLowerCase().includes(text) && !c.location.toLowerCase().includes(text)) return false;
+    if (verifiedOnly.value && !breeders.some(b => b.ownerUid === c.owner_uid && b.verified)) return false;
     return true;
   });
 });
@@ -70,21 +73,35 @@ onMounted(async () => {
 
       <!-- Filters -->
       <div class="row g-2 mb-4 align-items-center">
-        <div :class="isLoggedIn ? 'col-md-4' : 'col-md-5'">
+        <div :class="isLoggedIn ? 'col-md-3' : 'col-md-4'">
           <BFormInput v-model="textFilter" placeholder="Search descriptions..." />
         </div>
-        <div :class="isLoggedIn ? 'col-md-3' : 'col-md-4'">
+        <div :class="isLoggedIn ? 'col-md-2' : 'col-md-3'">
           <BFormInput v-model="locationFilter" placeholder="Filter by location..." />
         </div>
         <div class="col-md-3">
           <BFormSelect v-model="categoryFilter" :options="categoryOptions" />
         </div>
+        <div class="col-md-2">
+          <div class="form-check form-switch border rounded bg-white d-flex align-items-center justify-content-center px-2" style="height: 38px;">
+            <input
+              v-model="verifiedOnly"
+              class="form-check-input my-0 ms-1"
+              type="checkbox"
+              id="verifiedOnlySwitch"
+              style="cursor: pointer;"
+            >
+            <label class="form-check-label small ms-2 text-nowrap" for="verifiedOnlySwitch" style="cursor: pointer;">
+              <i class="bi bi-patch-check-fill text-success me-1"></i>Verified
+            </label>
+          </div>
+        </div>
         <div v-if="isLoggedIn" class="col-md-2">
           <div class="form-check form-switch border rounded bg-white d-flex align-items-center justify-content-center px-2" style="height: 38px;">
-            <input 
-              v-model="showMyOnly" 
-              class="form-check-input my-0 ms-1" 
-              type="checkbox" 
+            <input
+              v-model="showMyOnly"
+              class="form-check-input my-0 ms-1"
+              type="checkbox"
               id="myOnlySwitch"
               style="cursor: pointer;"
             >

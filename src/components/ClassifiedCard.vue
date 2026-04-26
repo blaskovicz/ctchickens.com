@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { BBadge } from 'bootstrap-vue-next';
@@ -16,6 +17,10 @@ const router = useRouter();
 
 const isPending = props.item.status === 'pending';
 const isOwner = store.state.user?.uid === props.item.owner_uid;
+
+const verifiedFarms = computed(() =>
+  (store.state.breeders as any[]).filter(b => b.ownerUid === props.item.owner_uid && b.verified)
+);
 </script>
 
 <template>
@@ -63,6 +68,14 @@ const isOwner = store.state.user?.uid === props.item.owner_uid;
         </div>
         <div class="text-muted smaller mt-1">
           <i class="bi bi-clock me-1"></i>{{ formatRelativeTime(item.created_at) }}
+        </div>
+        <div v-if="verifiedFarms.length" class="mt-1">
+          <div v-for="farm in verifiedFarms" :key="farm.id" class="d-flex align-items-center gap-1 small">
+            <i class="bi bi-patch-check-fill text-success"></i>
+            <router-link :to="`/directory/${farm.id}`" class="text-success fw-semibold text-truncate farm-link" @click.stop>
+              {{ farm.name }}
+            </router-link>
+          </div>
         </div>
       </div>
     </div>
@@ -115,6 +128,14 @@ const isOwner = store.state.user?.uid === props.item.owner_uid;
 
 .smaller {
   font-size: 0.75rem;
+}
+
+.farm-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.farm-link:hover {
+  opacity: 0.8;
 }
 
 @keyframes pulse-soft {
