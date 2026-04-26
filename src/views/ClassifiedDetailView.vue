@@ -65,7 +65,7 @@ const daysUntilExpiry = computed(() => {
 });
 
 const canRenew = computed(() => {
-  if (!classified.value || !isOwner.value) return false;
+  if (!classified.value || (!isOwner.value && !isAdmin.value)) return false;
   if (classified.value.status !== 'active') return false;
   if (classified.value.renewal_count >= classified.value.max_renewals) return false;
   const days = daysUntilExpiry.value;
@@ -187,6 +187,18 @@ const handleApprove = async () => {
     });
     batch.delete(doc(db, 'draft_classifieds', docId));
     await batch.commit();
+
+    // Wait for the CF to write to classifieds before navigating so the list is fresh
+    try {
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        const snap = await getDoc(doc(db, 'classifieds', docId));
+        if (snap.exists()) break;
+      }
+    } catch {
+      // Poll failed — navigate anyway, approval already committed
+    }
+
     create?.({ body: 'Classified approved and published!', variant: 'success' });
     router.push('/classified');
   } catch (e: any) {
@@ -386,10 +398,10 @@ const activeData = computed(() => classified.value || draftClassified.value);
                   <span class="text-dark">{{ classified.renewal_count }} / {{ classified.max_renewals }} used</span>
                 </div>
               </div>
-              <span v-if="isOwner && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
+              <span v-if="(isOwner || isAdmin) && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
                 <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
-              <div v-if="isOwner && activeData && userTier === 'freemium'" class="alert alert-warning border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
+              <div v-if="(isOwner || isAdmin) && activeData && ownerTier === 'freemium'" class="alert alert-warning border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
                 <i class="bi bi-stars fs-5 flex-shrink-0"></i>
                 <div>
                   <p class="mb-1 fw-bold">Get more out of your listings</p>
@@ -423,7 +435,7 @@ const activeData = computed(() => classified.value || draftClassified.value);
               </div>
 
               <!-- No farm nudge -->
-              <div v-if="isOwner && ownerFarms.length === 0" class="alert alert-light border shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
+              <div v-if="(isOwner || isAdmin) && ownerFarms.length === 0" class="alert alert-light border shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
                 <i class="bi bi-house-door fs-5 flex-shrink-0 text-muted"></i>
                 <div>
                   <p class="mb-1 fw-bold">Buyers can't find you outside this listing</p>

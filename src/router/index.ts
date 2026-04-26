@@ -56,6 +56,11 @@ const router = createRouter({
       component: () => import('../views/ClassifiedsView.vue')
     },
     {
+      path: '/classified/new',
+      name: 'classified-new',
+      component: () => import('../views/NewClassifiedView.vue')
+    },
+    {
       path: '/classified/:docId',
       name: 'classified-detail',
       component: () => import('../views/ClassifiedDetailView.vue')
