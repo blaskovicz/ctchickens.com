@@ -40,7 +40,6 @@ let unsubscribeClassified: (() => void) | null = null;
 const user = computed(() => store.state.user);
 const isAdmin = computed(() => store.getters.isAdmin);
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
-const userTier = computed(() => store.getters.userTier);
 const isOwner = computed(() => !!user.value && (classified.value?.owner_uid === user.value.uid || draftClassified.value?.owner_uid === user.value.uid));
 const isDraft = computed(() => !!draftClassified.value && !classified.value);
 const publishedFarms = computed(() => (store.getters.myBreeders as any[]).filter((b: any) => b.status === 'published'));
