@@ -97,8 +97,8 @@ const isOwner = computed(() => {
 // When admin is viewing: check the owner's users-doc email (ownerProfile is already fetched).
 // Only evaluates to true once ownerProfile has loaded (not null) to avoid a flash.
 const ownerEmailMissing = computed(() => {
-  if (isRealOwner.value) return !user.value?.email;
-  if (isAdmin.value) return ownerProfile.value !== null && !ownerProfile.value?.email;
+  if (isRealOwner.value) return !user.value?.email && !store.state.userData?.localEmail;
+  if (isAdmin.value) return ownerProfile.value !== null && !ownerProfile.value?.email && !ownerProfile.value?.localEmail;
   return false;
 });
 
