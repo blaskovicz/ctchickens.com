@@ -10,6 +10,7 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', component: { template: '<div />' } },
+    { path: '/classified/new', component: { template: '<div />' } },
     { path: '/classified/:docId', component: { template: '<div />' } },
     { path: '/classified', component: { template: '<div />' } },
   ]
@@ -87,7 +88,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -104,7 +105,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -124,7 +125,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -144,7 +145,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -166,7 +167,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -182,7 +183,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -196,7 +197,7 @@ describe('ClassifiedsView', () => {
     });
 
     const wrapper = mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -209,7 +210,7 @@ describe('ClassifiedsView', () => {
     const spy = vi.spyOn(store, 'dispatch');
 
     mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -221,7 +222,7 @@ describe('ClassifiedsView', () => {
     const spy = vi.spyOn(store, 'dispatch');
 
     mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
@@ -233,7 +234,7 @@ describe('ClassifiedsView', () => {
     const spy = vi.spyOn(store, 'dispatch');
 
     mount(ClassifiedsView, {
-      global: { plugins: [store, router], stubs: { NewClassifiedModal: true } }
+      global: { plugins: [store, router], stubs: {} }
     });
     await flushPromises();
 
