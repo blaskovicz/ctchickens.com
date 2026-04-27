@@ -183,7 +183,7 @@ const handleSubmit = async () => {
                     </div>
                   </div>
 
-                  <div v-if="!store.getters.currentUser?.email" class="alert alert-warning border-0 shadow-sm text-start mb-4 py-3 d-flex align-items-start gap-3">
+                  <div v-if="!store.getters.currentUser?.email && !store.state.userData?.localEmail" class="alert alert-warning border-0 shadow-sm text-start mb-4 py-3 d-flex align-items-start gap-3">
                     <i class="bi bi-envelope-exclamation-fill fs-4 text-warning mt-1 flex-shrink-0"></i>
                     <div>
                       <h6 class="fw-bold mb-1 text-warning">No email address on your account</h6>
