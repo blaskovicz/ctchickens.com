@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { formatRelativeTime } from '../composables/useBreederUtils';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
@@ -88,6 +88,14 @@ const fetchAdminInsights = async (ownerUid: string) => {
     console.warn('Failed to fetch admin insights:', e);
   }
 };
+
+// On cold refresh the snapshot fires before auth settles, so isAdmin is false and
+// fetchAdminInsights returns early. Re-run it once auth catches up.
+watch(isAdmin, (nowAdmin) => {
+  if (!nowAdmin) return;
+  const uid = classified.value?.owner_uid ?? draftClassified.value?.owner_uid;
+  if (uid) fetchAdminInsights(uid);
+});
 
 onMounted(async () => {
   try {
