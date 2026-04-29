@@ -10,7 +10,7 @@ export interface ProfileMedia {
   logoUrl: string;
   galleryUrls: string[];
   logoStoragePath: string | null;
-  galleryStoragePaths: string[];
+  galleryStoragePaths: (string | null)[];
 }
 
 export interface ProfileImageEditorExposed {
@@ -151,7 +151,7 @@ function removeLogo() {
 }
 
 function removeGallery(idx: number) {
-  const oldUrl = props.modelValue.galleryUrls[idx];
+  const oldUrl = props.modelValue.galleryUrls[idx]!;
   const oldPath = props.modelValue.galleryStoragePaths[idx];
   if (isBlobUrl(oldUrl)) {
     pendingFiles.delete(oldUrl);
@@ -255,7 +255,7 @@ function onGalleryReplaceChange(e: Event) {
   const idx = replacingGalleryIdx.value;
   replacingGalleryIdx.value = null;
 
-  const oldUrl = props.modelValue.galleryUrls[idx];
+  const oldUrl = props.modelValue.galleryUrls[idx]!;
   const oldPath = props.modelValue.galleryStoragePaths[idx];
   if (isBlobUrl(oldUrl)) {
     pendingFiles.delete(oldUrl);
@@ -293,8 +293,8 @@ function onDrop(targetIdx: number) {
   }
   const urls = [...props.modelValue.galleryUrls];
   const paths = [...props.modelValue.galleryStoragePaths];
-  const [movedUrl] = urls.splice(draggedIndex.value, 1);
-  const [movedPath] = paths.splice(draggedIndex.value, 1);
+  const movedUrl = urls.splice(draggedIndex.value, 1)[0]!;
+  const movedPath = paths.splice(draggedIndex.value, 1)[0]!;
   urls.splice(targetIdx, 0, movedUrl);
   paths.splice(targetIdx, 0, movedPath);
   emit('update:modelValue', { ...props.modelValue, galleryUrls: urls, galleryStoragePaths: paths });
