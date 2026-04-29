@@ -2,8 +2,10 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import { db, trackEvent } from '../firebase';
-import BreederGallery from '../components/BreederGallery.vue';
+import { db, storage, trackEvent } from '../firebase';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
+import ProfileImageEditor from '../components/ProfileImageEditor.vue';
+import type { ProfileImageEditorExposed } from '../components/ProfileImageEditor.vue';
 import { 
   doc, getDoc, setDoc, deleteDoc, serverTimestamp, writeBatch,
   Timestamp, collection, query, where, orderBy, getDocs, limit
@@ -35,6 +37,8 @@ const initialAdminFields = ref<any | null>(null); // Store the initial admin fie
 const hasPendingDraft = ref(false);
 const isLocked = ref(true); // Admin-only: Lock fields during review
 
+const profileImageEditorRef = ref<ProfileImageEditorExposed | null>(null);
+
 // Local state for the tag input box
 const tagInput = ref('');
 
@@ -46,7 +50,7 @@ const toggleLock = () => {
 const formData = ref({
   profile: { businessName: '', memberType: '', town: '', contactEmail: '', website: '' },
   offerings: { description: '', searchTags: [] as string[] },
-  media: { logoUrl: '', galleryUrls: [] as string[] },
+  media: { logoUrl: '', galleryUrls: [] as string[], logoStoragePath: null as string | null, galleryStoragePaths: [] as string[] },
   account: { ownerUid: '', status: 'draft' }
 });
 
@@ -134,9 +138,29 @@ const handleDiscard = async () => {
         return;
       }
     }
+    // Clean up Storage files that exist in the draft but not in the live doc
+    if (draftSnap.exists()) {
+      const draftMedia = draftSnap.data().media || {};
+      const liveMedia = liveData.value?.media || {};
+      const livePaths = new Set([
+        liveMedia.logoStoragePath,
+        ...(liveMedia.galleryStoragePaths || [])
+      ].filter(Boolean));
+      const orphans: string[] = [];
+      if (draftMedia.logoStoragePath && !livePaths.has(draftMedia.logoStoragePath)) {
+        orphans.push(draftMedia.logoStoragePath);
+      }
+      for (const p of (draftMedia.galleryStoragePaths || [])) {
+        if (p && !livePaths.has(p)) orphans.push(p);
+      }
+      await Promise.all(orphans.map(p =>
+        deleteObject(storageRef(storage, p)).catch(() => {})
+      ));
+    }
+
     await deleteDoc(draftRef);
 
-    // FIX: Clear local pending state immediately
+    profileImageEditorRef.value?.discardPending();
     store.commit('REMOVE_DRAFT', slug);
 
     if (liveData.value) {
@@ -181,6 +205,8 @@ onMounted(async () => {
       if (!data.offerings.searchTags) data.offerings.searchTags = [];
       if (!data.media) data.media = {};
       if (!data.media.galleryUrls) data.media.galleryUrls = [];
+      if (data.media.logoStoragePath === undefined) data.media.logoStoragePath = null;
+      if (!data.media.galleryStoragePaths) data.media.galleryStoragePaths = [];
       
       liveData.value = data;
       
@@ -213,6 +239,8 @@ onMounted(async () => {
       if (!draftData.offerings.searchTags) draftData.offerings.searchTags = [];
       if (!draftData.media) draftData.media = {};
       if (!draftData.media.galleryUrls) draftData.media.galleryUrls = [];
+      if (draftData.media.logoStoragePath === undefined) draftData.media.logoStoragePath = null;
+      if (!draftData.media.galleryStoragePaths) draftData.media.galleryStoragePaths = [];
       
       if (!draftData.account) {
         draftData.account = liveData.value ? JSON.parse(JSON.stringify(liveData.value.account)) : {
@@ -364,10 +392,23 @@ const DIFF_EXCLUDED_PATHS = new Set([
   'account.updatedAt',
   'updatedAt',
   // Publish logic deletes this before writing to the live doc.
-  'draft_owner_uid'
+  'draft_owner_uid',
+  // Internal storage paths — not meaningful in a visual diff.
+  'media.logoStoragePath',
 ]);
 
-type PublishDiffRow = { path: string; oldVal: string; newVal: string };
+const GALLERY_STORAGE_PATH_RE = /^media\.galleryStoragePaths\[/;
+const GALLERY_URL_PATH_RE = /^media\.galleryUrls\[\d+\]$/;
+
+const isImageDiffPath = (path: string) =>
+  path === 'media.logoUrl' || GALLERY_URL_PATH_RE.test(path);
+
+const rawImageUrl = (v: unknown): string | null => {
+  if (typeof v === 'string' && (v.startsWith('http') || v.startsWith('blob:'))) return v;
+  return null;
+};
+
+type PublishDiffRow = { path: string; oldVal: string; newVal: string; oldUrl: string | null; newUrl: string | null };
 
 const topLevelSection = (path: string): string => {
   const m = path.match(/^([a-zA-Z_][a-zA-Z0-9_]*)/);
@@ -425,6 +466,7 @@ const publishDiffGrouped = computed(() => {
   const rows: PublishDiffRow[] = [];
   for (const path of allPaths) {
     if (DIFF_EXCLUDED_PATHS.has(path)) continue;
+    if (GALLERY_STORAGE_PATH_RE.test(path)) continue;
     const a = liveFlat[path];
     const b = proposedFlat[path];
     
@@ -433,10 +475,13 @@ const publishDiffGrouped = computed(() => {
     const same = (isNullish(a) && isNullish(b)) || (JSON.stringify(a) === JSON.stringify(b));
     
     if (!same) {
+      const imgPath = isImageDiffPath(path);
       rows.push({
         path,
         oldVal: formatDiffValue(a),
-        newVal: formatDiffValue(b)
+        newVal: formatDiffValue(b),
+        oldUrl: imgPath ? rawImageUrl(a) : null,
+        newUrl: imgPath ? rawImageUrl(b) : null,
       });
     }
   }
@@ -471,6 +516,8 @@ const handleSave = async (): Promise<boolean> => {
   isSaving.value = true;
 
   try {
+    await profileImageEditorRef.value?.flushUploads();
+
     const payload = {
       ...formData.value,
       account: {
@@ -503,6 +550,8 @@ const handleSave = async (): Promise<boolean> => {
         batch.delete(doc(db, 'draft_profiles', slug));
       }
       await batch.commit();
+      // Firestore write succeeded — safe to delete orphaned Storage files now.
+      await profileImageEditorRef.value?.commitDeletes();
 
       // Clear local draft flag immediately — before any further async work —
       // so the UI can't get stuck in "draft pending" if navigation or store
@@ -535,6 +584,7 @@ const handleSave = async (): Promise<boolean> => {
       };
       const { account, ...draftPayloadWithoutAccount } = draftPayload;
       await setDoc(doc(db, 'draft_profiles', slug), draftPayloadWithoutAccount);
+      await profileImageEditorRef.value?.commitDeletes();
       trackEvent('profile_draft_submitted', { breeder_id: slug });
       create?.({ body: "Draft submitted for admin approval!", variant: 'success' });
     }
@@ -696,17 +746,17 @@ const removeTag = (tag: string) => {
               </div>
             </div>
 
-            <!-- Gallery Preview -->
+            <!-- Photos -->
+            <h5 class="mb-3 border-bottom pb-2 fw-bold text-dark">Photos</h5>
             <div class="mb-4">
-              <h5 class="mb-3 border-bottom pb-2 fw-bold text-dark">Gallery Preview</h5>
-              <div v-if="formData.media.logoUrl || (formData.media.galleryUrls && formData.media.galleryUrls.length > 0)" class="p-3 border rounded bg-light-subtle">
-                <BreederGallery
-                  id="draft-gallery"
-                  :logo="formData.media.logoUrl"
-                  :images="formData.media.galleryUrls"
-                />
-              </div>
-              <div v-else class="text-muted small">No gallery images in this draft yet.</div>
+              <ProfileImageEditor
+                ref="profileImageEditorRef"
+                v-model="formData.media"
+                :owner-uid="formData.account.ownerUid || user?.uid || ''"
+                :slug="slug"
+                :locked="isAdmin && hasPendingDraft && isLocked"
+                :is-verified="!!(liveData?.account?.isVerified)"
+              />
             </div>
 
             <!-- Admin Only Section -->
@@ -791,8 +841,25 @@ const removeTag = (tag: string) => {
             class="publish-diff-row font-monospace small mb-2 p-2 rounded border bg-light"
           >
             <div class="text-break fw-semibold text-dark mb-1">{{ row.path }}</div>
-            <div class="text-danger mb-1"><span class="me-1">−</span>{{ row.oldVal }}</div>
-            <div class="text-success"><span class="me-1">+</span>{{ row.newVal }}</div>
+            <template v-if="isImageDiffPath(row.path)">
+              <div class="d-flex gap-3 align-items-start mt-1">
+                <div class="text-center">
+                  <div class="text-danger small mb-1 fw-semibold">− old</div>
+                  <img v-if="row.oldUrl" :src="row.oldUrl" class="diff-thumb border" alt="Old" referrerpolicy="no-referrer" />
+                  <span v-else class="text-muted fst-italic small">none</span>
+                </div>
+                <div class="text-center">
+                  <div class="text-success small mb-1 fw-semibold">+ new</div>
+                  <img v-if="row.newUrl" :src="row.newUrl" class="diff-thumb border" alt="New" referrerpolicy="no-referrer" />
+                  <span v-else class="text-muted fst-italic small">none</span>
+                  <div v-if="row.newUrl && row.newUrl.startsWith('blob:')" class="text-muted fst-italic mt-1" style="font-size: 0.65rem;">(pending — will upload on save)</div>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <div class="text-danger mb-1"><span class="me-1">−</span>{{ row.oldVal }}</div>
+              <div class="text-success"><span class="me-1">+</span>{{ row.newVal }}</div>
+            </template>
           </div>
         </div>
       </div>
@@ -866,5 +933,13 @@ const removeTag = (tag: string) => {
 .publish-diff-scroll {
   max-height: min(60vh, 480px);
   overflow-y: auto;
+}
+
+.diff-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
 }
 </style>
