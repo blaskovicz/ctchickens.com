@@ -6,6 +6,7 @@ import { getStorage } from 'firebase-admin/storage';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onObjectFinalized } from 'firebase-functions/v2/storage';
 import { defineSecret } from 'firebase-functions/params';
 import { Resend } from 'resend';
 import {
@@ -38,6 +39,12 @@ initializeApp();
 const db = getFirestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const hmacSecret = defineSecret('HMAC_SECRET');
+
+async function chunkAll<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(fn));
+  }
+}
 
 function resolveEmail(userData: FirebaseFirestore.DocumentData): string | null {
   if (userData.localEmail) return userData.localEmail;
@@ -1253,6 +1260,99 @@ export const sweepExpiredClassifieds = onSchedule(
       if (!rejectedSnap.empty) console.log(`[sweepExpiredClassifieds] Cleaned up ${rejectedSnap.size} rejected drafts and their images`);
     } catch (err) {
       console.error('[sweepExpiredClassifieds] Rejected draft cleanup failed', err);
+    }
+  }
+);
+
+// Runs nightly: deletes orphaned profile images from Storage.
+// A profile image is orphaned if its storage path appears under profiles/ but is not
+// referenced by any directory_members or draft_profiles document.
+export const sweepExpiredFarmImages = onSchedule(
+  { schedule: 'every 24 hours', timeZone: 'America/New_York' },
+  async () => {
+    const bucket = getStorage().bucket();
+
+    // 1. Collect all storage paths currently referenced in Firestore
+    const referencedPaths = new Set<string>();
+
+    try {
+      const [liveSnap, draftSnap] = await Promise.all([
+        db.collection('directory_members').get(),
+        db.collection('draft_profiles').get(),
+      ]);
+
+      for (const doc of [...liveSnap.docs, ...draftSnap.docs]) {
+        const media = doc.data().media;
+        if (!media) continue;
+        if (media.logoStoragePath) referencedPaths.add(media.logoStoragePath);
+        for (const p of (media.galleryStoragePaths ?? [])) {
+          if (p) referencedPaths.add(p);
+        }
+      }
+
+      console.log(`[sweepExpiredFarmImages] ${referencedPaths.size} referenced profile storage paths`);
+    } catch (err) {
+      console.error('[sweepExpiredFarmImages] Failed to collect referenced paths', err);
+      return;
+    }
+
+    // 2. List all files under profiles/ and delete any that are not referenced.
+    // A 1-hour grace period skips recently uploaded files that may not yet be written
+    // to Firestore (e.g., flushUploads completed but handleSave Firestore write is in flight).
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const now = Date.now();
+
+    try {
+      const [files] = await bucket.getFiles({ prefix: 'profiles/' });
+      let deleted = 0;
+
+      await chunkAll(files, 50, async (file) => {
+        if (referencedPaths.has(file.name)) return;
+        const created = new Date(file.metadata.timeCreated as string).getTime();
+        if (now - created < ONE_HOUR_MS) return; // Grace period
+        await file.delete().catch(() => {/* already gone */});
+        deleted++;
+      });
+
+      console.log(`[sweepExpiredFarmImages] Deleted ${deleted} orphaned profile images (${files.length} total scanned)`);
+    } catch (err) {
+      console.error('[sweepExpiredFarmImages] Storage sweep failed', err);
+    }
+  }
+);
+
+// Verifies that every file uploaded to profiles/ or classifieds/ is actually an image
+// by checking magic bytes. Deletes any file that fails — guards against a client that
+// lies about contentType in the upload metadata.
+// Scoped to the production bucket so it doesn't fire in staging/secondary buckets.
+export const verifyUploadedImage = onObjectFinalized(
+  { bucket: 'ct-chickens.firebasestorage.app' },
+  async (event) => {
+    const filePath = event.data.name;
+    if (!filePath) return;
+    if (!filePath.startsWith('profiles/') && !filePath.startsWith('classifieds/')) return;
+
+    const bucket = getStorage().bucket(event.data.bucket);
+    const file = bucket.file(filePath);
+
+    let buffer: Buffer;
+    try {
+      [buffer] = await file.download({ start: 0, end: 11 });
+    } catch {
+      return; // File already gone
+    }
+
+    const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8;
+    const isPng  = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+    const isGif  = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46;
+    // WebP: bytes 0-3 = "RIFF", bytes 8-11 = "WEBP"
+    const isWebP = buffer.length >= 12
+      && buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46
+      && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
+
+    if (!isJpeg && !isPng && !isGif && !isWebP) {
+      console.warn(`[verifyUploadedImage] Non-image bytes detected, deleting: ${filePath}`);
+      await file.delete().catch(() => {});
     }
   }
 );

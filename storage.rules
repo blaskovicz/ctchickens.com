@@ -1,27 +1,49 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Publicly readable images
-    match /{allPaths=**} {
+
+    // Returns true if userId owns the given slug in either the live directory or a pending draft.
+    // Uses firestore.get() directly — accessing a missing doc's field returns null (not an error),
+    // so the == userId check safely returns false without a separate exists() guard.
+    function ownsSlug(userId, slug) {
+      let live  = firestore.get(/databases/(default)/documents/directory_members/$(slug));
+      let draft = firestore.get(/databases/(default)/documents/draft_profiles/$(slug));
+      return live.data.account.ownerUid == userId
+          || draft.data.draft_owner_uid == userId;
+    }
+
+    // Profile images — publicly readable; writes and deletes require UID match + slug ownership.
+    // Path structure: profiles/{userId}/{slug}/{fileName}
+    match /profiles/{userId}/{slug}/{fileName} {
       allow read: if true;
+      allow write: if request.auth != null
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*')
+                   && (request.auth.token.admin == true
+                       || (request.auth.uid == userId && ownsSlug(userId, slug)));
+      allow delete: if request.auth != null
+                    && (request.auth.token.admin == true
+                        || (request.auth.uid == userId && ownsSlug(userId, slug)));
     }
 
-    // Protect directory member assets (owner or admin only)
-    match /directory_members/{memberId}/{allPaths=**} {
-      allow write: if request.auth != null && (request.auth.uid == memberId || request.auth.token.admin == true);
-    }
-
-    // Classifieds images
+    // Classifieds images — publicly readable
     match /classifieds/{userId}/{fileName} {
-      allow create, update: if request.auth != null 
+      allow read: if true;
+      allow create, update: if request.auth != null
                    && request.auth.uid == userId
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Default: Only admins can write to other locations
+    // Legacy: directory_members path was never used in production — admin only
+    match /directory_members/{memberId}/{allPaths=**} {
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Default: deny public reads; admin-only writes everywhere else
     match /{allPaths=**} {
+      allow read: if request.auth != null && request.auth.token.admin == true;
       allow write: if request.auth != null && request.auth.token.admin == true;
     }
   }
