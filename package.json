@@ -8,7 +8,7 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "emulate:seed": "node .\\seed-emualtor.js",
+    "emulate:seed": "node scripts/restore-collections.js --emulator",
     "emulate": "firebase emulators:start",
     "emulate:persist": "firebase emulators:start --import=./seed-data --export-on-exit",
     "emulate:export": "firebase emulators:export ./seed-data"
@@ -31,6 +31,7 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.8.1",
+    "firebase-admin": "^13.4.0",
     "firebase-tools": "^13.31.1",
     "jsdom": "^28.0.0",
     "typescript": "~5.9.3",

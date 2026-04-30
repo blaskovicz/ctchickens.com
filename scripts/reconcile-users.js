@@ -5,18 +5,18 @@
  * - Creates missing `users` docs from Auth data.
  * - Updates stale `email`, `displayName`, `photoURL` fields where they differ.
  *
- * Usage (run from the functions/ directory):
- *   node reconcile-users.js --dry-run          # preview changes, no writes
- *   node reconcile-users.js --uid <uid>        # target a single user
- *   node reconcile-users.js                    # full reconcile
+ * Usage (run from the repo root):
+ *   node scripts/reconcile-users.js --dry-run          # preview changes, no writes
+ *   node scripts/reconcile-users.js --uid <uid>        # target a single user
+ *   node scripts/reconcile-users.js                    # full reconcile
  *
  * Auth: uses Application Default Credentials.
  * Run `firebase login` or set GOOGLE_APPLICATION_CREDENTIALS before running.
  */
 
-const { initializeApp, cert, getApps } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // ---------------------------------------------------------------------------
 // Parse args
@@ -98,7 +98,6 @@ async function main() {
   let errors = 0;
 
   if (TARGET_UID) {
-    // Single user mode
     let authUser;
     try {
       authUser = await auth.getUser(TARGET_UID);
@@ -118,7 +117,6 @@ async function main() {
       errors++;
     }
   } else {
-    // Full reconcile — page through all Auth users
     let pageToken;
     do {
       const listResult = await auth.listUsers(1000, pageToken);

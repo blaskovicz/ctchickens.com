@@ -3,11 +3,15 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
+import { setGlobalOptions } from 'firebase-functions/v2';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onObjectFinalized } from 'firebase-functions/v2/storage';
+import { beforeUserCreated } from 'firebase-functions/v2/identity';
 import { defineSecret } from 'firebase-functions/params';
+
+setGlobalOptions({ region: 'us-east1' });
 import { Resend } from 'resend';
 import {
   sendWelcomeEmail,
@@ -138,6 +142,24 @@ export const onDraftProfileCreated = onDocumentCreated(
     await emailAdminsNewDraftIfRequired(slug, data, userSnap, resend);
   }
 );
+
+// Firebase does not set emailVerified=true for Facebook OAuth users because Facebook's
+// OAuth response omits the OIDC email_verified claim. This blocking function corrects
+// that at creation time so the first issued token is already verified — required for
+// the claim flow security rule (request.auth.token.email_verified == true).
+//
+// Handler is exported separately for unit testing without importing the Firebase SDK.
+export function verifyFacebookEmailHandler(event: { data?: { providerData?: { providerId: string }[]; emailVerified?: boolean } }): { emailVerified: boolean } | undefined {
+  const user = event.data;
+  if (!user) return undefined;
+  const isFacebook = user.providerData?.some(p => p.providerId === 'facebook.com');
+  if (isFacebook && !user.emailVerified) {
+    return { emailVerified: true };
+  }
+  return undefined;
+}
+
+export const verifyFacebookEmailOnCreate = beforeUserCreated(verifyFacebookEmailHandler);
 
 // Sends a welcome email when a new user document is created (first FB OAuth login)
 export const onUserCreated = onDocumentCreated(
