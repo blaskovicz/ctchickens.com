@@ -34,4 +34,7 @@ functions/generate-sample-emails.js
 email-previews/
 .claude/agent-memory-local/*
 .claude/settings.local.json
+seed-data/
+backups/
+
 

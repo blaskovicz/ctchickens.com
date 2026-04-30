@@ -584,7 +584,8 @@ const handleSave = async (): Promise<boolean> => {
       };
       const { account, ...draftPayloadWithoutAccount } = draftPayload;
       await setDoc(doc(db, 'draft_profiles', slug), draftPayloadWithoutAccount);
-      await profileImageEditorRef.value?.commitDeletes();
+      // Do NOT commitDeletes() here — the live doc still references these files.
+      // Orphaned Storage files are swept by the nightly cleaner after admin publishes.
       trackEvent('profile_draft_submitted', { breeder_id: slug });
       create?.({ body: "Draft submitted for admin approval!", variant: 'success' });
     }

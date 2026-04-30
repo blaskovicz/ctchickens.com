@@ -7,27 +7,42 @@
  * Firebase Storage, and updates the Firestore doc with the new URLs
  * and storage paths.
  *
- * Run from the functions/ directory:
- *   node migrate-images.js --dry-run   (inspect only, no writes)
- *   node migrate-images.js             (live run)
+ * Usage (run from the repo root):
+ *   node scripts/migrate-images.js --dry-run             (inspect only, no writes)
+ *   node scripts/migrate-images.js                       (live run against production)
+ *   node scripts/migrate-images.js --emulator            (live run against local emulators)
+ *   node scripts/migrate-images.js --emulator --dry-run  (inspect against local emulators)
  *
- * Prerequisites:
+ * Prerequisites (production only):
  *   gcloud auth application-default login
  *   (or set GOOGLE_APPLICATION_CREDENTIALS to a service account JSON)
+ *
+ * Emulator prerequisites:
+ *   npm run emulate  (start emulators in another terminal)
  */
 
 'use strict';
 
-const crypto = require('crypto');
-const { initializeApp, applicationDefault } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-const { getStorage } = require('firebase-admin/storage');
+import crypto from 'crypto';
+import { initializeApp, applicationDefault } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
+const EMULATOR = process.argv.includes('--emulator');
 const DRIVE_HOST = 'lh3.googleusercontent.com';
 
-initializeApp({ credential: applicationDefault() });
+const STORAGE_BUCKET = 'ct-chickens.firebasestorage.app';
+
+if (EMULATOR) {
+  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+  initializeApp({ projectId: 'ct-chickens', storageBucket: STORAGE_BUCKET });
+} else {
+  initializeApp({ credential: applicationDefault(), storageBucket: STORAGE_BUCKET });
+}
+
 const db = getFirestore();
 const bucket = getStorage().bucket();
 
@@ -62,8 +77,11 @@ async function uploadToStorage(buffer, contentType, storagePath) {
       metadata: { firebaseStorageDownloadTokens: token },
     },
   });
-  const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/');
-  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
+  const encodedPath = storagePath.split('/').map(encodeURIComponent).join('%2F');
+  const host = EMULATOR
+    ? 'http://127.0.0.1:9199'
+    : 'https://firebasestorage.googleapis.com';
+  return `${host}/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
 }
 
 async function migrateDoc(snap) {
@@ -76,7 +94,6 @@ async function migrateDoc(snap) {
     return false;
   }
 
-  // Idempotency: skip docs already migrated unless --force is passed
   if (data.media?.migratedAt && !FORCE) {
     console.log(`  [SKIP] ${slug} — already migrated at ${data.media.migratedAt}`);
     return false;
@@ -103,12 +120,10 @@ async function migrateDoc(snap) {
   const newGalleryUrls = [...galleryUrls];
   const newGalleryStoragePaths = [...(media.galleryStoragePaths || [])];
 
-  // Pad galleryStoragePaths to match galleryUrls length
   while (newGalleryStoragePaths.length < newGalleryUrls.length) {
     newGalleryStoragePaths.push(null);
   }
 
-  // Upload logo and all gallery items in parallel
   const tasks = [];
 
   if (hasDriveLogo) {
@@ -170,7 +185,6 @@ async function main() {
   let skipped = 0;
 
   for (const docSnap of snap.docs) {
-    // Fail fast — any error stops the script (all or nothing per the plan)
     const wasMigrated = await migrateDoc(docSnap);
     if (wasMigrated) migrated++;
     else skipped++;

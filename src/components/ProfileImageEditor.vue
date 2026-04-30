@@ -223,6 +223,7 @@ defineExpose<ProfileImageEditorExposed>({
     pendingFiles.clear();
     pendingDeletes.clear();
   },
+
 });
 
 function onLogoDrop(e: DragEvent) {
