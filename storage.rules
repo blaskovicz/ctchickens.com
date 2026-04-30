@@ -12,7 +12,13 @@ service firebase.storage {
           || draft.data.draft_owner_uid == userId;
     }
 
-    // Profile images — publicly readable; writes and deletes require UID match + slug ownership.
+    // Returns true if userId owns the slug AND is verified in the live directory.
+    function isVerifiedOwner(userId, slug) {
+      let live = firestore.get(/databases/(default)/documents/directory_members/$(slug));
+      return live.data.account.ownerUid == userId && live.data.account.isVerified == true;
+    }
+
+    // Profile images — publicly readable; writes require verified ownership, deletes require ownership only.
     // Path structure: profiles/{userId}/{slug}/{fileName}
     match /profiles/{userId}/{slug}/{fileName} {
       allow read: if true;
@@ -20,7 +26,7 @@ service firebase.storage {
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*')
                    && (request.auth.token.admin == true
-                       || (request.auth.uid == userId && ownsSlug(userId, slug)));
+                       || (request.auth.uid == userId && isVerifiedOwner(userId, slug)));
       allow delete: if request.auth != null
                     && (request.auth.token.admin == true
                         || (request.auth.uid == userId && ownsSlug(userId, slug)));
