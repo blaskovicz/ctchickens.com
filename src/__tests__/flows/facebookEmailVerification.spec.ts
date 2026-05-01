@@ -13,7 +13,6 @@ import { clearAuthEmulator } from '../test-helpers';
 // → user record has emailVerified: true before the first token is issued.
 
 const AUTH_EMULATOR = 'http://localhost:9099';
-const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ct-chickens';
 const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'fake-key';
 
 /**
