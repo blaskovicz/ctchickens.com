@@ -75,6 +75,14 @@
       ]
     },
     {
+      "collectionGroup": "draft_classifieds",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "owner_uid", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "draft_classified_history",
       "queryScope": "COLLECTION",
       "fields": [
