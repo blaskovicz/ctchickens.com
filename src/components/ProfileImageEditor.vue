@@ -90,7 +90,7 @@ function validateFile(file: File): boolean {
 async function uploadImage(file: File, path: string, isLogo: boolean): Promise<{ url: string; storagePath: string }> {
   const blob = await compressImage(file, isLogo ? 800 : 1200, isLogo ? 0.85 : 0.75);
   const ref = storageRef(storage, path);
-  const snapshot = await uploadBytes(ref, blob, { contentType: 'image/jpeg' });
+  const snapshot = await uploadBytes(ref, blob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
   const url = await getDownloadURL(snapshot.ref);
   return { url, storagePath: path };
 }
@@ -177,7 +177,7 @@ defineExpose<ProfileImageEditorExposed>({
       if (isBlobUrl(logoUrl)) {
         const file = pendingFiles.get(logoUrl);
         if (!file) throw new Error('Missing file for pending logo');
-        const path = `profiles/${props.ownerUid}/${props.slug}/logo.jpg`;
+        const path = `profiles/${props.ownerUid}/${props.slug}/logo_${crypto.randomUUID()}.jpg`;
         const result = await uploadImage(file, path, true);
         toRevoke.push(logoUrl);
         logoUrl = result.url;

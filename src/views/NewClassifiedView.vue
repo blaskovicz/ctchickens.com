@@ -78,9 +78,9 @@ const handleSubmit = async () => {
     let imageUrl = undefined;
     if (imageFile.value && user.value) {
       const compressedBlob = await compressImage(imageFile.value);
-      const path = `classifieds/${user.value.uid}/${Date.now()}.jpg`;
+      const path = `classifieds/${user.value.uid}/${crypto.randomUUID()}.jpg`;
       const fileRef = storageRef(storage, path);
-      const snapshot = await uploadBytes(fileRef, compressedBlob, { contentType: 'image/jpeg' });
+      const snapshot = await uploadBytes(fileRef, compressedBlob, { contentType: 'image/jpeg', cacheControl: 'public, max-age=31536000, immutable' });
       uploadedRef = snapshot.ref;
       imageUrl = await getDownloadURL(snapshot.ref);
     }
