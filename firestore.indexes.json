@@ -75,6 +75,14 @@
       ]
     },
     {
+      "collectionGroup": "draft_classified_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "draft_meta.status", "order": "ASCENDING" },
+        { "fieldPath": "draft_meta.archivedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
