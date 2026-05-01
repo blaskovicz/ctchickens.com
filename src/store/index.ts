@@ -46,7 +46,7 @@ interface State {
 const mapMemberToBreeder = (member: FirestoreMember, id: string): Breeder => {
   return {
     id,
-    name: member.profile.businessName,
+    name: member.profile?.businessName || id,
     location: member.profile.town,
     selling: member.offerings.description,
     category: member.profile.memberType,
