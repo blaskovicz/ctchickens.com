@@ -72,7 +72,7 @@ const pendingFiles = new Map<string, File>();
 const pendingDeletes = new Set<string>();
 
 function isBlobUrl(url: string) {
-  return url.startsWith('blob:');
+  return typeof url === 'string' && url.startsWith('blob:');
 }
 
 function validateFile(file: File): boolean {
