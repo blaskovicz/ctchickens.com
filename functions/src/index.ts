@@ -1183,10 +1183,12 @@ export const sweepExpiredClassifieds = onSchedule(
             const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
             const category = (c.category as string) || 'iso';
             const expiresAtStr = (c.expires_at as Timestamp).toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            const classifiedUrl = `https://ctchickens.com/#/classified/${d.id}`;
             await sendClassifiedExpiredEmail(userEmail, {
               firstName,
               categoryLabel: CATEGORY_LABELS[category] || category,
               expiresAt: expiresAtStr,
+              classifiedUrl,
               title: c.title,
             }, resend);
             console.log(`[sweepExpiredClassifieds] Expired email sent to ${userEmail} for ${d.id}`);

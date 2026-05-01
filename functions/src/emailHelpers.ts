@@ -316,7 +316,7 @@ export async function sendClassifiedExpiryWarningEmail(
 
 export async function sendClassifiedExpiredEmail(
   to: string,
-  vars: { firstName: string; categoryLabel: string; expiresAt: string; title?: string },
+  vars: { firstName: string; categoryLabel: string; expiresAt: string; classifiedUrl: string; title?: string },
   resend: Resend
 ): Promise<void> {
   const label = vars.title || vars.categoryLabel;
