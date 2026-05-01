@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -17,6 +17,7 @@ import { useSupport } from '../composables/useSupport';
 import { BButton } from 'bootstrap-vue-next';
 
 const route = useRoute();
+const router = useRouter();
 const store = useStore();
 const { generateSlug, splitBreederName } = useBreederUtils();
 const { contactSupport } = useSupport();
@@ -381,12 +382,17 @@ const formatDate = (dateString: string) => {
           <BreederGallery :logo="breeder.logo" :images="breeder.images" />
         </div>
         
-        <!-- Active Classifieds -->
+        <!-- Classifieds -->
         <div v-if="breeder.ownerUid" class="mt-4 pt-4 border-top">
-          <h5 class="fw-bold mb-2 text-dark d-flex align-items-center">
-            <span class="icon-circle me-2 bg-light text-muted"><i class="bi bi-tag-fill"></i></span>
-            Active Classifieds
-          </h5>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="fw-bold mb-0 text-dark d-flex align-items-center">
+              <span class="icon-circle me-2 bg-light text-muted"><i class="bi bi-tag-fill"></i></span>
+              Classifieds
+            </h5>
+            <BButton v-if="isOwner" variant="outline-primary" size="sm" @click="router.push('/classified/new')">
+              <i class="bi bi-plus-lg me-1"></i> New
+            </BButton>
+          </div>
           <BreederClassifiedsPreview :owner-uid="breeder.ownerUid" :is-owner="isRealOwner" :is-admin="isAdmin" />
         </div>
 
