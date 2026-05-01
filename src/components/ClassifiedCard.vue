@@ -16,6 +16,7 @@ const store = useStore();
 const router = useRouter();
 
 const isPending = props.item.status === 'pending';
+const isExpired = props.item.status === 'expired';
 const isOwner = store.state.user?.uid === props.item.owner_uid;
 
 const verifiedFarms = computed(() =>
@@ -26,17 +27,27 @@ const verifiedFarms = computed(() =>
 <template>
   <div class="card h-100 border-0 shadow-sm overflow-hidden classified-card" style="cursor:pointer;" @click="router.push(`/classified/${item.id}`)">
     <div v-if="item.image_url" class="classified-thumbnail-wrapper">
-      <img :src="item.image_url" class="card-img-top classified-thumbnail" alt="Classified photo" />
+      <img :src="item.image_url" class="card-img-top classified-thumbnail" :class="{ 'expired-img': isExpired }" alt="Classified photo" />
       <div v-if="isPending" class="pending-overlay">
         <div class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
           <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
         </div>
       </div>
+      <div v-else-if="isExpired" class="pending-overlay">
+        <div class="badge bg-secondary text-white px-3 py-2 shadow-sm">
+          <i class="bi bi-clock-history me-1"></i> Expired
+        </div>
+      </div>
     </div>
     <div v-else-if="isPending" class="pending-no-image p-3 text-center bg-light border-bottom">
-        <div class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
-          <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
-        </div>
+      <div class="badge bg-warning text-dark px-3 py-2 shadow-sm animate-pulse">
+        <i class="bi bi-file-earmark-check me-1"></i> Pending Approval
+      </div>
+    </div>
+    <div v-else-if="isExpired" class="pending-no-image p-3 text-center bg-light border-bottom">
+      <div class="badge bg-secondary text-white px-3 py-2 shadow-sm">
+        <i class="bi bi-clock-history me-1"></i> Expired
+      </div>
     </div>
 
     <div class="card-body d-flex flex-column">
@@ -117,6 +128,14 @@ const verifiedFarms = computed(() =>
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(2px);
+}
+
+.expired-img {
+  filter: grayscale(80%) opacity(0.6);
+}
+
+.pending-no-image {
+  min-height: 56px;
 }
 
 .line-clamp-2 {
