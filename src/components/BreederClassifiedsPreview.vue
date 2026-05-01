@@ -1,21 +1,28 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { db } from '../firebase';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import ClassifiedCard from './ClassifiedCard.vue';
 import type { Classified } from '../types';
 
-const props = defineProps<{ ownerUid: string; isOwner?: boolean }>();
+const props = defineProps<{ ownerUid: string; isOwner?: boolean; isAdmin?: boolean }>();
 
 const classifieds = ref<Classified[]>([]);
 const isLoading = ref(true);
+const canSeeExpired = computed(() => props.isOwner || props.isAdmin);
+
+const activeClassifieds = computed(() => classifieds.value.filter(c => c.status === 'active'));
+const expiredClassifieds = computed(() => classifieds.value.filter(c => c.status === 'expired'));
 
 onMounted(async () => {
   try {
+    const statusFilter = canSeeExpired.value
+      ? where('status', 'in', ['active', 'expired'])
+      : where('status', '==', 'active');
     const q = query(
       collection(db, 'classifieds'),
       where('owner_uid', '==', props.ownerUid),
-      where('status', '==', 'active'),
+      statusFilter,
       orderBy('created_at', 'desc')
     );
     const snap = await getDocs(q);
@@ -33,9 +40,23 @@ onMounted(async () => {
     <div class="spinner-border spinner-border-sm text-muted" role="status" />
   </div>
   <template v-else-if="classifieds.length">
-    <div class="row g-3">
-      <div v-for="item in classifieds" :key="item.id" class="col-md-6 col-lg-4">
+    <!-- Active classifieds -->
+    <div v-if="activeClassifieds.length" class="row g-3">
+      <div v-for="item in activeClassifieds" :key="item.id" class="col-md-6 col-lg-4">
         <ClassifiedCard :item="item" />
+      </div>
+    </div>
+
+    <!-- Expired classifieds (owner/admin only) -->
+    <div v-if="expiredClassifieds.length && canSeeExpired" :class="{ 'mt-4': activeClassifieds.length }">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <h6 class="text-muted text-uppercase small fw-bold mb-0 letter-spacing-1">Expired</h6>
+        <hr class="flex-grow-1 my-0 opacity-10">
+      </div>
+      <div class="row g-3">
+        <div v-for="item in expiredClassifieds" :key="item.id" class="col-md-6 col-lg-4">
+          <ClassifiedCard :item="item" />
+        </div>
       </div>
     </div>
   </template>
@@ -46,3 +67,9 @@ onMounted(async () => {
     </router-link>
   </div>
 </template>
+
+<style scoped>
+.letter-spacing-1 {
+  letter-spacing: 0.05rem;
+}
+</style>
