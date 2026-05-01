@@ -8,10 +8,12 @@
  * and storage paths.
  *
  * Usage (run from the repo root):
- *   node scripts/migrate-images.js --dry-run             (inspect only, no writes)
- *   node scripts/migrate-images.js                       (live run against production)
- *   node scripts/migrate-images.js --emulator            (live run against local emulators)
- *   node scripts/migrate-images.js --emulator --dry-run  (inspect against local emulators)
+ *   node scripts/migrate-images.js --dry-run                        (inspect only, no writes)
+ *   node scripts/migrate-images.js                                  (live run against production)
+ *   node scripts/migrate-images.js --slug some-farm                 (single doc)
+ *   node scripts/migrate-images.js --slug some-farm --dry-run       (inspect single doc)
+ *   node scripts/migrate-images.js --emulator                       (live run against local emulators)
+ *   node scripts/migrate-images.js --emulator --dry-run             (inspect against local emulators)
  *
  * Prerequisites (production only):
  *   gcloud auth application-default login
@@ -31,6 +33,8 @@ import { getStorage } from 'firebase-admin/storage';
 const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
 const EMULATOR = process.argv.includes('--emulator');
+const slugIndex = process.argv.indexOf('--slug');
+const SLUG = slugIndex !== -1 ? process.argv[slugIndex + 1] : null;
 const DRIVE_HOST = 'lh3.googleusercontent.com';
 
 const STORAGE_BUCKET = 'ct-chickens.firebasestorage.app';
@@ -74,6 +78,7 @@ async function uploadToStorage(buffer, contentType, storagePath) {
   await file.save(buffer, {
     metadata: {
       contentType,
+      cacheControl: 'public, max-age=31536000, immutable',
       metadata: { firebaseStorageDownloadTokens: token },
     },
   });
@@ -87,12 +92,7 @@ async function uploadToStorage(buffer, contentType, storagePath) {
 async function migrateDoc(snap) {
   const slug = snap.id;
   const data = snap.data();
-  const ownerUid = data.account?.ownerUid;
-
-  if (!ownerUid) {
-    console.log(`  [SKIP] ${slug} — unclaimed (no ownerUid)`);
-    return false;
-  }
+  const ownerUid = data.account?.ownerUid ?? 'unclaimed';
 
   if (data.media?.migratedAt && !FORCE) {
     console.log(`  [SKIP] ${slug} — already migrated at ${data.media.migratedAt}`);
@@ -113,7 +113,7 @@ async function migrateDoc(snap) {
     return false;
   }
 
-  console.log(`\n  [MIGRATE] ${slug} (owner: ${ownerUid})`);
+  console.log(`\n  [MIGRATE] ${slug} (owner: ${ownerUid === 'unclaimed' ? 'unclaimed' : ownerUid})`);
 
   let newLogoUrl = logoUrl;
   let newLogoStoragePath = media.logoStoragePath || null;
@@ -127,7 +127,7 @@ async function migrateDoc(snap) {
   const tasks = [];
 
   if (hasDriveLogo) {
-    const storagePath = `profiles/${ownerUid}/${slug}/logo.jpg`;
+    const storagePath = `profiles/${ownerUid}/${slug}/logo_${crypto.randomUUID()}.jpg`;
     console.log(`    Logo: downloading...`);
     tasks.push(
       downloadImage(logoUrl).then(async ({ buffer, contentType }) => {
@@ -175,19 +175,30 @@ async function migrateDoc(snap) {
 }
 
 async function main() {
-  console.log(`\nMigrate Images — ${DRY_RUN ? 'DRY RUN' : 'LIVE'}`);
+  console.log(`\nMigrate Images — ${DRY_RUN ? 'DRY RUN' : 'LIVE'}${SLUG ? ` [slug: ${SLUG}]` : ''}`);
   console.log('=========================================');
-
-  const snap = await db.collection('directory_members').get();
-  console.log(`Found ${snap.size} directory_members docs\n`);
 
   let migrated = 0;
   let skipped = 0;
 
-  for (const docSnap of snap.docs) {
+  if (SLUG) {
+    const docSnap = await db.collection('directory_members').doc(SLUG).get();
+    if (!docSnap.exists) {
+      console.error(`No directory_members doc found with slug: ${SLUG}`);
+      process.exit(1);
+    }
+    console.log(`Found 1 doc\n`);
     const wasMigrated = await migrateDoc(docSnap);
     if (wasMigrated) migrated++;
     else skipped++;
+  } else {
+    const snap = await db.collection('directory_members').get();
+    console.log(`Found ${snap.size} directory_members docs\n`);
+    for (const docSnap of snap.docs) {
+      const wasMigrated = await migrateDoc(docSnap);
+      if (wasMigrated) migrated++;
+      else skipped++;
+    }
   }
 
   console.log(`\n=========================================`);
