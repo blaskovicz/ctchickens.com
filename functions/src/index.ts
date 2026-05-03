@@ -36,6 +36,7 @@ import {
   sendInquiryAdminUnclaimedEmail,
   sendSupportThreadUserEmail,
   sendSupportThreadAdminEmail,
+  sendPeerThreadInitiatorEmail,
   sendUnreadNudgeEmail,
   sendUnreadSupportNudgeEmail,
   formatDisplayName,
@@ -1146,6 +1147,19 @@ export const initiatePeerThread = onCall(
         read: false,
       });
     });
+
+    const callerEmail = callerDoc.exists ? resolveEmail(callerDoc.data()!) : null;
+    if (callerEmail) {
+      const resend = new Resend(resendApiKey.value());
+      const callerFirstName = (callerDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+      const inboxUrl = `https://ctchickens.com/#/inbox/${threadRef.id}`;
+      try {
+        await sendPeerThreadInitiatorEmail(callerEmail, { firstName: callerFirstName, targetName, inboxUrl }, resend);
+        console.log(`[initiatePeerThread] Initiator email sent to ${callerEmail}`);
+      } catch (err) {
+        console.error('[initiatePeerThread] Failed to send initiator email', { callerEmail, err });
+      }
+    }
 
     return { threadId: threadRef.id };
   }

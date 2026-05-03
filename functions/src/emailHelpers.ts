@@ -359,6 +359,20 @@ export async function sendClassifiedClosedEmail(
   });
 }
 
+export async function sendPeerThreadInitiatorEmail(
+  to: string,
+  vars: { firstName: string; targetName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `You messaged ${vars.targetName} on CT Chickens`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('peer-thread-initiator-body.html', { subject, ...vars }),
+  });
+}
+
 export async function sendUnreadNudgeEmail(
   to: string,
   vars: { senderName: string; inboxUrl: string },
