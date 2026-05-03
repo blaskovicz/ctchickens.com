@@ -857,6 +857,16 @@ export const onDraftClassifiedReviewAction = onDocumentCreated(
         console.error('[onDraftClassifiedReviewAction] Failed to delete draft', { historyId, err });
       }
 
+      // Track approval count on user doc
+      try {
+        await db.collection('users').doc(ownerUid).set(
+          { approvedClassifiedsCount: FieldValue.increment(1) },
+          { mergeFields: ['approvedClassifiedsCount'] }
+        );
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to increment approvedClassifiedsCount', { ownerUid, err });
+      }
+
       // Email owner approval
       try {
         const userDoc = await db.collection('users').doc(ownerUid).get();
@@ -880,6 +890,16 @@ export const onDraftClassifiedReviewAction = onDocumentCreated(
         console.error('[onDraftClassifiedReviewAction] Failed to send approval email', { historyId, err });
       }
     } else if (status === 'rejected') {
+      // Track rejection count on user doc
+      try {
+        await db.collection('users').doc(ownerUid).set(
+          { rejectedClassifiedsCount: FieldValue.increment(1) },
+          { mergeFields: ['rejectedClassifiedsCount'] }
+        );
+      } catch (err) {
+        console.error('[onDraftClassifiedReviewAction] Failed to increment rejectedClassifiedsCount', { ownerUid, err });
+      }
+
       // Email owner rejection
       try {
         const userDoc = await db.collection('users').doc(ownerUid).get();

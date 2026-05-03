@@ -44,7 +44,7 @@ async function main() {
     fs.mkdirSync(backupsDir, { recursive: true });
   }
 
-  const collections = ['directory_members', 'users', 'classifieds'];
+  const collections = ['directory_members', 'users', 'classifieds', 'inquiry_threads'];
   for (const name of collections) {
     const data = await exportCollection(name);
     const filename = path.join(backupsDir, `${name}_${timestamp}.json`);
