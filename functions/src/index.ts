@@ -36,6 +36,8 @@ import {
   sendInquiryAdminUnclaimedEmail,
   sendSupportThreadUserEmail,
   sendSupportThreadAdminEmail,
+  sendUnreadNudgeEmail,
+  sendUnreadSupportNudgeEmail,
   formatDisplayName,
 } from './emailHelpers';
 
@@ -1341,6 +1343,74 @@ export const sweepExpiredFarmImages = onSchedule(
       console.log(`[sweepExpiredFarmImages] Deleted ${deleted} orphaned profile images (${files.length} total scanned)`);
     } catch (err) {
       console.error('[sweepExpiredFarmImages] Storage sweep failed', err);
+    }
+  }
+);
+
+// Runs every 30 min: emails participants who have unread messages in threads that
+// went quiet more than 2 hours ago. One email per qualifying thread per sweep.
+// Uses lastNotifiedAt[uid] to avoid re-notifying on the same unread batch.
+export const sweepUnreadThreadNotifications = onSchedule(
+  { schedule: 'every 30 minutes', timeZone: 'America/New_York', secrets: [resendApiKey] },
+  async () => {
+    const resend = new Resend(resendApiKey.value());
+    const now = Date.now();
+    const twoHoursAgo = Timestamp.fromDate(new Date(now - 2 * 60 * 60 * 1000));
+    const thirtyDaysAgo = Timestamp.fromDate(new Date(now - 30 * 24 * 60 * 60 * 1000));
+
+    const snapshot = await db.collection('inquiry_threads')
+      .where('updatedAt', '>=', thirtyDaysAgo)
+      .where('updatedAt', '<', twoHoursAgo)
+      .get();
+
+    console.log(`[sweepUnreadThreadNotifications] Checking ${snapshot.size} threads`);
+
+    for (const threadDoc of snapshot.docs) {
+      const thread = threadDoc.data();
+      const participants: string[] = thread.participants || [];
+
+      for (const uid of participants) {
+        if (uid === 'admin') continue;
+        if (thread.type === 'support' && uid !== thread.userUid) continue;
+
+        const unread: number = thread.unreadCount?.[uid] ?? 0;
+        if (unread === 0) continue;
+
+        const lastNotified: Timestamp | undefined = thread.lastNotifiedAt?.[uid];
+        if (lastNotified && lastNotified.toMillis() >= (thread.updatedAt as Timestamp).toMillis()) continue;
+
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (!userDoc.exists) continue;
+        const userData = userDoc.data()!;
+        const email = resolveEmail(userData);
+        if (!email) continue;
+
+        const inboxUrl = `https://ctchickens.com/#/inbox/${threadDoc.id}`;
+
+        try {
+          await threadDoc.ref.update({ [`lastNotifiedAt.${uid}`]: FieldValue.serverTimestamp() });
+
+          if (thread.type === 'support') {
+            const firstName = (userData.displayName as string || '').split(' ')[0] || 'there';
+            await sendUnreadSupportNudgeEmail(email, { firstName, inboxUrl }, resend);
+          } else if (thread.type === 'inquiry') {
+            const isBuyer = uid === thread.userUid;
+            const senderName = isBuyer
+              ? (thread.breederName as string || 'Someone')
+              : formatDisplayName(thread.userName || 'Someone');
+            await sendUnreadNudgeEmail(email, { senderName, inboxUrl }, resend);
+          } else {
+            const otherUid = participants.find(p => p !== uid && p !== 'admin');
+            const senderName = (otherUid && thread.peerParticipantNames?.[otherUid])
+              || formatDisplayName(thread.userName || 'Someone');
+            await sendUnreadNudgeEmail(email, { senderName, inboxUrl }, resend);
+          }
+
+          console.log(`[sweepUnreadThreadNotifications] Notified ${uid} for thread ${threadDoc.id}`);
+        } catch (err) {
+          console.error(`[sweepUnreadThreadNotifications] Failed for uid=${uid} thread=${threadDoc.id}`, err);
+        }
+      }
     }
   }
 );
