@@ -359,6 +359,34 @@ export async function sendClassifiedClosedEmail(
   });
 }
 
+export async function sendUnreadNudgeEmail(
+  to: string,
+  vars: { senderName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = `Unread message from ${vars.senderName} — CT Chickens`;
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('unread-nudge-body.html', { subject, ...vars }),
+  });
+}
+
+export async function sendUnreadSupportNudgeEmail(
+  to: string,
+  vars: { firstName: string; inboxUrl: string },
+  resend: Resend
+): Promise<void> {
+  const subject = 'You have an unread reply from CT Chickens support';
+  await sendGenericEmail(resend, {
+    from: 'CT Chickens <admin@ctchickens.com>',
+    to,
+    subject,
+    html: renderTemplate('unread-support-nudge-body.html', { subject, ...vars }),
+  });
+}
+
 export async function sendAnnouncementEmail(
   to: string,
   vars: {

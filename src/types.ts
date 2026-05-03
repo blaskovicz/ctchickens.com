@@ -73,6 +73,8 @@ export interface Review {
     peerKey?: string;
     peerParticipantNames?: Record<string, string>;
     senderFarmSlug?: string | null;
+    // notification tracking
+    lastNotifiedAt?: Record<string, any>; // { [uid]: Timestamp }
   }
 
   export type ClassifiedCategory = 'iso' | 'for_sale' | 'rehoming' | 'hatching_eggs';
