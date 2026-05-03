@@ -70,7 +70,7 @@ const handleDirectContact = () => {
         { 'opacity-50': isBlocked }
       ]"
       :disabled="isBlocked"
-      :title="isBlocked ? 'Messaging Restricted' : 'Message Breeder via CTChickens'"
+      :title="isBlocked ? 'Messaging Restricted' : 'Message via CTChickens'"
     >
       <i class="bi bi-chat-dots-fill text-center" :class="showLabelOnMobile ? 'me-2' : 'me-lg-2'"></i>
       <span :class="{ 'd-none d-lg-inline': !showLabelOnMobile }">Message</span>
