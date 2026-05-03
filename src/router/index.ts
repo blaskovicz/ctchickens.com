@@ -110,18 +110,32 @@ const router = createRouter({
   }
 });
 
-router.onError((error, to) => {
+let lastNavHadChunkError = false;
+
+export function onChunkLoadError(error: Error, to: { fullPath: string }) {
   const isChunkLoadError =
     error.message.includes('Failed to fetch dynamically imported module') ||
     error.message.includes('Importing a module script failed') ||
     error.message.includes('Unable to preload CSS');
   if (isChunkLoadError) {
-    try { trackEvent('chunk_load_error_reload', { path: to.fullPath }); } catch (_) {}
-    window.location.href = '/#' + to.fullPath;
+    lastNavHadChunkError = true;
+    const key = 'chunk-error-reload';
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, '1');
+      try { trackEvent('chunk_load_error_reload', { path: to.fullPath }); } catch (_) {}
+      window.location.hash = to.fullPath;
+      window.location.reload();
+    }
   }
-});
+}
+
+router.onError(onChunkLoadError);
 
 router.afterEach((to) => {
+  if (!lastNavHadChunkError) {
+    sessionStorage.removeItem('chunk-error-reload');
+  }
+  lastNavHadChunkError = false;
   trackEvent('page_view', {
     page_path: to.fullPath,
     page_title: to.name?.toString() ?? to.path,
