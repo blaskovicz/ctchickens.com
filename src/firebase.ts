@@ -22,7 +22,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
-const functions = getFunctions(app);
+const functions = getFunctions(app, 'us-east1');
 
 if (USE_EMULATOR) {
   // Using 'localhost' instead of '127.0.0.1' to prevent origin mismatch in redirects

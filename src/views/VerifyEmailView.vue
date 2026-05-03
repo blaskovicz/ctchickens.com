@@ -2,7 +2,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore } from 'vuex';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase';
 import {
   BContainer, BCard, BCardBody, BButton, BSpinner,
 } from 'bootstrap-vue-next';
@@ -26,7 +27,6 @@ onMounted(async () => {
   }
 
   try {
-    const functions = getFunctions();
     const verifyLocalEmail = httpsCallable(functions, 'verifyLocalEmail');
     await verifyLocalEmail({ uid, email, ts, token });
     if (isLoggedIn.value) {
