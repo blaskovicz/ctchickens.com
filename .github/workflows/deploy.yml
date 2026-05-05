@@ -165,12 +165,10 @@ jobs:
 
       - name: Deploy preview channel
         id: deploy
-        shell: bash
         run: |
-          set -o pipefail
-          npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 7d --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} 2>&1 | tee /tmp/deploy-out.txt
-          URL=$(grep 'Channel URL' /tmp/deploy-out.txt | grep -oP 'https://\S+\.web\.app')
-          echo "url=$URL" >> $GITHUB_OUTPUT
+          OUTPUT=$(npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 7d --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} --json)
+          echo "$OUTPUT"
+          echo "url=$(echo "$OUTPUT" | jq -r '.result.url')" >> $GITHUB_OUTPUT
 
       - name: Comment preview URL on PR
         uses: actions/github-script@v7
