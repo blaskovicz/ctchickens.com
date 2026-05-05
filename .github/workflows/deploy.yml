@@ -140,7 +140,12 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy to staging
-        run: npx firebase hosting:channel:deploy staging --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          OUTPUT=$(NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy staging --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} --json)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | jq -r '.result | to_entries[0].value.url')
+          echo "### Staging deployed" >> $GITHUB_STEP_SUMMARY
+          echo "$URL" >> $GITHUB_STEP_SUMMARY
 
   deploy-preview:
     if: github.event_name == 'pull_request'
