@@ -165,7 +165,9 @@ jobs:
 
       - name: Deploy preview channel
         id: deploy
+        shell: bash
         run: |
+          set -o pipefail
           npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 7d --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} 2>&1 | tee /tmp/deploy-out.txt
           URL=$(grep -oP 'https://\S+\.web\.app' /tmp/deploy-out.txt | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
