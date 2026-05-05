@@ -152,9 +152,8 @@ jobs:
       - name: Deploy preview channel
         id: deploy
         run: |
-          OUTPUT=$(npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 7d --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} 2>&1)
-          echo "$OUTPUT"
-          URL=$(echo "$OUTPUT" | grep -oP 'https://\S+\.web\.app' | head -1)
+          npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 7d --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} 2>&1 | tee /tmp/deploy-out.txt
+          URL=$(grep -oP 'https://\S+\.web\.app' /tmp/deploy-out.txt | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Comment preview URL on PR
