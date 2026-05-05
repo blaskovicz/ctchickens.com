@@ -61,7 +61,7 @@ jobs:
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
@@ -114,7 +114,7 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy Firebase functions, rules, and indexes
-        run: npx firebase deploy --only firestore,storage,functions --force --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: npx firebase deploy --only firestore,storage,functions --force --project ${{ vars.VITE_FIREBASE_PROJECT_ID }}
 
   deploy-staging:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -145,7 +145,7 @@ jobs:
       - name: Deploy to staging
         id: deploy
         run: |
-          OUTPUT=$(NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy staging --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} --json)
+          OUTPUT=$(NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy staging --project ${{ vars.VITE_FIREBASE_PROJECT_ID }} --json)
           echo "$OUTPUT"
           URL=$(echo "$OUTPUT" | jq -r '.result | to_entries[0].value.url')
           echo "url=$URL" >> $GITHUB_OUTPUT
@@ -178,7 +178,7 @@ jobs:
       - name: Deploy preview channel
         id: deploy
         run: |
-          OUTPUT=$(NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 2d --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} --json)
+          OUTPUT=$(NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy pr-${{ github.event.number }} --expires 2d --project ${{ vars.VITE_FIREBASE_PROJECT_ID }} --json)
           echo "$OUTPUT"
           echo "url=$(echo "$OUTPUT" | jq -r '.result | to_entries[0].value.url')" >> $GITHUB_OUTPUT
 
