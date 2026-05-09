@@ -49,6 +49,8 @@ const activeDisplayName = computed(() => {
   return getThreadDisplayName(activeThread.value);
 });
 
+const mobilePanel = ref<'threads' | 'messages'>(activeThreadId.value ? 'messages' : 'threads');
+
 const newMessage = ref('');
 const isSending = ref(false);
 const isLoadingThreads = ref(true);
@@ -93,6 +95,8 @@ const fetchThreads = () => {
 };
 
 const selectThread = (id: string) => {
+  mobilePanel.value = 'messages';
+  if (activeThreadId.value === id) return;
   activeThreadId.value = id;
   router.push({ name: 'inbox', params: { threadId: id } });
 };
@@ -100,6 +104,7 @@ const selectThread = (id: string) => {
 // Sync activeThreadId with route params
 watch(() => route.params.threadId, (newId) => {
   activeThreadId.value = (newId as string) || null;
+  mobilePanel.value = newId ? 'messages' : 'threads';
 });
 
 watch(activeThread, (thread) => {
@@ -114,6 +119,7 @@ const scrollToBottom = async () => {
 };
 
 const focusTextarea = async () => {
+  if (window.innerWidth < 768) return;
   await nextTick();
   (textareaRef.value?.$el as HTMLElement)?.focus();
 };
@@ -332,7 +338,7 @@ onUnmounted(() => {
     <BRow class="h-100 g-0 shadow-sm border rounded overflow-hidden bg-white">
 
       <!-- Thread List -->
-      <BCol md="4" class="border-end h-100 d-flex flex-column bg-light">
+      <BCol md="4" :class="['border-end h-100 flex-column bg-light', mobilePanel === 'messages' ? 'd-none d-md-flex' : 'd-flex']">
         <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
           <h5 class="mb-0 fw-bold">Messages</h5>
           <div class="d-flex gap-2">
@@ -355,7 +361,7 @@ onUnmounted(() => {
               v-for="thread in threads" 
               :key="thread.id"
               @click="selectThread(thread.id)"
-              :active="activeThreadId === thread.id"
+              :active="activeThreadId === thread.id && mobilePanel === 'messages'"
               class="thread-item p-3 border-bottom cursor-pointer"
               :class="{ 'unread': (thread.unreadCount?.[user?.uid!] || 0) > 0 }"
             >
@@ -391,10 +397,13 @@ onUnmounted(() => {
       </BCol>
 
       <!-- Message Window -->
-      <BCol md="8" class="h-100 d-flex flex-column bg-white position-relative">
+      <BCol md="8" :class="['h-100 flex-column bg-white position-relative', mobilePanel === 'threads' ? 'd-none d-md-flex' : 'd-flex']">
         <div v-if="activeThread || isPendingSupportThread" class="h-100 d-flex flex-column">
           <!-- Header -->
           <div class="p-3 border-bottom bg-white d-flex align-items-center gap-3">
+            <button class="btn btn-link p-0 d-md-none text-dark" @click="router.push({ name: 'inbox' })" aria-label="Back to messages">
+              <i class="bi bi-arrow-left fs-5"></i>
+            </button>
             <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
               {{ isPendingSupportThread ? 'S' : (activeDisplayName?.substring(0, 1) || '?') }}
             </div>
@@ -577,9 +586,10 @@ onUnmounted(() => {
   visibility: visible;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .inbox-container {
-    height: auto;
+    height: calc(100vh - 120px);
+    min-height: 0;
   }
 }
 </style>
