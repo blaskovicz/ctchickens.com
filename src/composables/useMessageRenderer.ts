@@ -14,5 +14,8 @@ export function renderMessage(text: string): string {
 
 export function stripMarkdown(text: string): string {
   const raw = marked.parseInline(text) as string;
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  const sanitized = DOMPurify.sanitize(raw, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  const el = document.createElement('div');
+  el.innerHTML = sanitized;
+  return el.textContent || '';
 }
