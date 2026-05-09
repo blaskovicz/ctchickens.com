@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { db, trackEvent } from '../firebase';
 import { 
   collection, query, where, orderBy, onSnapshot,
-  doc, updateDoc, serverTimestamp, runTransaction, getDoc,
+  doc, updateDoc, serverTimestamp, runTransaction,
   writeBatch, or
 } from 'firebase/firestore';
 import { 
@@ -34,36 +34,15 @@ const activeThreadId = ref<string | null>((route.params.threadId as string) || n
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
 const isPendingSupportThread = computed(() => activeThreadId.value === 'support_new');
 
-// undefined = still resolving, null = confirmed unclaimed, string = has owner
-const activeBreederOwnerUid = ref<string | null | undefined>(undefined);
-
 const isUnclaimed = computed(() => {
   if (!activeThread.value || activeThread.value.type === 'support' || activeThread.value.type === 'peer') return false;
   if (activeThread.value.userUid !== user.value?.uid) return false;
-  if (activeBreederOwnerUid.value === undefined) return false; // loading — don't flash
-  return activeBreederOwnerUid.value === null;
+  const slug = activeThread.value.breederSlug;
+  if (!slug || slug === 'support') return false;
+  if (!store.state.lastFetch) return false;
+  const breeder = (store.state.breeders as any[]).find(b => b.id === slug);
+  return !breeder?.ownerUid;
 });
-
-const fetchBreederStatus = async (slug: string) => {
-  activeBreederOwnerUid.value = undefined; // reset to loading
-  if (!slug || slug === 'support') return;
-
-  // Check store first (free, synchronous)
-  const storeBreeder = (store.state.breeders as any[]).find((b) => b.id === slug);
-  if (storeBreeder !== undefined) {
-    activeBreederOwnerUid.value = storeBreeder.ownerUid || null;
-    return;
-  }
-
-  // Fall back to a direct read for listings not yet in the store
-  try {
-    const snap = await getDoc(doc(db, 'directory_members', slug));
-    activeBreederOwnerUid.value = snap.exists() ? (snap.data().account?.ownerUid || null) : null;
-  } catch (e) {
-    console.error('Error checking breeder status:', e);
-    activeBreederOwnerUid.value = null;
-  }
-};
 
 const activeDisplayName = computed(() => {
   if (!activeThread.value) return '';
@@ -170,11 +149,9 @@ const markAsRead = async (threadId: string) => {
 watch(activeThreadId, (newId) => {
   if (messagesUnsubscribe) messagesUnsubscribe();
   messages.value = [];
-  activeBreederOwnerUid.value = undefined;
 
   if (!newId || newId === 'support_new') {
     isLoadingMessages.value = false;
-    activeBreederOwnerUid.value = null;
     return;
   }
 
@@ -191,13 +168,8 @@ watch(activeThreadId, (newId) => {
     markAsRead(newId).catch(() => {}); // suppress background write errors (e.g. after logout)
   });
 
-  const thread = threads.value.find(t => t.id === newId);
-  if (thread && thread.type !== 'support' && thread.type !== 'peer' && thread.breederSlug !== 'support') {
-    fetchBreederStatus(thread.breederSlug);
-  } else {
-    activeBreederOwnerUid.value = null;
-  }
 }, { immediate: true });
+
 
 const handleSend = async () => {
   if (!newMessage.value.trim() || !user.value) return;
