@@ -126,7 +126,7 @@ jobs:
 
       - name: Deploy to staging
         run: |
-          NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy live --site ct-chickens-staging --project ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          NODE_NO_WARNINGS=1 npx firebase hosting:channel:deploy live --only hosting:ct-chickens-staging --project ${{ vars.VITE_FIREBASE_PROJECT_ID }}
           echo "### Staging deployed" >> $GITHUB_STEP_SUMMARY
           echo "https://ct-chickens-staging.web.app" >> $GITHUB_STEP_SUMMARY
 
