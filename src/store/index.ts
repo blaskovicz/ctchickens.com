@@ -198,7 +198,11 @@ export default createStore({
         });
       }
 
-      // 2. Setup observer
+      // 2. Setup observer — fire fetchDirectory in parallel since it's public data
+      const directoryFetch = dispatch('fetchDirectory').catch((e: unknown) => {
+        console.error("[auth] fetchDirectory failed", e);
+      });
+
       await new Promise<void>((resolve) => {
         let isResolved = false;
         const timeout = setTimeout(() => {
@@ -252,13 +256,8 @@ export default createStore({
         });
       });
 
-      // 3. Final synchronization
-      try {
-        await dispatch('fetchDirectory');
-      } catch (e) {
-        console.error("[auth] fetchDirectory failed", e);
-      }
-      
+      await directoryFetch;
+
       if (getters.isLoggedIn && getters.myBreeders.length > 0 && router.currentRoute.value.path === '/') {
         const farm = getters.myBreeders[0];
         const path = farm.status === 'draft' ? `/get-listed/${farm.id}` : `/directory/${farm.id}`;
