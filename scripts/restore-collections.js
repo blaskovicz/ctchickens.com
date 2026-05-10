@@ -22,10 +22,11 @@
  */
 
 import { initializeApp, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { COLLECTIONS } from './collections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,7 +39,7 @@ const CONFIRM = args.includes('--confirm');
 const fileIndex = args.indexOf('--file');
 const SPECIFIC_FILE = fileIndex !== -1 ? args[fileIndex + 1] : null;
 
-const KNOWN_COLLECTIONS = ['directory_members', 'users', 'classifieds'];
+const KNOWN_COLLECTIONS = COLLECTIONS;
 const BACKUPS_DIR = path.join(__dirname, '..', 'backups');
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,24 @@ const db = getFirestore();
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Recursively converts plain { _seconds, _nanoseconds } objects (produced by JSON.stringify
+ * on Admin SDK Timestamps) back into proper Firestore Timestamp instances so they are
+ * stored correctly when written via batch.set().
+ */
+function deserializeTimestamps(value) {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map(deserializeTimestamps);
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 2 && '_seconds' in value && '_nanoseconds' in value) {
+      return new Timestamp(value._seconds, value._nanoseconds);
+    }
+    return Object.fromEntries(keys.map(k => [k, deserializeTimestamps(value[k])]));
+  }
+  return value;
+}
 
 /**
  * Infers the Firestore collection name from the backup filename.
@@ -115,7 +134,7 @@ async function restoreFile(filePath) {
     const chunk = entries.slice(i, i + BATCH_SIZE);
     const batch = db.batch();
     for (const [id, data] of chunk) {
-      batch.set(db.collection(collection).doc(id), data);
+      batch.set(db.collection(collection).doc(id), deserializeTimestamps(data));
     }
     await batch.commit();
     written += chunk.length;
