@@ -77,27 +77,26 @@ function getStoragePathFromUrl(url: string): string | null {
 // Self-heals a missing users doc when a draft_profiles document is created.
 // Guards against getRedirectResult failing silently on the client.
 async function healUserProfileIfRequired(
-  slug: string,
-  ownerUid: string
+  uid: string
 ): Promise<FirebaseFirestore.DocumentSnapshot | null> {
-  const userRef = db.collection('users').doc(ownerUid);
+  const userRef = db.collection('users').doc(uid);
   const userSnap = await userRef.get();
   if (userSnap.exists) return userSnap;
 
   // users doc is missing — pull data from Auth and create it
-  console.error('[healUserProfileIfRequired] Missing users doc detected', { slug, ownerUid });
+  console.error('[healUserProfileIfRequired] Missing users doc detected', { uid });
   try {
-    const authUser = await getAuth().getUser(ownerUid);
+    const authUser = await getAuth().getUser(uid);
     await userRef.set({
       displayName: authUser.displayName ?? null,
       email: authUser.email ?? null,
       photoURL: authUser.photoURL ?? null,
       lastLogin: FieldValue.serverTimestamp(),
     }, { merge: true });
-    console.log('[healUserProfileIfRequired] users doc created for uid', ownerUid);
+    console.log('[healUserProfileIfRequired] users doc created for uid', uid);
     return await userRef.get();
   } catch (e) {
-    console.error('[healUserProfileIfRequired] Failed to create users doc', { ownerUid, error: e });
+    console.error('[healUserProfileIfRequired] Failed to create users doc', { uid, error: e });
     return null;
   }
 }
@@ -141,7 +140,7 @@ export const onDraftProfileCreated = onDocumentCreated(
     }
 
     const resend = new Resend(resendApiKey.value());
-    const userSnap = await healUserProfileIfRequired(slug, ownerUid);
+    const userSnap = await healUserProfileIfRequired(ownerUid);
     await emailAdminsNewDraftIfRequired(slug, data, userSnap, resend);
   }
 );
@@ -406,6 +405,8 @@ export const setLocalEmail = onCall(
 
     const uid = request.auth.uid;
     const userRef = db.collection('users').doc(uid);
+
+    await healUserProfileIfRequired(uid);
 
     if (!email) {
       await userRef.update({
@@ -757,7 +758,7 @@ export const onDraftClassifiedCreated = onDocumentCreated(
       return;
     }
 
-    const userSnap = await healUserProfileIfRequired(docId, ownerUid);
+    const userSnap = await healUserProfileIfRequired(ownerUid);
     const ownerName = (userSnap?.data()?.displayName as string) || (data.display_name as string) || 'Unknown';
     const category = (data.category as string) || 'unknown';
     const location = (data.location as string) || 'Unknown';
@@ -1056,6 +1057,8 @@ export const initiatePeerThread = onCall(
     if (callerUid === targetUid) {
       throw new HttpsError('invalid-argument', 'Cannot start a thread with yourself.');
     }
+
+    await healUserProfileIfRequired(callerUid);
 
     const [callerDoc, targetDoc] = await Promise.all([
       db.collection('users').doc(callerUid).get(),
