@@ -45,12 +45,12 @@ const previewBreeders = computed(() => {
     
     <div v-else class="table-responsive">
       <table class="table table-hover align-middle">
-        <thead class="table-light">
+        <thead class="table-light thead-row">
           <tr>
             <th>Name</th>
             <th class="d-none d-lg-table-cell">Location</th>
             <th class="d-none d-lg-table-cell">Selling</th>
-            <th class="text-end"></th>
+            <th class="text-end actions-col"></th>
           </tr>
         </thead>
         <tbody>
@@ -93,7 +93,7 @@ const previewBreeders = computed(() => {
               </template>
               <span v-else class="fst-italic opacity-50">Inquire for more info</span>
             </td>
-            <td class="text-end">
+            <td class="text-end actions-col">
               <div class="d-flex justify-content-end gap-2">
                 <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
                 <ViewProfileButton :breeder-name="breeder.name" size="sm" />
@@ -105,10 +105,14 @@ const previewBreeders = computed(() => {
               <div class="small text-muted mb-1">
                 <i class="bi bi-geo-alt-fill me-1 text-secondary opacity-75"></i>{{ breeder.location }}
               </div>
-              <div class="small text-muted text-truncate-mobile">
+              <div class="small text-muted text-truncate-mobile mb-3">
                 <i class="bi bi-tag-fill me-1 text-secondary opacity-75"></i>
                 <span v-if="breeder.selling">{{ breeder.selling }}</span>
                 <span v-else class="fst-italic opacity-50">Inquire for more info</span>
+              </div>
+              <div class="d-flex gap-2">
+                <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
+                <ViewProfileButton :breeder-name="breeder.name" size="sm" />
               </div>
             </td>
           </tr>
@@ -132,5 +136,9 @@ const previewBreeders = computed(() => {
 .grayscale {
   filter: grayscale(100%);
   opacity: 0.7;
+}
+@media (max-width: 991.98px) {
+  .thead-row { display: none !important; }
+  .actions-col { display: none !important; }
 }
 </style>
