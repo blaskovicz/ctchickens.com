@@ -322,9 +322,6 @@
     .breeds-row td {
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
-
-      border-bottom: 16px solid transparent; /* Adds the "empty space" */
-      background-clip: padding-box;          /* Stops hover colors from painting the space */
-      position: relative;                    /* Keeps z-index stacking clean */
+      border-bottom: 2px solid rgba(30, 58, 138, 0.50) !important;
     }
 </style>
