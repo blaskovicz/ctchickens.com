@@ -26,8 +26,7 @@ const subtext = computed(() => {
   if (featured.value.location) parts.push(featured.value.location);
   if (featured.value.category) parts.push(featured.value.category);
   if (featured.value.selling) parts.push(featured.value.selling);
-  const fullText = parts.join(' · ');
-  return fullText.length > 128 ? fullText.substring(0, 125) + '...' : fullText;
+  return parts.join(' · ');
 });
 
 const goToProfile = () => {

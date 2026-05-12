@@ -1,6 +1,7 @@
 <script setup lang="ts">
     import { ref, computed } from 'vue';
     import { useStore } from 'vuex';
+    import { useRouter } from 'vue-router';
     import type { Breeder } from '../types';
     import BreederGallery from './BreederGallery.vue';
     import VerifiedBadge from './VerifiedBadge.vue';
@@ -9,11 +10,9 @@
     import ViewProfileButton from './ViewProfileButton.vue';
     import VerifiedMemberLink from './VerifiedMemberLink.vue';
     import { useBreederUtils } from '../composables/useBreederUtils';
-    import { useSupport } from '../composables/useSupport';
-
     const store = useStore();
-    const { splitBreederName } = useBreederUtils();
-    const { contactSupport } = useSupport();
+    const router = useRouter();
+    const { splitBreederName, generateSlug } = useBreederUtils();
     const filter = ref('');
     const selectedCategory = ref('');
     const showVerifiedOnly = ref(false);
@@ -48,8 +47,6 @@
         year: 'numeric', month: 'short', day: 'numeric' 
       });
     };
-
-    const handleContactSupport = () => contactSupport();
 
     // Automatically finds all unique categories from the loaded data
     const uniqueCategories = computed(() => {
@@ -211,7 +208,7 @@
               </thead>
               <tbody>
                 <template v-for="breeder in sortedAndFilteredItems" :key="breeder.name">
-                  <tr>
+                  <tr style="cursor: pointer;" @click="router.push({ name: 'breeder-profile', params: { slug: generateSlug(breeder.name) } })">
                     <td>
                       <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="mb-1 mb-md-0">
@@ -255,10 +252,12 @@
                     </td>
                     <td class="d-none d-md-table-cell">{{ breeder.location }}</td>
                     <td class="text-md-end align-middle">
-                      <div class="d-flex flex-row justify-content-end gap-2">
-                        <!-- Directory ONLY shows Message & Profile -->
-                        <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
-                        <ViewProfileButton :breeder-name="breeder.name" />
+                      <div class="d-flex flex-row justify-content-end align-items-center gap-2">
+                        <div class="d-flex gap-2" @click.stop>
+                          <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
+                          <ViewProfileButton :breeder-name="breeder.name" />
+                        </div>
+                        <i class="bi bi-chevron-right text-muted d-md-none"></i>
                       </div>
                     </td>
                   </tr>
@@ -313,14 +312,6 @@
             </div>
           </div>
           
-          <p class="text-muted small text-center mt-3">
-            <i class="bi bi-info-circle me-1"></i>
-            Listings are provided by community members. Please contact breeders/suppliers directly to verify availability.
-          </p>
-          <p class="text-muted small text-center">
-            If you need help, please <a href="#" @click.prevent="handleContactSupport">contact support</a>.
-            To get listed, <router-link to="/get-listed">click here to start your listing</router-link>.
-          </p>
           </div>
           </div>
           </template>
@@ -328,12 +319,12 @@
           <style scoped>    .uc-first {
       text-transform: capitalize;
     }
+    @media (max-width: 767.98px) {
+      thead { display: none !important; }
+    }
     .breeds-row td {
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
-
-      border-bottom: 16px solid transparent; /* Adds the "empty space" */
-      background-clip: padding-box;          /* Stops hover colors from painting the space */
-      position: relative;                    /* Keeps z-index stacking clean */
+      border-bottom: 2px solid rgba(30, 58, 138, 0.50) !important;
     }
 </style>

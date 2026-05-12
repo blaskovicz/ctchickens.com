@@ -66,12 +66,12 @@ const GROUP_URL = "https://www.facebook.com/groups/1465813350383274";
         <!-- Admin Tools Section -->
         <li v-if="userData?.isAdmin">
           <hr class="dropdown-divider">
-          <router-link to="/admin/inbox" class="dropdown-item d-flex align-items-center gap-2 text-primary fw-bold">
+          <router-link to="/admin/inbox" class="dropdown-item d-flex align-items-center gap-2 text-primary">
             <i class="bi bi-inbox-fill"></i> Admin Inbox
           </router-link>
         </li>
         <li v-if="userData?.isAdmin">
-          <router-link to="/admin/email" class="dropdown-item d-flex align-items-center gap-2 text-primary fw-bold">
+          <router-link to="/admin/email" class="dropdown-item d-flex align-items-center gap-2 text-primary">
             <i class="bi bi-envelope-fill"></i> Admin Email
           </router-link>
         </li>
