@@ -1,6 +1,7 @@
 <script setup lang="ts">
     import { ref, computed } from 'vue';
     import { useStore } from 'vuex';
+    import { useRouter } from 'vue-router';
     import type { Breeder } from '../types';
     import BreederGallery from './BreederGallery.vue';
     import VerifiedBadge from './VerifiedBadge.vue';
@@ -12,7 +13,8 @@
     import { useSupport } from '../composables/useSupport';
 
     const store = useStore();
-    const { splitBreederName } = useBreederUtils();
+    const router = useRouter();
+    const { splitBreederName, generateSlug } = useBreederUtils();
     const { contactSupport } = useSupport();
     const filter = ref('');
     const selectedCategory = ref('');
@@ -211,7 +213,7 @@
               </thead>
               <tbody>
                 <template v-for="breeder in sortedAndFilteredItems" :key="breeder.name">
-                  <tr>
+                  <tr style="cursor: pointer;" @click="router.push({ name: 'breeder-profile', params: { slug: generateSlug(breeder.name) } })">
                     <td>
                       <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="mb-1 mb-md-0">
@@ -255,10 +257,12 @@
                     </td>
                     <td class="d-none d-md-table-cell">{{ breeder.location }}</td>
                     <td class="text-md-end align-middle">
-                      <div class="d-flex flex-row justify-content-end gap-2">
-                        <!-- Directory ONLY shows Message & Profile -->
-                        <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
-                        <ViewProfileButton :breeder-name="breeder.name" />
+                      <div class="d-flex flex-row justify-content-end align-items-center gap-2">
+                        <div class="d-flex gap-2" @click.stop>
+                          <ContactButton :link="breeder.contact_link" :breeder="breeder" :force-secure-only="true" />
+                          <ViewProfileButton :breeder-name="breeder.name" />
+                        </div>
+                        <i class="bi bi-chevron-right text-muted d-md-none"></i>
                       </div>
                     </td>
                   </tr>
