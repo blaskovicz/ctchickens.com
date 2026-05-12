@@ -319,6 +319,9 @@
           <style scoped>    .uc-first {
       text-transform: capitalize;
     }
+    @media (max-width: 767.98px) {
+      thead { display: none !important; }
+    }
     .breeds-row td {
       font-size: 0.9rem;
       border-top: 1px solid #e9ecef;
