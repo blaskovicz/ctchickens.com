@@ -10,12 +10,9 @@
     import ViewProfileButton from './ViewProfileButton.vue';
     import VerifiedMemberLink from './VerifiedMemberLink.vue';
     import { useBreederUtils } from '../composables/useBreederUtils';
-    import { useSupport } from '../composables/useSupport';
-
     const store = useStore();
     const router = useRouter();
     const { splitBreederName, generateSlug } = useBreederUtils();
-    const { contactSupport } = useSupport();
     const filter = ref('');
     const selectedCategory = ref('');
     const showVerifiedOnly = ref(false);
@@ -50,8 +47,6 @@
         year: 'numeric', month: 'short', day: 'numeric' 
       });
     };
-
-    const handleContactSupport = () => contactSupport();
 
     // Automatically finds all unique categories from the loaded data
     const uniqueCategories = computed(() => {
@@ -317,14 +312,6 @@
             </div>
           </div>
           
-          <p class="text-muted small text-center mt-3">
-            <i class="bi bi-info-circle me-1"></i>
-            Listings are provided by community members. Please contact breeders/suppliers directly to verify availability.
-          </p>
-          <p class="text-muted small text-center">
-            If you need help, please <a href="#" @click.prevent="handleContactSupport">contact support</a>.
-            To get listed, <router-link to="/get-listed">click here to start your listing</router-link>.
-          </p>
           </div>
           </div>
           </template>

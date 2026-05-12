@@ -322,6 +322,13 @@
     overflow: hidden;
     min-height: 400px;
   }
+
+  @media (max-width: 767.98px) {
+    .hero-section {
+      min-height: 0;
+      padding: 1.25rem 0;
+    }
+  }
   
   .hero-overlay {
     position: absolute;

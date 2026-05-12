@@ -2,6 +2,9 @@
 import BreederTable from '../components/BreederTable.vue';
 import FeaturedBreeder from '../components/FeaturedBreeder.vue';
 import PageHero from '../components/PageHero.vue';
+import { useSupport } from '../composables/useSupport';
+
+const { contactSupport } = useSupport();
 </script>
 
 <template>
@@ -19,12 +22,11 @@ import PageHero from '../components/PageHero.vue';
 
   <section id="directory" class="py-5 bg-light min-vh-100">
     <div class="container">
-      <div class="row mb-5">
+      <FeaturedBreeder />
+      <BreederTable />
+
+      <div class="row mt-5">
         <div class="col-lg-10 mx-auto text-center">
-          <p class="lead mb-4">
-            Facebook prohibits live animal sales; all listings are moved here for community safety.
-            Our directory connects you with trusted local Connecticut suppliers, breeders, and service providers.
-          </p>
           <div class="row g-4 justify-content-center">
             <div class="col-md-6">
               <div class="card h-100 border-0 shadow-sm p-3">
@@ -51,9 +53,20 @@ import PageHero from '../components/PageHero.vue';
           </div>
         </div>
       </div>
-      
-      <FeaturedBreeder />
-      <BreederTable />
+
+      <p class="text-muted small text-center mt-4">
+        <i class="bi bi-info-circle me-1"></i>
+        Listings are provided by community members. Please contact breeders/suppliers directly to verify availability.
+      </p>
+      <p class="text-muted small text-center">
+        Facebook prohibits live animal sales; all listings are moved here for community safety.
+        Our directory connects you with trusted local Connecticut suppliers, breeders, and service providers.
+      </p>
+      <p class="text-muted small text-center">
+        If you need help, please <a href="#" @click.prevent="contactSupport()">contact support</a>.
+        To get listed, <router-link to="/get-listed">click here to start your listing</router-link>.
+      </p>
+
     </div>
   </section>
 </template>

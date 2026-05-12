@@ -92,7 +92,7 @@ const previewBreeders = computed(() => {
             <td class="d-none d-lg-table-cell text-muted">{{ breeder.location }}</td>
             <td class="d-none d-lg-table-cell text-muted small">
               <template v-if="breeder.selling">
-                {{ breeder.selling.length > 64 ? breeder.selling.substring(0, 61) + '...' : breeder.selling }}
+                {{ breeder.selling }}
               </template>
               <span v-else class="fst-italic opacity-50">Inquire for more info</span>
             </td>

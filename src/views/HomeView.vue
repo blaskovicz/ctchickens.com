@@ -32,9 +32,9 @@ import HaveMoreQuestions from '../components/HaveMoreQuestions.vue';
     <div class="container">
       <div class="row align-items-end mb-4">
         <div class="col-lg-9 text-center text-lg-start">
-          <h2 class="display-5 fw-bold text-dark">Verified Breeders and Suppliers</h2>
+          <h2 class="display-5 fw-bold text-dark">Verified Sellers</h2>
           <p class="lead mb-0">
-            Confirmed members of the community in good standing.
+            Trusted members of the community.
           </p>
         </div>
         <div class="col-lg-3 text-center text-lg-end mt-4 mt-lg-0 d-lg-flex align-items-end justify-content-end">
