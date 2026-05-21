@@ -117,6 +117,8 @@ export interface Review {
     created_at: any;
     expiry_warning_sent?: boolean;
     image_url?: string;
+    cloned_from?: string;
+    cloned_to?: string;
   }
 
   export interface DraftClassified {
