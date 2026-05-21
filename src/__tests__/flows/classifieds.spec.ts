@@ -580,7 +580,8 @@ async function simulateCFClone(expiredId: string, newId: string, ownerUid: strin
 
   // Write new active classified
   const newFields = ['owner_uid', 'display_name', 'location', 'title', 'description',
-    'category', 'status', 'renewal_count', 'max_renewals', 'expires_at', 'created_at', 'cloned_from'];
+    'category', 'status', 'renewal_count', 'max_renewals', 'expires_at', 'created_at', 'cloned_from',
+    ...(data.image_url ? ['image_url'] : [])];
   const newMask = newFields.map(f => `updateMask.fieldPaths=${f}`).join('&');
   const newUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${newId}?${newMask}`;
 
