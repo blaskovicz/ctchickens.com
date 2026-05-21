@@ -63,6 +63,17 @@ const daysUntilExpiry = computed(() => {
   return Math.ceil((d.getTime() - Date.now()) / 86400000);
 });
 
+const deletesAt = computed(() => {
+  if (!classified.value?.expires_at) return null;
+  const d = classified.value.expires_at.toDate ? classified.value.expires_at.toDate() : new Date(classified.value.expires_at);
+  return new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+});
+
+const daysUntilDeletion = computed(() => {
+  if (!deletesAt.value) return null;
+  return Math.ceil((deletesAt.value.getTime() - Date.now()) / 86400000);
+});
+
 const canRenew = computed(() => {
   if (!classified.value || (!isOwner.value && !isAdmin.value)) return false;
   if (classified.value.status !== 'active') return false;
@@ -140,6 +151,22 @@ onMounted(async () => {
 onUnmounted(() => {
   unsubscribeClassified?.();
 });
+
+const isCloning = ref(false);
+
+const handleClone = async () => {
+  if (!isOwner.value || isCloning.value) return;
+  isCloning.value = true;
+  try {
+    const newId = await store.dispatch('cloneExpiredClassified', docId);
+    create?.({ body: 'Listing reposted — it\'s live now.', variant: 'success' });
+    router.push(`/classified/${newId}`);
+  } catch (e: any) {
+    create?.({ body: e?.message || 'Failed to clone listing.', variant: 'danger' });
+  } finally {
+    isCloning.value = false;
+  }
+};
 
 const handleRenew = async () => {
   if (!canRenew.value || isActing.value) return;
@@ -318,8 +345,27 @@ const activeData = computed(() => classified.value || draftClassified.value);
           </BButton>
         </div>
 
-        <!-- Admin approve/reject only in the header row; message button moved to card footer -->
-
+        <!-- Owner: clone or view repost of expired listing -->
+        <div v-else-if="isOwner && classified?.status === 'expired'" class="d-flex gap-2 align-items-center">
+          <router-link
+            v-if="classified.cloned_to"
+            :to="`/classified/${classified.cloned_to}`"
+            class="btn btn-sm btn-outline-success"
+          >
+            <i class="bi bi-box-arrow-up-right me-1"></i> View Repost
+          </router-link>
+          <BButton
+            v-else
+            variant="outline-primary"
+            size="sm"
+            @click="handleClone"
+            :disabled="isCloning"
+          >
+            <BSpinner v-if="isCloning" small class="me-1" />
+            <i v-else class="bi bi-clipboard-plus me-1"></i>
+            Clone Listing
+          </BButton>
+        </div>
 
         <!-- Owner: delete own pending draft -->
         <div v-else-if="isDraft && isOwner && !isAdmin">
@@ -408,6 +454,19 @@ const activeData = computed(() => classified.value || draftClassified.value);
               <span v-if="(isOwner || isAdmin) && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
                 <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
               </span>
+              <div v-if="isOwner && (classified?.status === 'expired' || classified?.status === 'discarded')" class="alert alert-danger border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-triangle fs-5 flex-shrink-0"></i>
+                <div>
+                  <p class="mb-1 fw-bold">{{ classified?.status === 'expired' ? 'This listing has expired' : 'This listing has been closed' }}</p>
+                  <p class="mb-0">
+                    Will be permanently deleted on {{ deletesAt ? formatDate(deletesAt) : '—' }}
+                    <template v-if="daysUntilDeletion !== null && daysUntilDeletion > 0"> ({{ daysUntilDeletion }}d left)</template>
+                    <template v-else-if="daysUntilDeletion !== null && daysUntilDeletion <= 0"> (today)</template>.
+                    <template v-if="classified?.status === 'expired' && !classified.cloned_to"> Clone it to repost instantly.</template>
+                  </p>
+                </div>
+              </div>
+
               <div v-if="(isOwner || isAdmin) && activeData && ownerTier === 'freemium'" class="alert alert-warning border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
                 <i class="bi bi-stars fs-5 flex-shrink-0"></i>
                 <div>
@@ -507,6 +566,9 @@ const activeData = computed(() => classified.value || draftClassified.value);
     >
       <p v-if="isAdmin && !isOwner">Are you sure you want to archive this listing? It will be removed from the public directory immediately.</p>
       <p v-else>Are you sure you want to close this listing? It will no longer be visible to others.</p>
+      <p v-if="!isAdmin && classified?.cloned_from" class="mb-0 text-danger small">
+        <i class="bi bi-exclamation-triangle me-1"></i>This listing was cloned from an expired post. Closing it cannot be undone — you won't be able to clone the original again.
+      </p>
     </BModal>
 
     <!-- DELETE DRAFT CONFIRMATION MODAL -->

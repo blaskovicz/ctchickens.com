@@ -131,7 +131,7 @@ onMounted(async () => {
       <!-- My expired listings -->
       <div v-if="isLoggedIn && myExpiredClassifieds.length > 0" class="mb-5">
         <div class="d-flex align-items-center gap-2 mb-3">
-          <h6 class="text-muted text-uppercase small fw-bold mb-0 letter-spacing-1">Your Expired Listings</h6>
+          <h6 class="text-muted text-uppercase small fw-bold mb-0 letter-spacing-1">Your Expired Listings <span class="fw-normal text-lowercase">(deleted after 7 days)</span></h6>
           <hr class="flex-grow-1 my-0 opacity-10">
         </div>
         <div class="row g-3">

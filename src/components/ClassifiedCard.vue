@@ -17,7 +17,16 @@ const router = useRouter();
 
 const isPending = props.item.status === 'pending';
 const isExpired = props.item.status === 'expired';
+const isDiscarded = props.item.status === 'discarded';
 const isOwner = store.state.user?.uid === props.item.owner_uid;
+
+const deletesAt = computed(() => {
+  if ((!isExpired && !isDiscarded) || !('expires_at' in props.item)) return null;
+  const ts = (props.item as any).expires_at;
+  if (!ts) return null;
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+});
 
 const verifiedFarms = computed(() =>
   ((store.state.breeders as any[]) ?? []).filter(b => b.ownerUid === props.item.owner_uid && b.verified)
@@ -79,6 +88,9 @@ const verifiedFarms = computed(() =>
         </div>
         <div class="text-muted smaller mt-1">
           <i class="bi bi-clock me-1"></i>{{ formatRelativeTime(item.created_at) }}
+        </div>
+        <div v-if="(isExpired || isDiscarded) && showOwnerLabel && isOwner && deletesAt" class="text-danger smaller mt-1">
+          <i class="bi bi-trash me-1"></i>Deletes {{ deletesAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
         </div>
         <div v-if="verifiedFarms.length" class="mt-1">
           <div v-for="farm in verifiedFarms" :key="farm.id" class="d-flex align-items-center gap-1 small">

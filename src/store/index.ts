@@ -345,6 +345,14 @@ export default createStore({
       return ref.id;
     },
 
+    async cloneExpiredClassified({ state, dispatch }: ActionContext<State, State>, classifiedId: string) {
+      if (!state.user) throw new Error('Must be logged in.');
+      const fn = httpsCallable<{ classifiedId: string }, { newClassifiedId: string }>(functions, 'cloneExpiredClassified');
+      const result = await fn({ classifiedId });
+      await dispatch('fetchMyClassifieds', state.user.uid);
+      return result.data.newClassifiedId;
+    },
+
     async fetchMyDrafts({ commit }: ActionContext<State, State>, uid: string) {
       try {
         const q = query(collection(db, 'draft_profiles'), where("draft_owner_uid", "==", uid));

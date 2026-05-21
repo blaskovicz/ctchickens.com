@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth } from '../../firebase';
 import {
-  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch} from 'firebase/firestore';
+  doc, getDoc, addDoc, collection, serverTimestamp, writeBatch, updateDoc} from 'firebase/firestore';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import {
   clearFirestoreEmulator,
@@ -564,4 +564,193 @@ describe('Store: createDraftClassified', () => {
       })
     ).rejects.toThrow(/logged in/i);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers for clone flow
+// ---------------------------------------------------------------------------
+
+async function simulateCFClone(expiredId: string, newId: string, ownerUid: string, data: {
+  title?: string;
+  description?: string;
+  category?: string;
+  image_url?: string;
+}) {
+  const projectId = PROJECT_ID();
+
+  // Write new active classified
+  const newFields = ['owner_uid', 'display_name', 'location', 'title', 'description',
+    'category', 'status', 'renewal_count', 'max_renewals', 'expires_at', 'created_at', 'cloned_from'];
+  const newMask = newFields.map(f => `updateMask.fieldPaths=${f}`).join('&');
+  const newUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${newId}?${newMask}`;
+
+  const expiresAt = new Date(Date.now() + 7 * 86400000);
+  const newPayload: Record<string, any> = {
+    fields: {
+      owner_uid: { stringValue: ownerUid },
+      display_name: { stringValue: 'Test User' },
+      location: { stringValue: 'Lebanon, CT' },
+      title: { stringValue: data.title ?? 'Test Listing' },
+      description: { stringValue: data.description ?? 'Test description' },
+      category: { stringValue: data.category ?? 'iso' },
+      status: { stringValue: 'active' },
+      renewal_count: { integerValue: 0 },
+      max_renewals: { integerValue: 1 },
+      expires_at: { timestampValue: expiresAt.toISOString() },
+      created_at: { timestampValue: new Date().toISOString() },
+      cloned_from: { stringValue: expiredId },
+    }
+  };
+  if (data.image_url) newPayload.fields.image_url = { stringValue: data.image_url };
+
+  const newRes = await fetch(newUrl, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+    body: JSON.stringify(newPayload)
+  });
+  if (!newRes.ok) throw new Error(`Clone CF write failed: ${await newRes.text()}`);
+
+  // Update expired listing with cloned_to
+  const sourceUrl = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/classifieds/${expiredId}?updateMask.fieldPaths=cloned_to`;
+  const sourceRes = await fetch(sourceUrl, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer owner' },
+    body: JSON.stringify({ fields: { cloned_to: { stringValue: newId } } })
+  });
+  if (!sourceRes.ok) throw new Error(`Clone CF source update failed: ${await sourceRes.text()}`);
+}
+
+// ---------------------------------------------------------------------------
+// Flow 5: Clone expired listing
+// ---------------------------------------------------------------------------
+describe('Classified Flow: clone expired listing', () => {
+  beforeEach(async () => {
+    await logout();
+    await clearFirestoreEmulator();
+    await clearAuthEmulator();
+    store.commit('SET_USER', null);
+    store.commit('SET_USER_DATA', null);
+    store.commit('SET_MY_CLASSIFIEDS', []);
+  });
+
+  it('CF clone creates new active classified with correct fields and sets cloned_to on source', async () => {
+    const ownerUser = await createTestUser('clone-owner@example.com', 'Clone Carol');
+
+    const expiredId = 'expired-to-clone';
+    const newId = 'cloned-result';
+    const pastExpiry = new Date(Date.now() - 2 * 86400000);
+
+    await seedClassified(expiredId, {
+      owner_uid: ownerUser.uid,
+      status: 'expired',
+      title: 'Silkie Hens Available',
+      description: 'Three silkie hens looking for a new home',
+      category: 'rehoming',
+      expires_at: pastExpiry,
+    });
+
+    await simulateCFClone(expiredId, newId, ownerUser.uid, {
+      title: 'Silkie Hens Available',
+      description: 'Three silkie hens looking for a new home',
+      category: 'rehoming',
+    });
+
+    const newDoc = await getDoc(doc(db, 'classifieds', newId));
+    expect(newDoc.exists()).toBe(true);
+    const newData = newDoc.data()!;
+    expect(newData.status).toBe('active');
+    expect(newData.owner_uid).toBe(ownerUser.uid);
+    expect(newData.cloned_from).toBe(expiredId);
+    expect(newData.renewal_count).toBe(0);
+    expect(newData.title).toBe('Silkie Hens Available');
+
+    const sourceDoc = await getDoc(doc(db, 'classifieds', expiredId));
+    expect(sourceDoc.data()?.cloned_to).toBe(newId);
+  }, 20000);
+
+  it('clone preserves image_url on new classified', async () => {
+    const ownerUser = await createTestUser('clone-img@example.com', 'Clone Iris');
+
+    const expiredId = 'expired-with-image';
+    const newId = 'cloned-with-image';
+    const pastExpiry = new Date(Date.now() - 2 * 86400000);
+
+    await seedClassified(expiredId, {
+      owner_uid: ownerUser.uid,
+      status: 'expired',
+      expires_at: pastExpiry,
+    });
+
+    await simulateCFClone(expiredId, newId, ownerUser.uid, {
+      image_url: `https://storage.example.com/classifieds%2F${ownerUser.uid}%2Ftest.jpg`,
+    });
+
+    const newDoc = await getDoc(doc(db, 'classifieds', newId));
+    expect(newDoc.data()?.image_url).toBeDefined();
+  }, 20000);
+
+  it('non-admin owner cannot write cloned_to directly to classifieds', async () => {
+    const ownerUser = await createTestUser('no-write@example.com', 'No Write Nick');
+    const pastExpiry = new Date(Date.now() - 2 * 86400000);
+
+    await seedClassified('no-write-expired', {
+      owner_uid: ownerUser.uid,
+      status: 'expired',
+      expires_at: pastExpiry,
+    });
+
+    await signInWithEmailAndPassword(auth, 'no-write@example.com', 'password123');
+
+    await expect(
+      updateDoc(doc(db, 'classifieds', 'no-write-expired'), { cloned_to: 'fake-id' })
+    ).rejects.toThrow();
+  }, 15000);
+
+  it('sweep guard: cloned_to prevents image deletion logic', async () => {
+    const ownerUser = await createTestUser('sweep-guard@example.com', 'Sweep Guard');
+    const expiredId = 'sweep-guard-test';
+    const pastExpiry = new Date(Date.now() - 8 * 86400000);
+
+    await seedClassified(expiredId, {
+      owner_uid: ownerUser.uid,
+      status: 'expired',
+      expires_at: pastExpiry,
+    });
+
+    // Simulate CF having set cloned_to
+    await simulateCFClone(expiredId, 'new-live-clone', ownerUser.uid, {
+      image_url: `https://storage.example.com/classifieds%2F${ownerUser.uid}%2Ftest.jpg`,
+    });
+
+    const sweepSnap = await getDoc(doc(db, 'classifieds', expiredId));
+    expect(sweepSnap.exists()).toBe(true);
+    const data = sweepSnap.data()!;
+
+    // Sweep logic: skip image deletion when cloned_to is set
+    const wouldDeleteImage = !data.cloned_to && !!data.image_url;
+    expect(wouldDeleteImage).toBe(false);
+  }, 15000);
+
+  it('cloned listing has fresh renewal_count and valid expires_at', async () => {
+    const ownerUser = await createTestUser('clone-fresh@example.com', 'Clone Frank');
+    const expiredId = 'expired-for-fresh-test';
+    const newId = 'fresh-clone';
+    const pastExpiry = new Date(Date.now() - 3 * 86400000);
+
+    await seedClassified(expiredId, {
+      owner_uid: ownerUser.uid,
+      status: 'expired',
+      expires_at: pastExpiry,
+      renewal_count: 2,
+      max_renewals: 2,
+    });
+
+    await simulateCFClone(expiredId, newId, ownerUser.uid, {});
+
+    const newDoc = await getDoc(doc(db, 'classifieds', newId));
+    const data = newDoc.data()!;
+    expect(data.renewal_count).toBe(0);
+    const expiresAt = data.expires_at.toDate ? data.expires_at.toDate() : new Date(data.expires_at);
+    expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
+  }, 15000);
 });

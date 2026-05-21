@@ -265,7 +265,7 @@
 
     <ClaimBanner />
 
-    <router-view />
+    <router-view :key="$route.fullPath" />
 
     <InquiryModal />
 

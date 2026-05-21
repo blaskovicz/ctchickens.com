@@ -428,10 +428,10 @@ export const setLocalEmail = onCall(
 
     const verifyUrl = `https://ctchickens.com/#/verify-email?uid=${uid}&email=${encodeURIComponent(email)}&ts=${ts}&token=${token}`;
 
+    await userRef.update({ pendingLocalEmail: email });
+
     const resend = new Resend(resendApiKey.value());
     await sendVerificationEmail(email, { firstName, verifyUrl }, resend);
-
-    await userRef.update({ pendingLocalEmail: email });
     console.log(`Verification email sent to ${email} for uid ${uid}`);
 
     return { ok: true, action: 'verification_sent' };
@@ -1037,6 +1037,103 @@ export const onClassifiedAction = onDocumentCreated(
   }
 );
 
+// Callable: clone an expired classified directly to a new active listing.
+// Validates ownership, checks tier capacity (active + pending), and batch-writes atomically.
+export const cloneExpiredClassified = onCall(
+  { secrets: [resendApiKey] },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Must be logged in.');
+    const uid = request.auth.uid;
+    const { classifiedId } = request.data as { classifiedId: string };
+    if (!classifiedId) throw new HttpsError('invalid-argument', 'classifiedId is required.');
+
+    const sourceRef = db.collection('classifieds').doc(classifiedId);
+    const sourceSnap = await sourceRef.get();
+    if (!sourceSnap.exists) throw new HttpsError('not-found', 'Listing not found.');
+    const source = sourceSnap.data()!;
+
+    if (source.owner_uid !== uid) throw new HttpsError('permission-denied', 'Not your listing.');
+    if (source.status !== 'expired') throw new HttpsError('failed-precondition', 'Only expired listings can be cloned.');
+    if (source.cloned_to) throw new HttpsError('failed-precondition', 'This listing has already been cloned.');
+
+    // Determine tier (reuse verified farm check)
+    const verifiedFarmsSnap = await db.collection('directory_members')
+      .where('account.ownerUid', '==', uid)
+      .where('account.isVerified', '==', true)
+      .limit(1)
+      .get();
+    const isPremium = !verifiedFarmsSnap.empty;
+    const tierLimit = isPremium ? 10 : 2;
+    const maxRenewals = isPremium ? 3 : 1;
+
+    // Count active + pending slots to prevent jumping the queue
+    const [activeSnap, pendingSnap] = await Promise.all([
+      db.collection('classifieds').where('owner_uid', '==', uid).where('status', '==', 'active').get(),
+      db.collection('draft_classifieds').where('owner_uid', '==', uid).get(),
+    ]);
+    if (activeSnap.size + pendingSnap.size >= tierLimit) {
+      throw new HttpsError(
+        'resource-exhausted',
+        `You've reached your limit of ${tierLimit} listings. Get verified to unlock more.`
+      );
+    }
+
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const newRef = db.collection('classifieds').doc();
+
+    const newData: Record<string, any> = {
+      owner_uid: source.owner_uid,
+      display_name: source.display_name,
+      location: source.location,
+      title: source.title,
+      description: source.description,
+      category: source.category,
+      status: 'active',
+      expires_at: expiresAt,
+      renewal_count: 0,
+      max_renewals: maxRenewals,
+      created_at: FieldValue.serverTimestamp(),
+      expiry_warning_sent: false,
+      cloned_from: classifiedId,
+    };
+    if (source.price) newData.price = source.price;
+    if (source.image_url) newData.image_url = source.image_url;
+
+    const batch = db.batch();
+    batch.set(newRef, newData);
+    batch.update(sourceRef, { cloned_to: newRef.id });
+    await batch.commit();
+
+    console.log(`[cloneExpiredClassified] uid=${uid} cloned ${classifiedId} → ${newRef.id}`);
+
+    // Send "your repost is live" email
+    try {
+      const resend = new Resend(resendApiKey.value());
+      const userDoc = await db.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        const userEmail = resolveEmail(userDoc.data()!);
+        if (userEmail) {
+          const firstName = (userDoc.data()?.displayName as string || '').split(' ')[0] || 'there';
+          const expiresAtStr = expiresAt.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          const classifiedUrl = `https://ctchickens.com/#/classified/${newRef.id}`;
+          await sendClassifiedApprovedEmail(userEmail, {
+            firstName,
+            categoryLabel: CATEGORY_LABELS[source.category] || source.category,
+            expiresAt: expiresAtStr,
+            maxRenewals,
+            classifiedUrl,
+            title: source.title,
+          }, resend);
+        }
+      }
+    } catch (err) {
+      console.error('[cloneExpiredClassified] Failed to send repost email', err);
+    }
+
+    return { newClassifiedId: newRef.id };
+  }
+);
+
 // Callable: find or create a peer-to-peer inquiry thread between two users.
 // Runs server-side so it can read both users' display names (client rules forbid cross-user reads).
 export const initiatePeerThread = onCall(
@@ -1287,7 +1384,8 @@ export const sweepExpiredClassifieds = onSchedule(
 
       for (const deadDoc of deadSnap.docs) {
         const data = deadDoc.data();
-        if (data.image_url) {
+        // Skip image deletion if this listing was cloned — the clone references the same Storage file.
+        if (!data.cloned_to && data.image_url) {
           const path = getStoragePathFromUrl(data.image_url);
           const ownerUid = data.owner_uid as string | undefined;
           if (path && ownerUid && path.startsWith(`classifieds/${ownerUid}/`)) {
