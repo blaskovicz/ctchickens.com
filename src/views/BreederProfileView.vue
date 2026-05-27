@@ -12,6 +12,7 @@ import ContactButton from '../components/ContactButton.vue';
 import BreederClassifiedsPreview from '../components/BreederClassifiedsPreview.vue';
 import MoreInfoButton from '../components/MoreInfoButton.vue';
 import VerifiedMemberLink from '../components/VerifiedMemberLink.vue';
+import MarkdownContent from '../components/MarkdownContent.vue';
 import { useBreederUtils, formatRelativeTime } from '../composables/useBreederUtils';
 import { useSupport } from '../composables/useSupport';
 import { BButton } from 'bootstrap-vue-next';
@@ -316,9 +317,8 @@ const formatDate = (dateString: string) => {
                 <span class="icon-circle me-2 bg-light text-muted"><i class="bi bi-tag-fill"></i></span>
                 Selling
               </h5>
-              <div class="p-3 bg-light rounded-4 shadow-sm border selling-box">
-                <p v-if="breeder.selling" class="fs-6 mb-0 text-dark">{{ breeder.selling }}</p>
-                <p v-else class="fs-6 mb-0 text-muted fst-italic">Inquire for more info</p>
+              <div class="p-3 bg-light rounded-4 shadow-sm border selling-box fs-6 text-dark">
+                <MarkdownContent :text="breeder.selling" />
               </div>
             </div>
 

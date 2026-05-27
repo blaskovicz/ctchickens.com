@@ -5,7 +5,7 @@
   import { useStore } from 'vuex';
   import { onMounted, watch, ref, computed, onUnmounted } from 'vue';
   import { useRouter } from 'vue-router';
-  import { BApp, BOrchestrator, useToast, BBadge } from 'bootstrap-vue-next';
+  import { BApp, BOrchestrator, BModal, useToast, BBadge } from 'bootstrap-vue-next';
   import AuthButton from './components/AuthButton.vue';
   import ClaimBanner from './components/ClaimBanner.vue';
   import InquiryModal from './components/InquiryModal.vue';
@@ -24,6 +24,30 @@
   const authReady = computed(() => store.getters.authReady);
   const totalUnread = ref(0);
   const mobileNavOpen = ref(false);
+  const pendingExternalHref = ref<string | null>(null);
+  const showExternalLinkWarning = ref(false);
+
+  const handleDocumentClick = (e: MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest('a');
+    if (!anchor || !anchor.href) return;
+    if (anchor.dataset.trusted !== undefined) return;
+    try {
+      const { origin, protocol } = new URL(anchor.href);
+      if (!protocol.startsWith('http')) return;
+      if (origin === window.location.origin) return;
+    } catch {
+      return;
+    }
+    e.preventDefault();
+    pendingExternalHref.value = anchor.href;
+    showExternalLinkWarning.value = true;
+  };
+
+  const proceedToExternalLink = () => {
+    if (pendingExternalHref.value) window.open(pendingExternalHref.value, '_blank', 'noopener,noreferrer');
+    showExternalLinkWarning.value = false;
+    pendingExternalHref.value = null;
+  };
   const GROUP_URL = "https://www.facebook.com/groups/1465813350383274";
 
   const login = async () => { await store.dispatch('loginWithFacebook'); };
@@ -101,11 +125,13 @@
     // Vue does not re-mount — treat it like a fresh mount if a Firebase redirect
     // was in flight so getRedirectResult() can process the auth result.
     window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('click', handleDocumentClick);
   });
 
   onUnmounted(() => {
     if (unreadUnsubscribe) unreadUnsubscribe();
     window.removeEventListener('pageshow', onPageShow);
+    document.removeEventListener('click', handleDocumentClick);
     document.body.style.overflow = '';
   });
 </script>
@@ -252,7 +278,7 @@
 
         <!-- Logged out section -->
         <div v-else-if="authReady" class="px-4 py-4 border-top">
-          <a :href="GROUP_URL" target="_blank" class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2">
+          <a :href="GROUP_URL" target="_blank" data-trusted class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2">
             <i class="bi bi-facebook"></i> Join FB Group
           </a>
           <button @click="login" class="btn btn-facebook w-100 d-flex align-items-center justify-content-center gap-2 text-white">
@@ -269,6 +295,19 @@
 
     <InquiryModal />
 
+    <BModal
+      v-model="showExternalLinkWarning"
+      title="External Link"
+      ok-title="Continue"
+      cancel-title="Cancel"
+      @ok="proceedToExternalLink"
+      @hide="pendingExternalHref = null"
+    >
+      <p>You're about to leave Connecticut Backyard Chickens and visit an external site:</p>
+      <p class="fw-bold text-break small text-muted">{{ pendingExternalHref }}</p>
+      <p class="mb-0">We're not responsible for the content of external websites.</p>
+    </BModal>
+
     <footer class="bg-dark text-light py-4 mt-3 mb-3">
       <div class="container">
         <div class="row">
@@ -280,8 +319,9 @@
             </small>
             <div class="mt-2" v-if="gitCommitHash">
               <a 
-                :href="`https://github.com/blaskovicz/ctchickens.com/commit/${gitCommitHash}`" 
-                target="_blank" 
+                :href="`https://github.com/blaskovicz/ctchickens.com/commit/${gitCommitHash}`"
+                target="_blank"
+                data-trusted
                 class="text-secondary small text-decoration-none hover-underline"
               >
                 <i class="bi bi-git me-1"></i>

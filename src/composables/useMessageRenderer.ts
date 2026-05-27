@@ -7,9 +7,31 @@ renderer.link = ({ href, text }) =>
 
 marked.use({ breaks: true, renderer });
 
+function enforceExternalLinks(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  div.querySelectorAll('a').forEach(a => {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  });
+  return div.innerHTML;
+}
+
 export function renderMessage(text: string): string {
   const raw = text.split('\n').map(line => marked.parseInline(line) as string).join('<br>');
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['a', 'strong', 'em', 'code', 'br'], ALLOWED_ATTR: ['href', 'target', 'rel'] });
+  return enforceExternalLinks(
+    DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['a', 'strong', 'em', 'code', 'br'], ALLOWED_ATTR: ['href', 'target', 'rel'] })
+  );
+}
+
+export function renderBreederDescription(text: string): string {
+  const raw = marked.parse(text) as string;
+  return enforceExternalLinks(
+    DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ['a', 'strong', 'em', 'code', 'br', 'p', 'ul', 'ol', 'li'],
+      ALLOWED_ATTR: ['href', 'target', 'rel'],
+    })
+  );
 }
 
 export function stripMarkdown(text: string): string {
