@@ -5,6 +5,7 @@ import { useStore } from 'vuex';
 import { db, storage, trackEvent } from '../firebase';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
 import ProfileImageEditor from '../components/ProfileImageEditor.vue';
+import MarkdownContent from '../components/MarkdownContent.vue';
 import type { ProfileImageEditorExposed } from '../components/ProfileImageEditor.vue';
 import { 
   doc, getDoc, setDoc, deleteDoc, serverTimestamp, writeBatch,
@@ -41,6 +42,7 @@ const profileImageEditorRef = ref<ProfileImageEditorExposed | null>(null);
 
 // Local state for the tag input box
 const tagInput = ref('');
+const showDescriptionPreview = ref(false);
 
 const toggleLock = () => {
   isLocked.value = !isLocked.value;
@@ -416,7 +418,7 @@ const topLevelSection = (path: string): string => {
 };
 
 const buildLiveCompareShape = () => {
-  if (!liveData.value) return null;
+  if (!liveData.value) return {};
   const shape = JSON.parse(JSON.stringify(liveData.value));
 
   // Normalize memberType for stable comparisons (and to match how we store draft values)
@@ -456,10 +458,10 @@ const buildProposedCompareShape = () => {
 };
 
 const publishDiffGrouped = computed(() => {
-  if (!isAdmin.value || !liveData.value) return {} as Record<string, PublishDiffRow[]>;
+  if (!isAdmin.value) return {} as Record<string, PublishDiffRow[]>;
   const liveShape = buildLiveCompareShape();
   const proposedShape = buildProposedCompareShape();
-  if (!liveShape || !proposedShape) return {};
+  if (!proposedShape) return {};
   const liveFlat = flattenForDiff(liveShape);
   const proposedFlat = flattenForDiff(proposedShape);
   const allPaths = new Set([...Object.keys(liveFlat), ...Object.keys(proposedFlat)]);
@@ -713,19 +715,29 @@ const removeTag = (tag: string) => {
             </div>
 
             <!-- Offerings Section -->
-            <h5 class="mb-3 border-bottom pb-2 fw-bold text-dark">What you offer</h5>
             <div class="mb-4">
-              <label class="form-label">Description</label>
-              <BFormTextarea v-model="formData.offerings.description" rows="4" :class="{'bg-diff-highlight': isDifferentFromLive('offerings', 'description')}" :disabled="isAdmin && hasPendingDraft && isLocked" required />
-              
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0">Description</label>
+                <div class="d-flex align-items-center gap-2">
+                  <a href="https://commonmark.org/help/" target="_blank" rel="noopener noreferrer" data-trusted class="text-muted" style="font-size: 0.7rem;">Markdown supported</a>
+                  <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;" @click="showDescriptionPreview = !showDescriptionPreview">
+                    {{ showDescriptionPreview ? 'Edit' : 'Preview' }}
+                  </button>
+                </div>
+              </div>
+              <BFormTextarea v-if="!showDescriptionPreview" v-model="formData.offerings.description" rows="4" :class="{'bg-diff-highlight': isDifferentFromLive('offerings', 'description')}" :disabled="isAdmin && hasPendingDraft && isLocked" required />
+              <div v-else class="p-3 bg-light rounded border" style="font-size: 0.9rem; min-height: 100px;">
+                <MarkdownContent :text="formData.offerings.description" />
+              </div>
+
               <!-- Original Description Hint -->
               <div v-if="isDifferentFromLive('offerings', 'description')" class="mt-2">
                 <div class="current-value-hint d-block w-100 p-3" @click="revertToLive('offerings', 'description')" style="font-size: 0.85rem;" :class="{'pe-none': isAdmin && hasPendingDraft && isLocked}">
                   <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span><i class="bi bi-card-text me-1"></i><strong>Original Live Description:</strong></span>
+                    <span><i class="bi bi-card-text me-1"></i>Original Live Description:</span>
                     <span v-if="!(isAdmin && hasPendingDraft && isLocked)" class="badge bg-secondary-subtle text-secondary border-0">Click to Revert</span>
                   </div>
-                  <div class="text-wrap text-start" style="white-space: pre-wrap; font-weight: normal;">{{ liveData?.offerings?.description || '(none)' }}</div>
+                  <MarkdownContent :text="liveData?.offerings?.description" fallback="(none)" />
                 </div>
               </div>
             </div>
@@ -821,8 +833,7 @@ const removeTag = (tag: string) => {
       :ok-disabled="isSaving"
     >
       <p class="small text-muted mb-3">
-        Clicking <strong>Publish Live</strong> will copy the draft into the public listing.
-        The list below shows what would change compared to the current live version.
+        Clicking <strong>Publish Live</strong> will {{ liveData ? 'update the public listing with these changes' : 'create a new public listing with the fields below' }}.
         If you see something you didn't expect (weird/extra fields), do <strong>not</strong> publish.
         Click <strong>Cancel</strong> and use <strong>Discard Draft</strong> (or clean it up in the editor first).
       </p>

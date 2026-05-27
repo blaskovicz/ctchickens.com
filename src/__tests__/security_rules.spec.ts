@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth, storage } from '../firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, deleteDoc, addDoc, collection } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, deleteObject } from 'firebase/storage';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, signOut } from 'firebase/auth';
 import { 
   clearFirestoreEmulator, 
   clearAuthEmulator, 
@@ -30,6 +30,29 @@ describe('Security Rules: Users Collection', () => {
       lastLogin: new Date()
     };
     await expect(setDoc(userDocRef, userData)).resolves.not.toThrow();
+  });
+
+  it('allows a no-email user (e.g. Facebook without shared email) to create their users doc', async () => {
+    const { user } = await signInAnonymously(auth);
+    const userDocRef = doc(db, 'users', user.uid);
+    await expect(setDoc(userDocRef, {
+      displayName: 'Facebook User',
+      email: null,
+      photoURL: null,
+      lastLogin: new Date(),
+    })).resolves.not.toThrow();
+  });
+
+  it('prevents a user from writing a spoofed email to their users doc', async () => {
+    const email = `real-${Date.now()}@example.com`;
+    const { user } = await createUserWithEmailAndPassword(auth, email, 'password123');
+    const userDocRef = doc(db, 'users', user.uid);
+    await expect(setDoc(userDocRef, {
+      displayName: 'Hacker',
+      email: 'victim@example.com',
+      photoURL: null,
+      lastLogin: new Date(),
+    })).rejects.toThrow();
   });
 
   it('prevents a user from setting isAdmin to true on creation', async () => {
