@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { BBadge } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified } from '../types';
 import { CATEGORY_LABELS, CATEGORY_VARIANTS } from '../types';
+import { CLASSIFIED_CLEANUP_AFTER_DAYS } from '../shared-config';
 import { formatRelativeTime } from '../composables/useBreederUtils';
 
 const props = defineProps<{
@@ -25,7 +26,7 @@ const deletesAt = computed(() => {
   const ts = (props.item as any).expires_at;
   if (!ts) return null;
   const d = ts.toDate ? ts.toDate() : new Date(ts);
-  return new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return new Date(d.getTime() + CLASSIFIED_CLEANUP_AFTER_DAYS * 24 * 60 * 60 * 1000);
 });
 
 const verifiedFarms = computed(() =>

@@ -13,7 +13,7 @@ import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified } from '../types';
 import { TIER_LIMITS, CATEGORY_LABELS } from '../types';
-import { CLASSIFIED_RENEWAL_WINDOW_DAYS } from '../shared-config';
+import { CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_CLEANUP_AFTER_DAYS } from '../shared-config';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
 import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 
@@ -67,7 +67,7 @@ const daysUntilExpiry = computed(() => {
 const deletesAt = computed(() => {
   if (!classified.value?.expires_at) return null;
   const d = classified.value.expires_at.toDate ? classified.value.expires_at.toDate() : new Date(classified.value.expires_at);
-  return new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return new Date(d.getTime() + CLASSIFIED_CLEANUP_AFTER_DAYS * 24 * 60 * 60 * 1000);
 });
 
 const daysUntilDeletion = computed(() => {
@@ -441,7 +441,7 @@ const activeData = computed(() => classified.value || draftClassified.value);
                 <div v-if="classified?.expires_at" class="d-flex align-items-center gap-2">
                   <i class="bi bi-calendar-event text-muted"></i>
                   <span class="text-muted" style="min-width:75px;">Expires</span>
-                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }" class="text-dark">
+                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= CLASSIFIED_RENEWAL_WINDOW_DAYS }" class="text-dark">
                     {{ formatDate(classified.expires_at) }}
                     <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0" class="small opacity-75">({{ daysUntilExpiry }}d)</span>
                     <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0" class="small opacity-75">(today)</span>
