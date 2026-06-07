@@ -194,7 +194,7 @@ describe('ClassifiedDetailView', () => {
       owner_uid: ownerId,
       renewal_count: 0,
       max_renewals: 2,
-      // 1 day until expiry — inside the 2-day window
+      // 1 day until expiry — inside the 7-day window
       expires_at: { toDate: () => new Date(Date.now() + 1 * 86400000) },
     });
 
@@ -440,7 +440,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
       owner_uid: 'owner-1',
       renewal_count: 0,
       max_renewals: 2,
-      expires_at: { toDate: () => new Date(Date.now() + 5 * 86400000) },
+      expires_at: { toDate: () => new Date(Date.now() + 10 * 86400000) },
     });
     const wrapper = await buildWrapperForCanRenew({ uid: 'owner-1' }, classified);
     const renewBtn = wrapper.findAll('button').find(b => b.text().includes('Renew'));
