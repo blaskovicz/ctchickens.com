@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_EXPIRY_WARNING_DAYS } from './shared-config';
+import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_EXPIRY_WARNING_DAYS, CLASSIFIED_CLEANUP_AFTER_DAYS } from './shared-config';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -996,9 +996,9 @@ export const onClassifiedAction = onDocumentCreated(
       const expiresAt = (classified.expires_at as Timestamp).toDate();
       const now = new Date();
       const msUntilExpiry = expiresAt.getTime() - now.getTime();
-      const sevenDaysMs = CLASSIFIED_RENEWAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+      const renewalWindowMs = CLASSIFIED_RENEWAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-      if (msUntilExpiry > sevenDaysMs || classified.status !== 'active') {
+      if (msUntilExpiry > renewalWindowMs || classified.status !== 'active') {
         console.log(`[onClassifiedAction] Renewal not yet allowed for ${classifiedId} (${Math.round(msUntilExpiry / 86400000)}d remaining)`);
         return;
       }
@@ -1292,8 +1292,8 @@ export const sweepExpiredClassifieds = onSchedule(
   async () => {
     const now = new Date();
     const nowTs = Timestamp.fromDate(now);
-    const sevenDaysTs = Timestamp.fromDate(new Date(now.getTime() + CLASSIFIED_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000));
-    const sevenDaysAgoTs = Timestamp.fromDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+    const expiryWarningCutoffTs = Timestamp.fromDate(new Date(now.getTime() + CLASSIFIED_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000));
+    const cleanupBeforeTs = Timestamp.fromDate(new Date(now.getTime() - CLASSIFIED_CLEANUP_AFTER_DAYS * 24 * 60 * 60 * 1000));
     const resend = new Resend(resendApiKey.value());
     const bucket = getStorage().bucket();
 
@@ -1343,7 +1343,7 @@ export const sweepExpiredClassifieds = onSchedule(
       const warningSnap = await db.collection('classifieds')
         .where('status', '==', 'active')
         .where('expires_at', '>', nowTs)
-        .where('expires_at', '<=', sevenDaysTs)
+        .where('expires_at', '<=', expiryWarningCutoffTs)
         .where('expiry_warning_sent', '==', false)
         .get();
 
@@ -1380,7 +1380,7 @@ export const sweepExpiredClassifieds = onSchedule(
     try {
       const deadSnap = await db.collection('classifieds')
         .where('status', 'in', ['expired', 'discarded'])
-        .where('expires_at', '<', sevenDaysAgoTs)
+        .where('expires_at', '<', cleanupBeforeTs)
         .get();
 
       for (const deadDoc of deadSnap.docs) {
@@ -1404,7 +1404,7 @@ export const sweepExpiredClassifieds = onSchedule(
     try {
       const rejectedSnap = await db.collection('draft_classified_history')
         .where('draft_meta.status', '==', 'rejected')
-        .where('draft_meta.archivedAt', '<', sevenDaysAgoTs)
+        .where('draft_meta.archivedAt', '<', cleanupBeforeTs)
         .get();
 
       for (const rejDoc of rejectedSnap.docs) {
