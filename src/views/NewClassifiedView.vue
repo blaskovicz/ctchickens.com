@@ -1,10 +1,25 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+
+const photoHooks = [
+  "Show off that beautiful bird!",
+  "A picture is worth a thousand clucks.",
+  "Let your flock do the talking.",
+  "Buyers love a good photo.",
+  "Give those feathers their moment.",
+  "Listings with photos sell faster!",
+  "Strike a pose, little hen.",
+  "First impressions are everything.",
+  "Show us what you're working with.",
+  "Help your listing stand out from the flock.",
+];
+const photoHook = photoHooks[Math.floor(Math.random() * photoHooks.length)];
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import { BButton, BSpinner, useToast } from 'bootstrap-vue-next';
 import type { ClassifiedCategory, UserTier } from '../types';
 import { TIER_LIMITS, CATEGORY_LABELS, CATEGORY_VARIANTS } from '../types';
+import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS } from '../shared-config';
 import { storage } from '../firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import type { StorageReference } from 'firebase/storage';
@@ -140,7 +155,7 @@ const handleSubmit = async () => {
               <div v-else class="image-hint">
                 <i class="bi bi-camera fs-3 mb-1"></i>
                 <span class="small">Add a photo</span>
-                <span class="smaller text-muted">Optional, but recommended</span>
+                <span class="smaller text-muted">{{ photoHook }}</span>
               </div>
               <button v-if="imagePreview && canPost" type="button" class="remove-btn" @click.stop="removeImage">
                 <i class="bi bi-x-lg"></i>
@@ -172,7 +187,7 @@ const handleSubmit = async () => {
                 <!-- Category + Price — mirrors card header row -->
                 <div class="d-flex justify-content-between align-items-start gap-2">
                   <div>
-                    <label class="form-label small fw-semibold text-muted mb-1">Category</label>
+                    <label class="form-label small fw-semibold text-muted mb-1">Category <span class="text-secondary">*</span></label>
                     <div class="category-select-wrapper">
                       <select v-model="category" class="category-select" :class="categoryBadgeClass" required>
                         <option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ opt.text }}</option>
@@ -188,7 +203,7 @@ const handleSubmit = async () => {
 
                 <!-- Title — mirrors card-title -->
                 <div>
-                  <label class="form-label small fw-semibold text-muted mb-1">Title</label>
+                  <label class="form-label small fw-semibold text-muted mb-1">Title <span class="text-secondary">*</span></label>
                   <input
                     v-model="title"
                     type="text"
@@ -205,7 +220,7 @@ const handleSubmit = async () => {
 
                 <!-- Description — mirrors card-text -->
                 <div>
-                  <label class="form-label small fw-semibold text-muted mb-1">Description</label>
+                  <label class="form-label small fw-semibold text-muted mb-1">Description <span class="text-secondary">*</span></label>
                   <textarea
                     v-model="description"
                     class="description-input w-100"
@@ -220,7 +235,7 @@ const handleSubmit = async () => {
 
                 <!-- Location — mirrors card footer -->
                 <div>
-                  <label class="form-label small fw-semibold text-muted mb-1">Town</label>
+                  <label class="form-label small fw-semibold text-muted mb-1">Town <span class="text-secondary">*</span></label>
                   <div class="d-flex align-items-center gap-2 text-muted small">
                     <i class="bi bi-geo-alt flex-shrink-0"></i>
                     <input
@@ -236,12 +251,17 @@ const handleSubmit = async () => {
 
               </fieldset>
 
-              <div class="d-flex justify-content-end gap-2 pt-1 border-top">
-                <BButton variant="light" @click="router.push('/classified')" :disabled="isSubmitting">Cancel</BButton>
-                <BButton type="submit" variant="primary" :disabled="!isValid || isSubmitting || !canPost">
-                  <BSpinner v-if="isSubmitting" small class="me-1" />
-                  Submit for Review
-                </BButton>
+              <div class="pt-3" style="border-top: 1px dashed #dee2e6;">
+                <p class="text-muted small mb-3">
+                  <i class="bi bi-info-circle me-1"></i>Listings are active for {{ CLASSIFIED_DURATION_DAYS }} days and can be renewed within {{ CLASSIFIED_RENEWAL_WINDOW_DAYS }} days of expiration.
+                </p>
+                <div class="d-flex justify-content-end gap-2">
+                  <BButton variant="light" @click="router.push('/classified')" :disabled="isSubmitting">Cancel</BButton>
+                  <BButton type="submit" variant="primary" :disabled="!isValid || isSubmitting || !canPost">
+                    <BSpinner v-if="isSubmitting" small class="me-1" />
+                    Submit for Review
+                  </BButton>
+                </div>
               </div>
 
             </div>

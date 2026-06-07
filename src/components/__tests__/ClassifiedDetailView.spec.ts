@@ -186,7 +186,7 @@ describe('ClassifiedDetailView', () => {
     expect(wrapper.text()).toContain('could not be found');
   });
 
-  it('owner sees Renew button when within 2 days of expiry and renewals remain', async () => {
+  it('owner sees Renew button when within 7 days of expiry and renewals remain', async () => {
     const ownerId = 'owner-1';
     const store = createMockStore({ user: { uid: ownerId } });
 
@@ -205,7 +205,7 @@ describe('ClassifiedDetailView', () => {
     expect(renewBtn?.exists()).toBe(true);
   });
 
-  it('owner does not see Renew button when more than 2 days until expiry', async () => {
+  it('owner does not see Renew button when more than 7 days until expiry', async () => {
     const ownerId = 'owner-1';
     const store = createMockStore({ user: { uid: ownerId } });
 
@@ -435,7 +435,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
     expect(renewBtn).toBeUndefined();
   });
 
-  it('canRenew is false when more than 2 days until expiry', async () => {
+  it('canRenew is false when more than 7 days until expiry', async () => {
     const classified = makeClassified({
       owner_uid: 'owner-1',
       renewal_count: 0,
@@ -447,7 +447,7 @@ describe('ClassifiedDetailView: canRenew logic', () => {
     expect(renewBtn).toBeUndefined();
   });
 
-  it('canRenew is true when owner, renewals remain, and within 2-day window', async () => {
+  it('canRenew is true when owner, renewals remain, and within 7-day window', async () => {
     const classified = makeClassified({
       owner_uid: 'owner-1',
       renewal_count: 1,
