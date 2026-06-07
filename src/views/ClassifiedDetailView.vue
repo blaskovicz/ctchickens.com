@@ -13,6 +13,7 @@ import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { BButton, BBadge, BSpinner, BModal, useToast } from 'bootstrap-vue-next';
 import type { Classified, DraftClassified } from '../types';
 import { TIER_LIMITS, CATEGORY_LABELS } from '../types';
+import { CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_CLEANUP_AFTER_DAYS } from '../shared-config';
 import VerifiedBadge from '../components/VerifiedBadge.vue';
 import FoundingBreederBadge from '../components/FoundingBreederBadge.vue';
 
@@ -66,7 +67,7 @@ const daysUntilExpiry = computed(() => {
 const deletesAt = computed(() => {
   if (!classified.value?.expires_at) return null;
   const d = classified.value.expires_at.toDate ? classified.value.expires_at.toDate() : new Date(classified.value.expires_at);
-  return new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return new Date(d.getTime() + CLASSIFIED_CLEANUP_AFTER_DAYS * 24 * 60 * 60 * 1000);
 });
 
 const daysUntilDeletion = computed(() => {
@@ -79,7 +80,7 @@ const canRenew = computed(() => {
   if (classified.value.status !== 'active') return false;
   if (classified.value.renewal_count >= classified.value.max_renewals) return false;
   const days = daysUntilExpiry.value;
-  return days !== null && days <= 2;
+  return days !== null && days <= CLASSIFIED_RENEWAL_WINDOW_DAYS;
 });
 
 const formatDate = (ts: any) => {
@@ -177,8 +178,9 @@ const handleRenew = async () => {
       owner_uid: user.value!.uid,
       created_at: serverTimestamp(),
     });
-    // No optimistic update — the onSnapshot listener picks up the CF's write
-    // to expires_at / renewal_count once it processes the action.
+    // Optimistically increment renewal_count so canRenew flips false immediately,
+    // preventing double-submits while the Cloud Function processes the action.
+    if (classified.value) classified.value = { ...classified.value, renewal_count: classified.value.renewal_count + 1 };
     create?.({ body: 'Renewal requested — your listing will update shortly.', variant: 'info' });
   } catch (e: any) {
     create?.({ body: `Renewal failed: ${e.message}`, variant: 'danger' });
@@ -439,7 +441,7 @@ const activeData = computed(() => classified.value || draftClassified.value);
                 <div v-if="classified?.expires_at" class="d-flex align-items-center gap-2">
                   <i class="bi bi-calendar-event text-muted"></i>
                   <span class="text-muted" style="min-width:75px;">Expires</span>
-                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= 2 }" class="text-dark">
+                  <span :class="{ 'text-danger fw-semibold': daysUntilExpiry !== null && daysUntilExpiry <= CLASSIFIED_RENEWAL_WINDOW_DAYS }" class="text-dark">
                     {{ formatDate(classified.expires_at) }}
                     <span v-if="daysUntilExpiry !== null && daysUntilExpiry > 0" class="small opacity-75">({{ daysUntilExpiry }}d)</span>
                     <span v-else-if="daysUntilExpiry !== null && daysUntilExpiry <= 0" class="small opacity-75">(today)</span>
@@ -452,7 +454,7 @@ const activeData = computed(() => classified.value || draftClassified.value);
                 </div>
               </div>
               <span v-if="(isOwner || isAdmin) && !canRenew && classified && classified.renewal_count < classified.max_renewals" class="text-muted smaller mt-2">
-                <i class="bi bi-info-circle me-1"></i>Renewal available within 2 days of expiration
+                <i class="bi bi-info-circle me-1"></i>Renewal available within {{ CLASSIFIED_RENEWAL_WINDOW_DAYS }} days of expiration
               </span>
               <div v-if="isOwner && (classified?.status === 'expired' || classified?.status === 'discarded')" class="alert alert-danger border-0 shadow-sm small mb-0 mt-2 d-flex align-items-start gap-2">
                 <i class="bi bi-exclamation-triangle fs-5 flex-shrink-0"></i>

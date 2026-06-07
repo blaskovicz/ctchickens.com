@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_EXPIRY_WARNING_DAYS, CLASSIFIED_CLEANUP_AFTER_DAYS } from './shared-config';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -833,7 +834,7 @@ export const onDraftClassifiedReviewAction = onDocumentCreated(
         console.error('[onDraftClassifiedReviewAction] Failed to query verified farms', { ownerUid, err });
       }
 
-      const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      const expiresAt = Timestamp.fromDate(new Date(Date.now() + CLASSIFIED_DURATION_DAYS * 24 * 60 * 60 * 1000));
 
       // Write to classifieds
       try {
@@ -995,14 +996,14 @@ export const onClassifiedAction = onDocumentCreated(
       const expiresAt = (classified.expires_at as Timestamp).toDate();
       const now = new Date();
       const msUntilExpiry = expiresAt.getTime() - now.getTime();
-      const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+      const renewalWindowMs = CLASSIFIED_RENEWAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-      if (msUntilExpiry > twoDaysMs || classified.status !== 'active') {
+      if (msUntilExpiry > renewalWindowMs || classified.status !== 'active') {
         console.log(`[onClassifiedAction] Renewal not yet allowed for ${classifiedId} (${Math.round(msUntilExpiry / 86400000)}d remaining)`);
         return;
       }
 
-      const newExpiresAt = Timestamp.fromDate(new Date(expiresAt.getTime() + 7 * 24 * 60 * 60 * 1000));
+      const newExpiresAt = Timestamp.fromDate(new Date(expiresAt.getTime() + CLASSIFIED_DURATION_DAYS * 24 * 60 * 60 * 1000));
       await classifiedRef.update({
         expires_at: newExpiresAt,
         renewal_count: FieldValue.increment(1),
@@ -1078,7 +1079,7 @@ export const cloneExpiredClassified = onCall(
       );
     }
 
-    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + CLASSIFIED_DURATION_DAYS * 24 * 60 * 60 * 1000));
     const newRef = db.collection('classifieds').doc();
 
     const newData: Record<string, any> = {
@@ -1285,14 +1286,14 @@ export const initiatePeerThread = onCall(
   }
 );
 
-// Runs daily: expires overdue classifieds and sends 2-day warning emails.
+// Runs daily: expires overdue classifieds and sends 7-day warning emails.
 export const sweepExpiredClassifieds = onSchedule(
   { schedule: 'every 24 hours', timeZone: 'America/New_York', secrets: [resendApiKey] },
   async () => {
     const now = new Date();
     const nowTs = Timestamp.fromDate(now);
-    const twoDaysTs = Timestamp.fromDate(new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000));
-    const sevenDaysAgoTs = Timestamp.fromDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+    const expiryWarningCutoffTs = Timestamp.fromDate(new Date(now.getTime() + CLASSIFIED_EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000));
+    const cleanupBeforeTs = Timestamp.fromDate(new Date(now.getTime() - CLASSIFIED_CLEANUP_AFTER_DAYS * 24 * 60 * 60 * 1000));
     const resend = new Resend(resendApiKey.value());
     const bucket = getStorage().bucket();
 
@@ -1337,12 +1338,12 @@ export const sweepExpiredClassifieds = onSchedule(
       console.error('[sweepExpiredClassifieds] Failed to expire classifieds', err);
     }
 
-    // 2. Send 2-day expiry warnings
+    // 2. Send 7-day expiry warnings
     try {
       const warningSnap = await db.collection('classifieds')
         .where('status', '==', 'active')
         .where('expires_at', '>', nowTs)
-        .where('expires_at', '<=', twoDaysTs)
+        .where('expires_at', '<=', expiryWarningCutoffTs)
         .where('expiry_warning_sent', '==', false)
         .get();
 
@@ -1379,7 +1380,7 @@ export const sweepExpiredClassifieds = onSchedule(
     try {
       const deadSnap = await db.collection('classifieds')
         .where('status', 'in', ['expired', 'discarded'])
-        .where('expires_at', '<', sevenDaysAgoTs)
+        .where('expires_at', '<', cleanupBeforeTs)
         .get();
 
       for (const deadDoc of deadSnap.docs) {
@@ -1403,7 +1404,7 @@ export const sweepExpiredClassifieds = onSchedule(
     try {
       const rejectedSnap = await db.collection('draft_classified_history')
         .where('draft_meta.status', '==', 'rejected')
-        .where('draft_meta.archivedAt', '<', sevenDaysAgoTs)
+        .where('draft_meta.archivedAt', '<', cleanupBeforeTs)
         .get();
 
       for (const rejDoc of rejectedSnap.docs) {

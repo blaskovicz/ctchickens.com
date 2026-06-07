@@ -328,7 +328,7 @@ describe('Classified Flow: published → renewed twice', () => {
     const ownerUser = await createTestUser(ownerEmail, 'Renew Rachel');
     const classifiedId = 'renewable-classified';
 
-    // Seed with 1 day until expiry so canRenew would be true (within 2-day window)
+    // Seed with 1 day until expiry so canRenew would be true (within 7-day window)
     const initialExpiry = new Date(Date.now() + 1 * 86400000);
     await seedClassified(classifiedId, {
       owner_uid: ownerUser.uid,
