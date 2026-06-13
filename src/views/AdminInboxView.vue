@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useStore } from 'vuex';
 import { db } from '../firebase';
 import {
@@ -14,6 +14,7 @@ import {
 
 const store = useStore();
 const isAdmin = computed(() => store.getters.isAdmin);
+const authReady = computed(() => store.getters.authReady);
 const { create } = useToast();
 
 const claims = ref<any[]>([]);
@@ -23,7 +24,8 @@ const flaggedMessages = ref<any[]>([]);
 const supportThreads = ref<any[]>([]);
 const liveSlugs = ref<Set<string>>(new Set()); // Track which drafts are already live
 const userProfiles = ref<Record<string, any>>({});
-const isLoading = ref(true);
+const isFetching = ref(false);
+const isLoading = computed(() => !authReady.value || isFetching.value);
 
 // Modal state
 const showApproveModal = ref(false);
@@ -32,68 +34,55 @@ const isProcessing = ref(false);
 
 const fetchData = async () => {
   if (!isAdmin.value) return;
-  isLoading.value = true;
+  isFetching.value = true;
   try {
-    const claimSnap = await getDocs(collection(db, 'claim_requests'));
+    const [claimSnap, draftSnap, classifiedDraftSnap, supportSnap, flagSnap, directorySnap] =
+      await Promise.all([
+        getDocs(collection(db, 'claim_requests')),
+        getDocs(collection(db, 'draft_profiles')),
+        getDocs(collection(db, 'draft_classifieds')),
+        getDocs(query(
+          collection(db, 'inquiry_threads'),
+          where('type', '==', 'support'),
+          orderBy('updatedAt', 'desc')
+        )),
+        getDocs(query(
+          collectionGroup(db, 'messages'),
+          where('adminReviewStatus', '==', 'pending'),
+          orderBy('createdAt', 'desc')
+        )),
+        getDocs(collection(db, 'directory_members')),
+      ]);
+
     claims.value = claimSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    const draftSnap = await getDocs(collection(db, 'draft_profiles'));
     drafts.value = draftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    const classifiedDraftSnap = await getDocs(collection(db, 'draft_classifieds'));
     draftClassifieds.value = classifiedDraftSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    // Fetch Support Threads
-    const supportQ = query(
-      collection(db, 'inquiry_threads'),
-      where('type', '==', 'support'),
-      orderBy('updatedAt', 'desc')
-    );
-    const supportSnap = await getDocs(supportQ);
     supportThreads.value = supportSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    // Fetch Flagged Messages
-    const flagQ = query(
-      collectionGroup(db, 'messages'),
-      where('adminReviewStatus', '==', 'pending'),
-      orderBy('createdAt', 'desc')
-    );
-    const flagSnap = await getDocs(flagQ);
-    flaggedMessages.value = flagSnap.docs.map(d => ({ 
-      id: d.id, 
-      path: d.ref.path,
-      ...d.data() 
-    }));
-
-    // Check which drafts exist in the live directory
-    const directorySnap = await getDocs(collection(db, 'directory_members'));
+    flaggedMessages.value = flagSnap.docs.map(d => ({ id: d.id, path: d.ref.path, ...d.data() }));
     liveSlugs.value = new Set(directorySnap.docs.map(d => d.id));
 
-    // Fetch user profiles for all requesters/owners/senders/reporters
     const uids = new Set([
       ...claims.value.map(c => c.requesterUid),
       ...drafts.value.map(d => d.account?.ownerUid || d.draft_owner_uid),
       ...flaggedMessages.value.map(m => m.senderUid),
       ...flaggedMessages.value.map(m => m.flaggedByUid),
       ...supportThreads.value.map(t => t.userUid)
-    ].filter(uid => !!uid));
+    ].filter((uid): uid is string => !!uid));
 
-    for (const uid of uids) {
-      if (!userProfiles.value[uid]) {
+    await Promise.all(
+      [...uids].filter(uid => !userProfiles.value[uid]).map(async uid => {
         try {
           const userDoc = await getDoc(doc(db, 'users', uid));
-          if (userDoc.exists()) {
-            userProfiles.value[uid] = userDoc.data();
-          }
+          if (userDoc.exists()) userProfiles.value[uid] = userDoc.data();
         } catch (err) {
           console.warn(`Could not fetch profile for UID: ${uid}`, err);
         }
-      }
-    }
+      })
+    );
   } catch (e: any) {
     create?.({ title: 'Error', body: `Fetch error: ${e.message}`, variant: 'danger' });
   } finally {
-    isLoading.value = false;
+    isFetching.value = false;
   }
 };
 
@@ -111,14 +100,11 @@ const handleModeration = async (msg: any, status: 'approved' | 'hidden') => {
   }
 };
 
-// FIX: Watch isAdmin so data loads on refresh when Auth completes
-watch(isAdmin, (newVal) => {
-  if (newVal) fetchData();
-}, { immediate: true });
-
-onMounted(() => {
-  if (isAdmin.value) fetchData();
-});
+watch(
+  [authReady, isAdmin],
+  ([ready, admin]) => { if (ready && admin) fetchData(); },
+  { immediate: true }
+);
 
 const confirmApprove = (claim: any) => {
   selectedItem.value = claim;
