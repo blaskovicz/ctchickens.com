@@ -5,6 +5,7 @@ import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { getAnalytics, logEvent, isSupported } from "firebase/analytics";
 import type { Analytics } from "firebase/analytics";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const USE_EMULATOR = import.meta.env.VITE_APP_USE_EMULATOR === 'true';
 
@@ -23,6 +24,20 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 const functions = getFunctions(app, 'us-east1');
+
+// App Check must be initialized before any Firebase service calls.
+// Skipped in emulator mode (no real reCAPTCHA key available).
+if (!USE_EMULATOR) {
+  if (import.meta.env.DEV) {
+    // Prints a debug token to the console on first run — register it in
+    // Firebase Console → App Check → your app → Manage debug tokens.
+    (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 if (USE_EMULATOR) {
   // Using 'localhost' instead of '127.0.0.1' to prevent origin mismatch in redirects
