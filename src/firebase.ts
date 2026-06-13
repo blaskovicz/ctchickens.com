@@ -26,8 +26,8 @@ const storage = getStorage(app);
 const functions = getFunctions(app, 'us-east1');
 
 // App Check must be initialized before any Firebase service calls.
-// Skipped in emulator mode (no real reCAPTCHA key available).
-if (!USE_EMULATOR) {
+// Skipped in emulator mode or when the site key is not configured.
+if (!USE_EMULATOR && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
   if (import.meta.env.DEV) {
     // Prints a debug token to the console on first run — register it in
     // Firebase Console → App Check → your app → Manage debug tokens.
