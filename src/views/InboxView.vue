@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
+import { ref, onUnmounted, computed, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
 import { db, trackEvent } from '../firebase';
@@ -316,10 +316,6 @@ const getRespondingAsLabel = (thread: InquiryThread) => {
 
   return null;
 };
-
-onMounted(() => {
-  fetchThreads();
-});
 
 watch([user, isAdmin], ([newUser]) => {
   if (newUser) {
