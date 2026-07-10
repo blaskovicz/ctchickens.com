@@ -15,6 +15,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { generateSlug } from '../composables/useBreederUtils';
+import { useNotifications } from '../composables/useNotifications';
 import { TIER_LIMITS } from '../types';
 
 const AUTH_TOAST_SUFFIX = 'Please try again. On Android, try disabling "Open links in Facebook" in Facebook app settings. If it keeps failing, clear your site data in browser settings or contact admin@ctchickens.com';
@@ -223,6 +224,15 @@ export default createStore({
               dispatch('fetchMyDrafts', user.uid),
               dispatch('fetchMyClassifieds', user.uid)
             ]);
+
+            // Only refresh an already-granted FCM token — never prompt from here.
+            // Showing the browser permission dialog immediately after login gets
+            // blocked at high rates.  The inbox banner in InboxView.vue is the
+            // user-facing opt-in path; this call silently refreshes the token for
+            // users who already granted permission on a previous visit.
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              useNotifications().requestPermission().catch(() => {});
+            }
 
             // Fallback: if no users doc exists after fetching, upsert one from the
             // Auth user object. Guards against getRedirectResult returning null

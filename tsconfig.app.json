@@ -13,5 +13,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
+  // The service worker is compiled by vite-plugin-pwa's own Vite sub-build, not by
+  // vue-tsc.  Excluding it here prevents DOM / ServiceWorkerGlobalScope type conflicts.
+  "exclude": ["src/firebase-messaging-sw.ts"]
 }

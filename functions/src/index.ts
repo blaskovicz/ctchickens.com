@@ -2,6 +2,8 @@ import * as crypto from 'crypto';
 import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_EXPIRY_WARNING_DAYS, CLASSIFIED_CLEANUP_AFTER_DAYS } from './shared-config';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
+import { notifyMessageParticipants } from './pushHelpers';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -1547,6 +1549,39 @@ export const sweepUnreadThreadNotifications = onSchedule(
           console.error(`[sweepUnreadThreadNotifications] Failed for uid=${uid} thread=${threadDoc.id}`, err);
         }
       }
+    }
+  }
+);
+
+// Fires when a new message document is created inside any inquiry thread.
+// Sends FCM push notifications to participants who have unread messages and registered
+// FCM tokens. Stale tokens are automatically removed from Firestore on send failure.
+//
+// Note: this supplements sweepUnreadThreadNotifications (email nudge) — it does not
+// replace it. Users without registered tokens continue to receive the email nudge.
+export const onInquiryMessageCreated = onDocumentCreated(
+  { document: 'inquiry_threads/{threadId}/messages/{messageId}' },
+  async (event) => {
+    const messageData = event.data?.data();
+    if (!messageData) return;
+
+    const threadId = event.params.threadId;
+
+    try {
+      await notifyMessageParticipants(
+        db,
+        threadId,
+        {
+          senderUid: messageData.senderUid as string,
+          text: messageData.text as string | undefined,
+          senderName: messageData.senderName as string | undefined,
+        },
+        (msg) => getMessaging().sendEachForMulticast(msg)
+      );
+    } catch (err) {
+      // Log but do not rethrow — a push failure must never cause the function to retry
+      // and re-process the message creation event.
+      console.error('[onInquiryMessageCreated] push notification error:', err);
     }
   }
 );

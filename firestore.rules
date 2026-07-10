@@ -67,6 +67,10 @@ service cloud.firestore {
       request.resource.data.diff(resource.data).affectedKeys()
       .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']) &&
       request.resource.data.get('email', request.auth.token.email) == request.auth.token.email;
+      // Push notification opt-in/opt-out: users may update only their own fcmTokens array.
+      // arrayUnion/arrayRemove operations on this field are the only permitted writes here.
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
     }
 
     match /directory_members/{memberId} {
