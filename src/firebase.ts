@@ -6,6 +6,8 @@ import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { getAnalytics, logEvent, isSupported } from "firebase/analytics";
 import type { Analytics } from "firebase/analytics";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
+import { getMessaging } from "firebase/messaging";
+import type { Messaging } from "firebase/messaging";
 
 const USE_EMULATOR = import.meta.env.VITE_APP_USE_EMULATOR === 'true';
 
@@ -53,6 +55,19 @@ if (USE_EMULATOR) {
 const facebookProvider = new FacebookAuthProvider();
 facebookProvider.addScope('email');
 
+// FCM Messaging — skipped in emulator mode (FCM has no emulator).
+// VAPID key is required for Web Push; generate in Firebase Console →
+// Project Settings → Cloud Messaging → Web Push certificates.
+const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY as string | undefined;
+let messaging: Messaging | null = null;
+if (!USE_EMULATOR) {
+  try {
+    messaging = getMessaging(app);
+  } catch {
+    // Messaging unsupported in this environment (no service worker context, SSR, etc.)
+  }
+}
+
 // Analytics is not available in emulator mode or non-browser environments
 let analytics: Analytics | null = null;
 if (!USE_EMULATOR) {
@@ -73,4 +88,4 @@ function trackEvent(name: string, params?: Record<string, unknown>) {
   }
 }
 
-export { db, auth, storage, functions, facebookProvider, trackEvent };
+export { db, auth, storage, functions, facebookProvider, trackEvent, messaging, VAPID_KEY };
