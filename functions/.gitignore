@@ -1,3 +1,4 @@
 src/shared-config.ts
+src/featuredCard.cjs
 lib/
 node_modules/

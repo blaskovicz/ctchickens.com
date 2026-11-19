@@ -11,7 +11,8 @@
     "emulate:seed": "node scripts/restore-collections.js --emulator",
     "emulate": "firebase emulators:start",
     "emulate:persist": "firebase emulators:start --import=./seed-data --export-on-exit",
-    "emulate:export": "firebase emulators:export ./seed-data"
+    "emulate:export": "firebase emulators:export ./seed-data",
+    "feature-card": "node scripts/weekly-feature-card.js"
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",
@@ -27,6 +28,7 @@
     "vuex": "^4.0.2"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^24.10.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/test-utils": "^2.4.6",

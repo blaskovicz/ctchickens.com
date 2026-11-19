@@ -36,5 +36,6 @@ email-previews/
 .claude/settings.local.json
 seed-data/
 backups/
+tmp/
 
 
