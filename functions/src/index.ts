@@ -1586,3 +1586,5 @@ export const verifyUploadedImage = onObjectFinalized(
     }
   }
 );
+
+export { postWeeklyFeaturedMember } from './weeklyFeaturedPost';
