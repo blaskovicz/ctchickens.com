@@ -50,4 +50,25 @@ describe('renderMessage', () => {
     const result = renderMessage('**bold**');
     expect(result).toContain('<strong>bold</strong>');
   });
+
+  it('autolinks a bare ctchickens.com mention', () => {
+    const result = renderMessage('check it out at ctchickens.com/#/directory/walkers-nest');
+    expect(result).toContain('href="https://ctchickens.com/#/directory/walkers-nest"');
+  });
+
+  it('strips trailing punctuation from an autolinked bare mention', () => {
+    const result = renderMessage('see ctchickens.com/#/directory/walkers-nest.');
+    expect(result).toContain('href="https://ctchickens.com/#/directory/walkers-nest"');
+    expect(result).toMatch(/<\/a>\.(\s|$)/);
+  });
+
+  it('does not double-wrap an already-schemed URL', () => {
+    const result = renderMessage('visit https://ctchickens.com/#/directory/walkers-nest');
+    expect((result.match(/<a /g) || []).length).toBe(1);
+  });
+
+  it('does not double-wrap a www.-prefixed mention', () => {
+    const result = renderMessage('visit www.ctchickens.com');
+    expect((result.match(/<a /g) || []).length).toBe(1);
+  });
 });
