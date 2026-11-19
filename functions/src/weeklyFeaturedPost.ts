@@ -70,7 +70,10 @@ export const postWeeklyFeaturedMember = onSchedule(
       profilePath: featured.id,
     });
 
-    const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 2400 } });
+    const resvg = new Resvg(svg, {
+      fitTo: { mode: 'width', value: 2400 },
+      font: { fontFiles: FeaturedCard.FONT_FILES, loadSystemFonts: false, defaultFontFamily: 'Roboto' },
+    });
     const png = resvg.render().asPng();
 
     const caption = FeaturedCard.buildCaption(featured);

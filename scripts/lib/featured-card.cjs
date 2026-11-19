@@ -15,10 +15,23 @@
  * with allowJs enabled in functions/tsconfig.json).
  */
 
+const path = require('path');
+
 const PRIMARY = '#1e3a8a';
 const PRIMARY_LIGHT = '#1e40af';
 const PAGE_ID = '1061046777099271';
 const SITE_URL = 'https://ctchickens.com';
+
+// Bundled rather than relying on system fonts: resvg has no way to request
+// "Arial"/system sans-serif in a minimal Cloud Functions container the way
+// it can on a Mac, and silently falls back to a generic monospace font
+// instead of erroring — explicit font files make rendering identical on
+// every machine (dev laptop and Cloud Functions alike).
+const FONT_DIR = path.join(__dirname, 'fonts');
+const FONT_FILES = [
+  path.join(FONT_DIR, 'Roboto-Regular.ttf'),
+  path.join(FONT_DIR, 'Roboto-Bold.ttf'),
+];
 
 function mapMemberToBreeder(member, id) {
   return {
@@ -114,6 +127,16 @@ function checkCircleIcon(cx, cy, r, color) {
     `<path d="M ${cx - r * 0.5} ${cy} L ${cx - r * 0.1} ${cy + r * 0.4} L ${cx + r * 0.55} ${cy - r * 0.35}" stroke="#ffffff" stroke-width="${Math.max(2, r * 0.26)}" fill="none" stroke-linecap="round" stroke-linejoin="round" />`;
 }
 
+function starIcon(cx, cy, r, color) {
+  const points = [];
+  for (let i = 0; i < 10; i++) {
+    const radius = i % 2 === 0 ? r : r * 0.42;
+    const angle = (Math.PI / 5) * i - Math.PI / 2;
+    points.push(`${cx + radius * Math.cos(angle)},${cy + radius * Math.sin(angle)}`);
+  }
+  return `<polygon points="${points.join(' ')}" fill="${color}" />`;
+}
+
 function awardIcon(cx, cy, r, color) {
   return `<circle cx="${cx}" cy="${cy - r * 0.15}" r="${r * 0.62}" fill="${color}" />` +
     `<path d="M ${cx - r * 0.32} ${cy + r * 0.15} L ${cx - r * 0.55} ${cy + r * 1.05} L ${cx} ${cy + r * 0.55} L ${cx + r * 0.55} ${cy + r * 1.05} L ${cx + r * 0.32} ${cy + r * 0.15} Z" fill="${color}" />`;
@@ -135,7 +158,7 @@ function buildPill({ x, y, text, bg, color, fontSize = 22, paddingX = 22, height
     width,
     svg: `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${height / 2}" fill="${bg}" />` +
       iconSvg +
-      `<text x="${textX}" y="${textY}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="700" fill="${color}">${escapeXml(text)}</text>`,
+      `<text x="${textX}" y="${textY}" font-family="Roboto" font-size="${fontSize}" font-weight="700" fill="${color}">${escapeXml(text)}</text>`,
   };
 }
 
@@ -235,7 +258,7 @@ function buildSvg({
   const badgeY = 70;
   let badgeX = LOGO_X;
   const badgePills = [];
-  const featuredPill = buildPill({ x: badgeX, y: badgeY, text: '★ Featured Member of the Week', bg: '#ffffff', color: PRIMARY });
+  const featuredPill = buildPill({ x: badgeX, y: badgeY, text: 'Featured Member of the Week', bg: '#ffffff', color: PRIMARY, icon: starIcon });
   badgePills.push(featuredPill.svg);
   badgeX += featuredPill.width + 16;
   if (verified) {
@@ -285,16 +308,16 @@ function buildSvg({
   ${logoImage}
 
   <!-- name + subtext -->
-  <text font-family="Arial, Helvetica, sans-serif" font-size="${nameFontSize}" font-weight="700" fill="#ffffff">${nameTspans}</text>
-  <text x="${TEXT_X}" y="${subtextY}" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="rgba(255,255,255,0.78)">${escapeXml(subtext)}</text>
+  <text font-family="Roboto" font-size="${nameFontSize}" font-weight="700" fill="#ffffff">${nameTspans}</text>
+  <text x="${TEXT_X}" y="${subtextY}" font-family="Roboto" font-size="26" fill="rgba(255,255,255,0.78)">${escapeXml(subtext)}</text>
 
   <!-- blurb -->
-  <text font-family="Arial, Helvetica, sans-serif" font-size="25" fill="rgba(255,255,255,0.88)">${blurbTspans}</text>
+  <text font-family="Roboto" font-size="25" fill="rgba(255,255,255,0.88)">${blurbTspans}</text>
 
   <!-- footer -->
   <rect x="0" y="${H - 80}" width="${W}" height="80" fill="rgba(0,0,0,0.18)" />
-  <text x="${LOGO_X}" y="${H - 30}" font-family="Arial, Helvetica, sans-serif" font-size="${footerLinkFontSize}" font-weight="700" fill="#ffffff">${escapeXml(footerLinkText)}</text>
-  <text x="${W - RIGHT_MARGIN}" y="${H - 30}" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="rgba(255,255,255,0.78)" text-anchor="end">Connecticut Backyard Chickens</text>
+  <text x="${LOGO_X}" y="${H - 30}" font-family="Roboto" font-size="${footerLinkFontSize}" font-weight="700" fill="#ffffff">${escapeXml(footerLinkText)}</text>
+  <text x="${W - RIGHT_MARGIN}" y="${H - 30}" font-family="Roboto" font-size="22" fill="rgba(255,255,255,0.78)" text-anchor="end">Connecticut Backyard Chickens</text>
 </svg>`;
 }
 
@@ -337,11 +360,18 @@ async function postFeaturedPhoto(pngBuffer, caption, systemToken) {
     throw new Error(`Facebook API error: ${postJson.error.message}`);
   }
 
-  const postId = `${PAGE_ID}_${postJson.post_id || postJson.id}`;
+  // post_id (or id, as a fallback) already comes back as the full
+  // "PAGE_ID_postId" composite — prepending PAGE_ID again here previously
+  // built a garbage double-prefixed id, which made this permalink lookup
+  // fail silently (permalink_url came back undefined on every real post).
+  const postId = postJson.post_id || postJson.id;
   const permalinkRes = await fetch(`https://graph.facebook.com/v21.0/${postId}?fields=permalink_url`, {
     headers: { Authorization: `Bearer ${pageToken}` },
   });
   const permalinkJson = await permalinkRes.json();
+  if (permalinkJson.error) {
+    console.warn(`  (permalink lookup failed for ${postId}: ${permalinkJson.error.message})`);
+  }
 
   return { ...postJson, id: postId, permalink_url: permalinkJson.permalink_url };
 }
@@ -349,6 +379,7 @@ async function postFeaturedPhoto(pngBuffer, caption, systemToken) {
 module.exports = {
   PAGE_ID,
   SITE_URL,
+  FONT_FILES,
   mapMemberToBreeder,
   getWeekNumber,
   pickFeatured,

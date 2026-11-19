@@ -31,6 +31,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import {
   SITE_URL,
+  FONT_FILES,
   mapMemberToBreeder,
   pickFeatured,
   fetchImageAsDataUri,
@@ -93,7 +94,10 @@ async function main() {
     profilePath: featured.id,
   });
 
-  const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 2400 } });
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: 'width', value: 2400 },
+    font: { fontFiles: FONT_FILES, loadSystemFonts: false, defaultFontFamily: 'Roboto' },
+  });
   const png = resvg.render().asPng();
 
   const outDir = path.join(__dirname, '..', 'tmp');
