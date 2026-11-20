@@ -31,6 +31,25 @@ export const formatDisplayName = (fullName: string | null, isBreeder: boolean = 
   return `${first} ${lastInitial}.`;
 };
 
+export const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+// Label for a chat date divider — "Today"/"Yesterday" for recent days, otherwise
+// a short date (with year only if it's not the current one).
+export const formatDateDivider = (date: Date): string => {
+  const now = new Date();
+  if (isSameDay(date, now)) return 'Today';
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(date, yesterday)) return 'Yesterday';
+
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return date.toLocaleDateString(undefined, sameYear
+    ? { month: 'long', day: 'numeric' }
+    : { month: 'long', day: 'numeric', year: 'numeric' });
+};
+
 export const formatRelativeTime = (timestamp: any) => {
   if (!timestamp) return 'Never';
   const date = timestamp?.toDate ? timestamp.toDate() : new Date(timestamp);
