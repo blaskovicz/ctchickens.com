@@ -90,6 +90,7 @@ export const postWeeklyFeaturedMember = onSchedule(
         subject,
         featuredName: featured.name,
         postUrl: result.permalink_url,
+        pageUrl: FeaturedCard.PAGE_URL,
       }),
     });
   }
