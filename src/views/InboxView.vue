@@ -99,9 +99,8 @@ const messagesWithDividers = computed(() => messages.value.map((msg, index) => {
   const date = msg.createdAt?.toDate ? msg.createdAt.toDate() : null;
   if (!date) return { msg, divider: null as string | null };
 
-  const prevDate = index > 0 && messages.value[index - 1].createdAt?.toDate
-    ? messages.value[index - 1].createdAt.toDate()
-    : null;
+  const prevMsg = index > 0 ? messages.value[index - 1] : undefined;
+  const prevDate = prevMsg?.createdAt?.toDate ? prevMsg.createdAt.toDate() : null;
 
   const divider = (prevDate && isSameDay(date, prevDate)) ? null : formatDateDivider(date);
   return { msg, divider };
