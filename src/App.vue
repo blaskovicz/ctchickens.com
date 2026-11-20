@@ -9,8 +9,9 @@
   import AuthButton from './components/AuthButton.vue';
   import ClaimBanner from './components/ClaimBanner.vue';
   import InquiryModal from './components/InquiryModal.vue';
-  import { db } from './firebase';
+  import { db, messaging } from './firebase';
   import { collection, query, where, onSnapshot } from 'firebase/firestore';
+  import { onMessage } from 'firebase/messaging';
 
   const store = useStore();
   const { create } = useToast();
@@ -113,6 +114,20 @@
         store.dispatch('initAuth');
       }
     }
+  }
+
+  // Push messages while this tab is open and focused are delivered here rather
+  // than to the service worker's onBackgroundMessage — without this listener
+  // they'd be silently dropped (see firebase-messaging-sw.ts's comment).
+  if (messaging) {
+    onMessage(messaging, (payload) => {
+      create?.({
+        title: payload.notification?.title || 'New message',
+        body: payload.notification?.body || '',
+        variant: 'info',
+        pos: 'top-center'
+      });
+    });
   }
 
   onMounted(async () => {

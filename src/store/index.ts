@@ -389,6 +389,11 @@ export default createStore({
     },
 
     async logout({ commit }: ActionContext<State, State>) {
+      // Revoke the FCM token BEFORE signing out — the Firestore write needs
+      // request.auth, so it must happen while the user is still authenticated.
+      // Otherwise a shared/public device would keep receiving this user's push
+      // notifications after they've logged out.
+      await useNotifications().revokeToken();
       await fullSignOut();
       commit('SET_USER', null);
       commit('SET_USER_DATA', null);

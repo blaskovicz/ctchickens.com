@@ -50,6 +50,19 @@ service cloud.firestore {
       data.keys().hasOnly(['profile', 'offerings', 'media', 'draft_owner_uid', 'updatedAt']);
     }
 
+    // Enforces that an fcmTokens write is really an arrayUnion (exactly one token
+    // added) or arrayRemove (exactly one token removed) — never an arbitrary
+    // overwrite — and keeps the array within a sane device-count bound.
+    function isValidFcmTokensUpdate(oldData, newData) {
+      let oldTokens = oldData.get('fcmTokens', []);
+      let newTokens = newData.get('fcmTokens', []);
+      return newTokens is list && newTokens.size() <= 20 &&
+      (
+        (newTokens.size() == oldTokens.size() + 1 && newTokens.hasAll(oldTokens)) ||
+        (newTokens.size() == oldTokens.size() - 1 && oldTokens.hasAll(newTokens))
+      );
+    }
+
     // --- COLLECTION RULES ---
 
     match /users/{userId} {
@@ -67,10 +80,11 @@ service cloud.firestore {
       request.resource.data.diff(resource.data).affectedKeys()
       .hasOnly(['displayName', 'email', 'photoURL', 'lastLogin']) &&
       request.resource.data.get('email', request.auth.token.email) == request.auth.token.email;
-      // Push notification opt-in/opt-out: users may update only their own fcmTokens array.
-      // arrayUnion/arrayRemove operations on this field are the only permitted writes here.
+      // Push notification opt-in/opt-out: users may update only their own fcmTokens array,
+      // and only via a single-token arrayUnion/arrayRemove — see isValidFcmTokensUpdate.
       allow update: if isSignedIn() && request.auth.uid == userId &&
-      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
+      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) &&
+      isValidFcmTokensUpdate(resource.data, request.resource.data);
     }
 
     match /directory_members/{memberId} {

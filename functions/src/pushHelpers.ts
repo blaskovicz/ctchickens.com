@@ -12,6 +12,16 @@ type SendMulticastFn = (message: MulticastMessage) => Promise<{
   responses: Array<{ success: boolean; error?: { code: string } | null }>;
 }>;
 
+// FCM error codes that mean the token will never succeed again — safe to prune
+// immediately instead of retrying (and failing) on every future message.
+// https://firebase.google.com/docs/cloud-messaging/send-message#admin_sdk_errors
+const UNREGISTERABLE_ERROR_CODES = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+  'messaging/invalid-argument',
+  'messaging/mismatched-credential',
+]);
+
 /**
  * Sends FCM push notifications to all thread participants who have unread messages,
  * excluding the message sender and the literal 'admin' participant.
@@ -48,47 +58,54 @@ export async function notifyMessageParticipants(
   const participants: string[] = thread.participants || [];
   const unreadCount: Record<string, number> = thread.unreadCount || {};
 
-  // Only notify participants who:
-  //   - are not the literal 'admin' sentinel (admin uses email, not push)
-  //   - are not the sender
-  //   - have at least one unread message (avoids spurious pings on read threads)
-  const recipients = participants.filter(
-    (uid: string) => uid !== 'admin' && uid !== senderUid && (unreadCount[uid] ?? 0) > 0
-  );
+  // Mirrors the recipient rule in sweepUnreadThreadNotifications (index.ts) — the
+  // two notification channels must agree on who "has unread messages to be notified
+  // about" for the same thread:
+  //   - never the literal 'admin' sentinel (admin uses email, not push)
+  //   - never the sender
+  //   - on support threads, only the thread owner gets notified, not other admins
+  //   - must have at least one unread message (avoids spurious pings on read threads)
+  const recipients = participants.filter((uid: string) => {
+    if (uid === 'admin' || uid === senderUid) return false;
+    if (thread.type === 'support' && uid !== thread.userUid) return false;
+    return (unreadCount[uid] ?? 0) > 0;
+  });
   if (recipients.length === 0) return;
 
   const preview = text.substring(0, 80);
   const link = `https://ctchickens.com/#/inbox/${threadId}`;
 
-  for (const uid of recipients) {
-    const userSnap = await db.collection('users').doc(uid).get();
-    const tokens: string[] = userSnap.data()?.fcmTokens ?? [];
-    if (tokens.length === 0) continue;
+  // Each recipient is handled independently — one recipient's Firestore read or
+  // FCM send failing must never block or delay any other recipient.
+  await Promise.all(
+    recipients.map(async (uid) => {
+      try {
+        const userSnap = await db.collection('users').doc(uid).get();
+        const tokens: string[] = userSnap.data()?.fcmTokens ?? [];
+        if (tokens.length === 0) return;
 
-    let response;
-    try {
-      response = await sendMulticast({
-        tokens,
-        notification: { title: senderName, body: preview },
-        webpush: { fcmOptions: { link } },
-      });
-    } catch (err) {
-      console.error(`[notifyMessageParticipants] sendEachForMulticast failed for uid=${uid}`, err);
-      continue;
-    }
+        const response = await sendMulticast({
+          tokens,
+          notification: { title: senderName, body: preview },
+          webpush: { fcmOptions: { link } },
+        });
 
-    // Collect tokens that FCM has invalidated and remove them from Firestore to
-    // prevent repeated failed send attempts on subsequent messages.
-    const staleTokens = response.responses
-      .map((r: any, i: number) =>
-        r.error?.code === 'messaging/registration-token-not-registered' ? tokens[i] : null
-      )
-      .filter(Boolean) as string[];
+        // Collect tokens that FCM has permanently invalidated and remove them from
+        // Firestore to prevent repeated failed send attempts on subsequent messages.
+        const staleTokens = response.responses
+          .map((r: any, i: number) =>
+            r.error?.code && UNREGISTERABLE_ERROR_CODES.has(r.error.code) ? tokens[i] : null
+          )
+          .filter(Boolean) as string[];
 
-    if (staleTokens.length > 0) {
-      await db.collection('users').doc(uid).update({
-        fcmTokens: FieldValue.arrayRemove(...staleTokens),
-      });
-    }
-  }
+        if (staleTokens.length > 0) {
+          await db.collection('users').doc(uid).update({
+            fcmTokens: FieldValue.arrayRemove(...staleTokens),
+          });
+        }
+      } catch (err) {
+        console.error(`[notifyMessageParticipants] failed for uid=${uid}`, err);
+      }
+    })
+  );
 }

@@ -222,6 +222,7 @@ const handleSend = async () => {
         });
         transaction.set(doc(messagesCol), {
           senderUid: user.value!.uid,
+          senderName: user.value!.displayName || 'User',
           text,
           createdAt: serverTimestamp(),
           read: false
@@ -269,6 +270,7 @@ const handleSend = async () => {
       const newMessageRef = doc(messagesCol);
       transaction.set(newMessageRef, {
         senderUid: user.value!.uid,
+        senderName: user.value!.displayName || 'User',
         text: text,
         createdAt: serverTimestamp(),
         read: false

@@ -1220,6 +1220,7 @@ export const initiatePeerThread = onCall(
           tx.update(threadRef, threadUpdate);
           tx.set(threadRef.collection('messages').doc(), {
             senderUid: callerUid,
+            senderName: callerName,
             text: messageText,
             createdAt: FieldValue.serverTimestamp(),
             read: false,
@@ -1265,6 +1266,7 @@ export const initiatePeerThread = onCall(
       });
       tx.set(threadRef.collection('messages').doc(), {
         senderUid: callerUid,
+        senderName: callerName,
         text: firstMessageText,
         createdAt: FieldValue.serverTimestamp(),
         read: false,
