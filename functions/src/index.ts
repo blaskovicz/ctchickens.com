@@ -4,6 +4,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { notifyMessageParticipants, sendPushAndPruneStaleTokens, checkTestPushRateLimit } from './pushHelpers';
+import { maybeReopenSupportThread } from './threadHelpers';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -1573,6 +1574,15 @@ export const onInquiryMessageCreated = onDocumentCreated(
     if (!messageData) return;
 
     const threadId = event.params.threadId;
+    const senderUid = messageData.senderUid as string;
+
+    // Support threads persist per-user forever; reopen one the admin closed as
+    // soon as its owner writes again, so it resurfaces in the admin queue.
+    try {
+      await maybeReopenSupportThread(db, threadId, senderUid);
+    } catch (err) {
+      console.error('[onInquiryMessageCreated] reopen-on-reply error:', err);
+    }
 
     try {
       await notifyMessageParticipants(

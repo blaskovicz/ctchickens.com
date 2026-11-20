@@ -62,6 +62,9 @@ export interface Review {
     id: string;
     participants: string[];
     type?: 'inquiry' | 'support' | 'peer';
+    // Support tickets only; absent means open. Closed by an admin, reopened
+    // automatically when the ticket owner sends another message.
+    status?: 'open' | 'closed';
     userUid: string;
     userName?: string;
     breederSlug: string;
