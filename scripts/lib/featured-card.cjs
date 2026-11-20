@@ -20,6 +20,12 @@ const path = require('path');
 const PRIMARY = '#1e3a8a';
 const PRIMARY_LIGHT = '#1e40af';
 const PAGE_ID = '1061046777099271';
+// The Page's vanity username (facebook.com/ctbackyardchickens), claimed specifically
+// because Facebook's own permalink_url embeds a stale/alias numeric page-object-id
+// that doesn't even resolve via the Graph API and is unreliable on mobile — links
+// built from the username are the standard, durable form.
+const PAGE_USERNAME = 'ctbackyardchickens';
+const PAGE_URL = `https://www.facebook.com/${PAGE_USERNAME}`;
 const SITE_URL = 'https://ctchickens.com';
 
 // Bundled rather than relying on system fonts: resvg has no way to request
@@ -362,22 +368,22 @@ async function postFeaturedPhoto(pngBuffer, caption, systemToken) {
 
   // post_id (or id, as a fallback) already comes back as the full
   // "PAGE_ID_postId" composite — prepending PAGE_ID again here previously
-  // built a garbage double-prefixed id, which made this permalink lookup
-  // fail silently (permalink_url came back undefined on every real post).
+  // built a garbage double-prefixed id.
   const postId = postJson.post_id || postJson.id;
-  const permalinkRes = await fetch(`https://graph.facebook.com/v21.0/${postId}?fields=permalink_url`, {
-    headers: { Authorization: `Bearer ${pageToken}` },
-  });
-  const permalinkJson = await permalinkRes.json();
-  if (permalinkJson.error) {
-    console.warn(`  (permalink lookup failed for ${postId}: ${permalinkJson.error.message})`);
-  }
 
-  return { ...postJson, id: postId, permalink_url: permalinkJson.permalink_url };
+  // Built from the Page's own username rather than trusting the API's
+  // permalink_url, which embeds a stale/alias page-object-id that doesn't
+  // even resolve via the Graph API and is unreliable on mobile (confirmed
+  // against the live Page — see PAGE_USERNAME above).
+  const postIdSuffix = postId.includes('_') ? postId.split('_').slice(1).join('_') : postId;
+  const permalinkUrl = `${PAGE_URL}/posts/${postIdSuffix}`;
+
+  return { ...postJson, id: postId, permalink_url: permalinkUrl };
 }
 
 module.exports = {
   PAGE_ID,
+  PAGE_URL,
   SITE_URL,
   FONT_FILES,
   mapMemberToBreeder,
