@@ -91,6 +91,10 @@ const activeThreadId = ref<string | null>((route.params.threadId as string) || n
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
 const isPendingSupportThread = computed(() => activeThreadId.value === 'support_new');
 
+const isClosedSupportThread = computed(() =>
+  activeThread.value?.type === 'support' && activeThread.value.status === 'closed'
+);
+
 const isUnclaimed = computed(() => {
   if (!activeThread.value || activeThread.value.type === 'support' || activeThread.value.type === 'peer') return false;
   if (activeThread.value.userUid !== user.value?.uid) return false;
@@ -323,6 +327,21 @@ const handleSend = async () => {
   }
 };
 
+const isTogglingThreadStatus = ref(false);
+const handleToggleThreadStatus = async () => {
+  if (!activeThread.value || activeThread.value.type !== 'support') return;
+  const nextStatus = activeThread.value.status === 'closed' ? 'open' : 'closed';
+  isTogglingThreadStatus.value = true;
+  try {
+    await updateDoc(doc(db, 'inquiry_threads', activeThread.value.id), { status: nextStatus });
+    create?.({ body: nextStatus === 'closed' ? 'Support ticket closed.' : 'Support ticket reopened.', variant: 'success' });
+  } catch (err: any) {
+    create?.({ body: `Could not update ticket: ${err.message}`, variant: 'danger' });
+  } finally {
+    isTogglingThreadStatus.value = false;
+  }
+};
+
 const handleFlag = async (msg: InquiryMessage) => {
   if (!activeThreadId.value || !user.value) return;
   try {
@@ -335,6 +354,18 @@ const handleFlag = async (msg: InquiryMessage) => {
   } catch (err: any) {
     create?.({ body: `Flag failed: ${err.message}`, variant: 'danger' });
   }
+};
+
+const threadTypeLabel = (thread: InquiryThread) => {
+  if (thread.type === 'support') return 'Support';
+  if (thread.type === 'peer') return 'Direct';
+  return 'Inquiry';
+};
+
+const threadTypeVariant = (thread: InquiryThread) => {
+  if (thread.type === 'support') return 'info';
+  if (thread.type === 'peer') return 'secondary';
+  return 'primary';
 };
 
 const getThreadDisplayName = (thread: InquiryThread) => {
@@ -472,6 +503,10 @@ onUnmounted(() => {
                   {{ thread.updatedAt?.toDate()?.toLocaleDateString() }}
                 </small>
               </div>
+              <div class="d-flex align-items-center gap-1 mb-1">
+                <BBadge :variant="threadTypeVariant(thread)" pill style="font-size: 0.6rem;">{{ threadTypeLabel(thread) }}</BBadge>
+                <BBadge v-if="thread.type === 'support' && thread.status === 'closed'" variant="secondary" pill style="font-size: 0.6rem;">Closed</BBadge>
+              </div>
               <div class="d-flex justify-content-between align-items-center">
                 <p class="mb-0 small text-muted text-truncate me-2">
                   {{ stripMarkdown(thread.lastMessage) }}
@@ -529,8 +564,19 @@ onUnmounted(() => {
                 Site Support Ticket
               </small>
             </div>
-            <div class="ms-auto">
-              <BBadge v-if="isPendingSupportThread || activeThread?.type === 'support'" pill variant="info" style="font-size: 0.65rem;">Support</BBadge>
+            <div class="ms-auto d-flex align-items-center gap-2">
+              <BButton
+                v-if="isAdmin && activeThread?.type === 'support'"
+                @click="handleToggleThreadStatus"
+                :variant="activeThread.status === 'closed' ? 'outline-success' : 'outline-secondary'"
+                size="sm"
+                :disabled="isTogglingThreadStatus"
+              >
+                <BSpinner v-if="isTogglingThreadStatus" small />
+                <template v-else>{{ activeThread.status === 'closed' ? 'Reopen' : 'Close' }}</template>
+              </BButton>
+              <BBadge v-if="activeThread?.type === 'support' && activeThread.status === 'closed'" pill variant="secondary" style="font-size: 0.65rem;">Closed</BBadge>
+              <BBadge v-else-if="isPendingSupportThread || activeThread?.type === 'support'" pill variant="info" style="font-size: 0.65rem;">Support</BBadge>
               <BBadge v-else-if="activeThread?.type === 'peer'" pill variant="secondary" style="font-size: 0.65rem;">Direct</BBadge>
               <BBadge v-else pill variant="primary" style="font-size: 0.65rem;">Inquiry</BBadge>
             </div>
@@ -540,6 +586,12 @@ onUnmounted(() => {
           <BAlert v-if="isUnclaimed" variant="warning" show class="mb-0 border-0 border-bottom rounded-0 py-2 small">
             <i class="bi bi-info-circle me-2"></i>
             This listing has not been claimed. Responses may be delayed until the owner logs in.
+          </BAlert>
+
+          <!-- Closed Ticket Banner -->
+          <BAlert v-if="isClosedSupportThread" variant="secondary" show class="mb-0 border-0 border-bottom rounded-0 py-2 small">
+            <i class="bi bi-check-circle me-2"></i>
+            This ticket is closed. Send a message below to reopen it.
           </BAlert>
 
           <!-- Messages -->

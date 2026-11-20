@@ -22,6 +22,7 @@ const drafts = ref<any[]>([]);
 const draftClassifieds = ref<any[]>([]);
 const flaggedMessages = ref<any[]>([]);
 const supportThreads = ref<any[]>([]);
+const openSupportThreads = computed(() => supportThreads.value.filter(t => t.status !== 'closed'));
 const liveSlugs = ref<Set<string>>(new Set()); // Track which drafts are already live
 const userProfiles = ref<Record<string, any>>({});
 const isFetching = ref(false);
@@ -83,6 +84,16 @@ const fetchData = async () => {
     create?.({ title: 'Error', body: `Fetch error: ${e.message}`, variant: 'danger' });
   } finally {
     isFetching.value = false;
+  }
+};
+
+const handleCloseThread = async (thread: any) => {
+  try {
+    await updateDoc(doc(db, 'inquiry_threads', thread.id), { status: 'closed' });
+    create?.({ body: 'Support ticket closed.', variant: 'success' });
+    fetchData();
+  } catch (e: any) {
+    create?.({ body: `Could not close ticket: ${e.message}`, variant: 'danger' });
   }
 };
 
@@ -306,15 +317,15 @@ const handleRejectClaim = async (id: string) => {
             <template #header>
               <div class="d-flex align-items-center gap-2 py-1">
                 <i class="bi bi-headset text-info"></i>
-                <h5 class="mb-0 fw-bold">Support Tickets ({{ supportThreads.length }})</h5>
+                <h5 class="mb-0 fw-bold">Support Tickets ({{ openSupportThreads.length }})</h5>
               </div>
             </template>
-            
+
             <BListGroup flush>
-              <BListGroupItem v-if="supportThreads.length === 0" class="text-center py-4 text-muted">
+              <BListGroupItem v-if="openSupportThreads.length === 0" class="text-center py-4 text-muted">
                 No active support tickets.
               </BListGroupItem>
-              <BListGroupItem v-for="thread in supportThreads" :key="thread.id" class="p-3">
+              <BListGroupItem v-for="thread in openSupportThreads" :key="thread.id" class="p-3">
                 <div class="d-flex justify-content-between align-items-center">
                   <div class="d-flex gap-3 align-items-center">
                     <img v-if="userProfiles[thread.userUid]?.photoURL" :src="userProfiles[thread.userUid].photoURL" width="40" height="40" class="rounded-circle border">
@@ -326,7 +337,10 @@ const handleRejectClaim = async (id: string) => {
                       <p class="mb-0 small text-muted text-truncate" style="max-width: 150px;">{{ thread.lastMessage }}</p>
                     </div>
                   </div>
-                  <BButton :to="`/inbox/${thread.id}`" variant="primary" size="sm">Reply</BButton>
+                  <div class="d-flex gap-2">
+                    <BButton @click="handleCloseThread(thread)" variant="outline-secondary" size="sm">Close</BButton>
+                    <BButton :to="`/inbox/${thread.id}`" variant="primary" size="sm">Reply</BButton>
+                  </div>
                 </div>
               </BListGroupItem>
             </BListGroup>
