@@ -124,6 +124,16 @@ describe('InboxView — thread type/status visibility and admin close/reopen', (
     expect(wrapper.text()).toContain('Closed');
   });
 
+  it('shows a reopen-by-messaging banner in the conversation for a closed ticket, and not for an open one', async () => {
+    threadDocs = [{ ...supportThread, status: 'closed' }];
+    const closedWrapper = await mountInbox(createMockStore(), 'support_user-1');
+    expect(closedWrapper.text()).toContain('This ticket is closed. Send a message below to reopen it.');
+
+    threadDocs = [supportThread];
+    const openWrapper = await mountInbox(createMockStore(), 'support_user-1');
+    expect(openWrapper.text()).not.toContain('This ticket is closed');
+  });
+
   it('admin sees a Close button on an open support thread, and clicking it writes status "closed"', async () => {
     threadDocs = [supportThread];
     const wrapper = await mountInbox(createMockStore({ isAdmin: true }), 'support_user-1');

@@ -91,6 +91,10 @@ const activeThreadId = ref<string | null>((route.params.threadId as string) || n
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
 const isPendingSupportThread = computed(() => activeThreadId.value === 'support_new');
 
+const isClosedSupportThread = computed(() =>
+  activeThread.value?.type === 'support' && activeThread.value.status === 'closed'
+);
+
 const isUnclaimed = computed(() => {
   if (!activeThread.value || activeThread.value.type === 'support' || activeThread.value.type === 'peer') return false;
   if (activeThread.value.userUid !== user.value?.uid) return false;
@@ -582,6 +586,12 @@ onUnmounted(() => {
           <BAlert v-if="isUnclaimed" variant="warning" show class="mb-0 border-0 border-bottom rounded-0 py-2 small">
             <i class="bi bi-info-circle me-2"></i>
             This listing has not been claimed. Responses may be delayed until the owner logs in.
+          </BAlert>
+
+          <!-- Closed Ticket Banner -->
+          <BAlert v-if="isClosedSupportThread" variant="secondary" show class="mb-0 border-0 border-bottom rounded-0 py-2 small">
+            <i class="bi bi-check-circle me-2"></i>
+            This ticket is closed. Send a message below to reopen it.
           </BAlert>
 
           <!-- Messages -->
