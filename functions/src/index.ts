@@ -50,6 +50,11 @@ const db = getFirestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const hmacSecret = defineSecret('HMAC_SECRET');
 
+// The emulator suite has no App Check emulator wired up, so enforcing here would
+// reject every callable request in local dev and in CI tests that hit the Functions
+// emulator directly (see src/__tests__/flows/email_verification.spec.ts).
+const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== 'true';
+
 async function chunkAll<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
   for (let i = 0; i < items.length; i += size) {
     await Promise.all(items.slice(i, i + size).map(fn));
@@ -280,7 +285,7 @@ interface AdminSendEmailPayload {
 }
 
 export const adminSendEmail = onCall(
-  { secrets: [resendApiKey] },
+  { secrets: [resendApiKey], enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     // Verify caller is authenticated
     if (!request.auth?.uid) {
@@ -394,7 +399,7 @@ export const adminSendEmail = onCall(
 // Empty string → clears both pendingLocalEmail and localEmail.
 // Valid email → writes pendingLocalEmail and sends a verification email.
 export const setLocalEmail = onCall(
-  { secrets: [resendApiKey, hmacSecret] },
+  { secrets: [resendApiKey, hmacSecret], enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     if (!request.auth?.uid) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
@@ -466,7 +471,7 @@ async function notifyLocalEmailUpdated(
 // Verifies the token from the email link and marks localEmailVerified = true.
 // Does NOT require auth — uid comes from the URL params.
 export const verifyLocalEmail = onCall(
-  { secrets: [hmacSecret, resendApiKey] },
+  { secrets: [hmacSecret, resendApiKey], enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const { uid, email, ts, token } = request.data as {
       uid: string;
@@ -1043,7 +1048,7 @@ export const onClassifiedAction = onDocumentCreated(
 // Callable: clone an expired classified directly to a new active listing.
 // Validates ownership, checks tier capacity (active + pending), and batch-writes atomically.
 export const cloneExpiredClassified = onCall(
-  { secrets: [resendApiKey] },
+  { secrets: [resendApiKey], enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError('unauthenticated', 'Must be logged in.');
     const uid = request.auth.uid;
@@ -1140,7 +1145,7 @@ export const cloneExpiredClassified = onCall(
 // Callable: find or create a peer-to-peer inquiry thread between two users.
 // Runs server-side so it can read both users' display names (client rules forbid cross-user reads).
 export const initiatePeerThread = onCall(
-  { secrets: [resendApiKey] },
+  { secrets: [resendApiKey], enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     if (!request.auth?.uid) {
       throw new HttpsError('unauthenticated', 'Must be signed in.');
