@@ -12,7 +12,7 @@ import {
   BContainer, BRow, BCol, BListGroup, BListGroupItem, 
   BFormTextarea, BButton, BSpinner, BBadge, useToast, BAlert
 } from 'bootstrap-vue-next';
-import { useBreederUtils } from '../composables/useBreederUtils';
+import { useBreederUtils, formatDateDivider, isSameDay } from '../composables/useBreederUtils';
 import { useSupport } from '../composables/useSupport';
 import { useNotifications } from '../composables/useNotifications';
 import { renderMessage, stripMarkdown } from '../composables/useMessageRenderer';
@@ -90,6 +90,22 @@ const messages = ref<InquiryMessage[]>([]);
 const activeThreadId = ref<string | null>((route.params.threadId as string) || null);
 const activeThread = computed(() => threads.value.find(t => t.id === activeThreadId.value));
 const isPendingSupportThread = computed(() => activeThreadId.value === 'support_new');
+
+// Pairs each message with a date-divider label ("Today", "Yesterday", "November 15")
+// to show above it, or null when it falls on the same day as the message before it.
+// A message still awaiting its server timestamp (createdAt not yet set) gets no
+// divider, so the divider doesn't flicker in before the real date resolves.
+const messagesWithDividers = computed(() => messages.value.map((msg, index) => {
+  const date = msg.createdAt?.toDate ? msg.createdAt.toDate() : null;
+  if (!date) return { msg, divider: null as string | null };
+
+  const prevDate = index > 0 && messages.value[index - 1].createdAt?.toDate
+    ? messages.value[index - 1].createdAt.toDate()
+    : null;
+
+  const divider = (prevDate && isSameDay(date, prevDate)) ? null : formatDateDivider(date);
+  return { msg, divider };
+}));
 
 const isClosedSupportThread = computed(() =>
   activeThread.value?.type === 'support' && activeThread.value.status === 'closed'
@@ -606,37 +622,43 @@ onUnmounted(() => {
                 <p class="mb-0">Describe your issue below and we'll get back to you shortly.</p>
               </div>
 
-              <div v-for="msg in messages" :key="msg.id" class="d-flex mb-3" :class="msg.senderUid === user?.uid ? 'justify-content-end' : 'justify-content-start'">
-                <div 
-                  class="message-bubble p-3 rounded-4 shadow-sm position-relative group"
-                  :class="msg.senderUid === user?.uid ? 'bg-primary text-white' : 'bg-white border text-dark'"
-                  style="max-width: 75%;"
-                >
-                  <div v-if="msg.adminReviewStatus === 'hidden'" class="fst-italic small opacity-75">
-                    [This message was removed for violating community guidelines]
-                  </div>
-                  <div v-else v-html="renderMessage(msg.text)"></div>
+              <template v-for="{ msg, divider } in messagesWithDividers" :key="msg.id">
+                <div v-if="divider" class="date-divider text-center my-3">
+                  <span class="badge bg-light text-muted border rounded-pill px-3 py-1 fw-normal" style="font-size: 0.7rem;">{{ divider }}</span>
+                </div>
 
-                  <div class="d-flex justify-content-between align-items-center mt-2 opacity-50" style="font-size: 0.65rem;">
-                    <div class="d-flex align-items-center gap-1">
-                      <span>{{ msg.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
-                      <span v-if="msg.senderUid === user?.uid" class="ms-1" :title="msg.read ? 'Read' : 'Sent'">
-                        <i v-if="msg.read" class="bi bi-check-circle-fill text-white"></i>
-                        <i v-else class="bi bi-circle text-white"></i>
-                      </span>
+                <div class="d-flex mb-3" :class="msg.senderUid === user?.uid ? 'justify-content-end' : 'justify-content-start'">
+                  <div
+                    class="message-bubble p-3 rounded-4 shadow-sm position-relative group"
+                    :class="msg.senderUid === user?.uid ? 'bg-primary text-white' : 'bg-white border text-dark'"
+                    style="max-width: 75%;"
+                  >
+                    <div v-if="msg.adminReviewStatus === 'hidden'" class="fst-italic small opacity-75">
+                      [This message was removed for violating community guidelines]
                     </div>
-                    <button 
-                      v-if="msg.senderUid !== user?.uid && !msg.flaggedByUid" 
-                      @click="handleFlag(msg)"
-                      class="btn btn-link p-0 text-reset ms-2 flag-btn"
-                      title="Flag for review"
-                    >
-                      <i class="bi bi-flag"></i>
-                    </button>
-                    <i v-else-if="msg.flaggedByUid && msg.flaggedByUid === user?.uid" class="bi bi-flag-fill text-danger ms-2" title="Flagged by you"></i>
+                    <div v-else v-html="renderMessage(msg.text)"></div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-2 opacity-50" style="font-size: 0.65rem;">
+                      <div class="d-flex align-items-center gap-1">
+                        <span>{{ msg.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
+                        <span v-if="msg.senderUid === user?.uid" class="ms-1" :title="msg.read ? 'Read' : 'Sent'">
+                          <i v-if="msg.read" class="bi bi-check-circle-fill text-white"></i>
+                          <i v-else class="bi bi-circle text-white"></i>
+                        </span>
+                      </div>
+                      <button
+                        v-if="msg.senderUid !== user?.uid && !msg.flaggedByUid"
+                        @click="handleFlag(msg)"
+                        class="btn btn-link p-0 text-reset ms-2 flag-btn"
+                        title="Flag for review"
+                      >
+                        <i class="bi bi-flag"></i>
+                      </button>
+                      <i v-else-if="msg.flaggedByUid && msg.flaggedByUid === user?.uid" class="bi bi-flag-fill text-danger ms-2" title="Flagged by you"></i>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </template>
             </template>
           </div>
 

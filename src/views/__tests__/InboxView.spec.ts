@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createStore } from 'vuex';
 import { createRouter, createWebHashHistory } from 'vue-router';
@@ -13,6 +13,7 @@ import InboxView from '../InboxView.vue';
 const mockUpdateDoc = vi.fn().mockResolvedValue(undefined);
 
 let threadDocs: any[] = [];
+let messageDocs: any[] = [];
 
 vi.mock('../../firebase', () => ({
   db: {},
@@ -49,8 +50,8 @@ vi.mock('firebase/firestore', () => ({
     if (ref.path === 'inquiry_threads') {
       successCb({ docs: threadDocs.map(d => ({ id: d.id, data: () => d })) });
     } else {
-      // Any thread's messages subcollection — no messages needed for these tests.
-      successCb({ docs: [] });
+      // Any thread's messages subcollection.
+      successCb({ docs: messageDocs.map(d => ({ id: d.id, data: () => d })) });
     }
     return vi.fn(); // unsubscribe
   }),
@@ -104,9 +105,12 @@ const supportThread = {
   unreadCount: {},
 };
 
+const ts = (date: string) => ({ toDate: () => new Date(date) });
+
 describe('InboxView — thread type/status visibility and admin close/reopen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    messageDocs = [];
   });
 
   it('shows a type badge and no Closed badge for an open support thread', async () => {
@@ -172,5 +176,50 @@ describe('InboxView — thread type/status visibility and admin close/reopen', (
 
     const toggleButton = wrapper.findAll('button').find(b => b.text() === 'Close' || b.text() === 'Reopen');
     expect(toggleButton).toBeFalsy();
+  });
+});
+
+describe('InboxView — date dividers in the message pane', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    threadDocs = [supportThread];
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-05T12:00:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows one date divider above a single day\'s worth of messages', async () => {
+    messageDocs = [
+      { id: 'm1', senderUid: 'user-1', text: 'Hi', createdAt: ts('2026-03-05T08:00:00'), read: true },
+      { id: 'm2', senderUid: 'admin-1', text: 'Hello', createdAt: ts('2026-03-05T09:00:00'), read: true },
+    ];
+    const wrapper = await mountInbox(createMockStore(), 'support_user-1');
+
+    expect(wrapper.findAll('.date-divider')).toHaveLength(1);
+    expect(wrapper.find('.date-divider').text()).toBe('Today');
+  });
+
+  it('shows a divider per day when messages span multiple days', async () => {
+    messageDocs = [
+      { id: 'm1', senderUid: 'user-1', text: 'Yesterday message', createdAt: ts('2026-03-04T10:00:00'), read: true },
+      { id: 'm2', senderUid: 'admin-1', text: 'Today message', createdAt: ts('2026-03-05T09:00:00'), read: true },
+    ];
+    const wrapper = await mountInbox(createMockStore(), 'support_user-1');
+
+    const dividers = wrapper.findAll('.date-divider').map(d => d.text());
+    expect(dividers).toEqual(['Yesterday', 'Today']);
+  });
+
+  it('does not render a divider for a message still awaiting its server timestamp', async () => {
+    messageDocs = [
+      { id: 'm1', senderUid: 'user-1', text: 'Synced', createdAt: ts('2026-03-05T08:00:00'), read: true },
+      { id: 'm2', senderUid: 'admin-1', text: 'Just sent', createdAt: null, read: false },
+    ];
+    const wrapper = await mountInbox(createMockStore(), 'support_user-1');
+
+    expect(wrapper.findAll('.date-divider')).toHaveLength(1);
   });
 });
