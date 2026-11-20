@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, auth, storage } from '../firebase';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, deleteDoc, addDoc, collection } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, deleteDoc, addDoc, collection, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, deleteObject } from 'firebase/storage';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { 
@@ -9,7 +9,8 @@ import {
   createTestUser, 
   blockUser,
   seedInquiryThread,
-  seedTestBreeder
+  seedTestBreeder,
+  seedFcmTokens
 } from './test-helpers';
 
 describe('Security Rules: Users Collection', () => {
@@ -43,6 +44,73 @@ describe('Security Rules: Users Collection', () => {
       lastLogin: new Date()
     };
     await expect(setDoc(userDocRef, maliciousData)).rejects.toThrow();
+  });
+});
+
+describe('Security Rules: fcmTokens', () => {
+  beforeEach(async () => {
+    await clearFirestoreEmulator();
+    await clearAuthEmulator();
+  });
+
+  it('allows a user to arrayUnion a single token onto their own doc', async () => {
+    const email = 'fcm-owner@example.com';
+    const user = await createTestUser(email, 'Owner');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    const userDocRef = doc(db, 'users', user.uid);
+    await expect(updateDoc(userDocRef, { fcmTokens: arrayUnion('token-1') })).resolves.not.toThrow();
+  });
+
+  it('allows a user to arrayRemove a single token from their own doc', async () => {
+    const email = 'fcm-owner2@example.com';
+    const user = await createTestUser(email, 'Owner');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    const userDocRef = doc(db, 'users', user.uid);
+    // One token at a time, matching how useNotifications.ts actually calls arrayUnion.
+    await updateDoc(userDocRef, { fcmTokens: arrayUnion('token-1') });
+    await updateDoc(userDocRef, { fcmTokens: arrayUnion('token-2') });
+    await expect(updateDoc(userDocRef, { fcmTokens: arrayRemove('token-1') })).resolves.not.toThrow();
+  });
+
+  it('rejects overwriting fcmTokens with an arbitrary array', async () => {
+    const email = 'fcm-attacker@example.com';
+    const user = await createTestUser(email, 'Attacker');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    const userDocRef = doc(db, 'users', user.uid);
+    await updateDoc(userDocRef, { fcmTokens: arrayUnion('token-1') });
+    await expect(
+      updateDoc(userDocRef, { fcmTokens: ['junk-1', 'junk-2', 'junk-3'] })
+    ).rejects.toThrow();
+  });
+
+  it('rejects growing fcmTokens past the 20-token bound', async () => {
+    const email = 'fcm-hoarder@example.com';
+    const user = await createTestUser(email, 'Hoarder');
+    await signInWithEmailAndPassword(auth, email, 'password123');
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const twentyTokens = Array.from({ length: 20 }, (_, i) => `token-${i}`);
+    await seedFcmTokens(user.uid, twentyTokens);
+
+    await expect(
+      updateDoc(userDocRef, { fcmTokens: arrayUnion('token-21') })
+    ).rejects.toThrow();
+  });
+
+  it("rejects updating another user's fcmTokens", async () => {
+    const victimEmail = 'fcm-victim@example.com';
+    const victim = await createTestUser(victimEmail, 'Victim');
+    await signOut(auth);
+
+    const attackerEmail = 'fcm-attacker2@example.com';
+    await createTestUser(attackerEmail, 'Attacker');
+    await signInWithEmailAndPassword(auth, attackerEmail, 'password123');
+
+    const victimDocRef = doc(db, 'users', victim.uid);
+    await expect(updateDoc(victimDocRef, { fcmTokens: arrayUnion('token-1') })).rejects.toThrow();
   });
 });
 

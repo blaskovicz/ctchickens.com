@@ -88,6 +88,7 @@ const handleSend = async () => {
       const newMessageRef = doc(messagesCol); // Pre-generate ID for transaction
       transaction.set(newMessageRef, {
         senderUid: user.value!.uid,
+        senderName: user.value!.displayName || 'User',
         text: messageText.value,
         createdAt: serverTimestamp(),
         read: false

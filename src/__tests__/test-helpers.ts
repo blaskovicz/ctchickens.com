@@ -160,6 +160,36 @@ export async function createTestUser(email: string, displayName: string, isAdmin
 }
 
 /**
+ * Seeds a user's fcmTokens array directly via REST API (bypasses rules for setup) —
+ * used to put a user at/over the token-count bound without going through the
+ * one-token-at-a-time arrayUnion the rules actually enforce.
+ */
+export async function seedFcmTokens(uid: string, tokens: string[]) {
+  const projectId = PROJECT_ID();
+  const url = `http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=fcmTokens`;
+
+  const payload = {
+    fields: {
+      fcmTokens: { arrayValue: { values: tokens.map((t) => ({ stringValue: t })) } }
+    }
+  };
+
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer owner'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Failed to seed fcmTokens: ${err}`);
+  }
+}
+
+/**
  * Seeds a claim request via REST API.
  */
 export async function seedClaimRequest(slug: string, data: any) {

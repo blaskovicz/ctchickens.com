@@ -14,8 +14,11 @@ import {
 } from 'bootstrap-vue-next';
 import { useBreederUtils } from '../composables/useBreederUtils';
 import { useSupport } from '../composables/useSupport';
+import { useNotifications } from '../composables/useNotifications';
 import { renderMessage, stripMarkdown } from '../composables/useMessageRenderer';
 import type { InquiryThread, InquiryMessage } from '../types';
+import { functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const store = useStore();
 const route = useRoute();
@@ -23,6 +26,43 @@ const router = useRouter();
 const { create } = useToast();
 const { formatDisplayName } = useBreederUtils();
 const { contactSupport } = useSupport();
+const { requestPermission, permissionState } = useNotifications();
+
+// Opt-in push notification banner — shown once until dismissed or permission granted.
+const notifBannerDismissed = ref(localStorage.getItem('push-banner-dismissed') === '1');
+const showNotifBanner = computed(() => {
+  if (notifBannerDismissed.value) return false;
+  if (typeof Notification === 'undefined' || !window.PushManager) return false;
+  return Notification.permission === 'default';
+});
+
+const dismissNotifBanner = () => {
+  notifBannerDismissed.value = true;
+  localStorage.setItem('push-banner-dismissed', '1');
+};
+
+const handleEnableNotifications = async () => {
+  await requestPermission();
+  dismissNotifBanner();
+};
+
+// Lets anyone confirm their own push setup actually works, without needing a
+// second account to send themselves a message.
+const showTestNotifButton = computed(() => permissionState.value === 'granted');
+const isSendingTestNotif = ref(false);
+
+const handleSendTestNotification = async () => {
+  isSendingTestNotif.value = true;
+  try {
+    const sendTestPushNotification = httpsCallable(functions, 'sendTestPushNotification');
+    await sendTestPushNotification();
+    create?.({ body: 'Test notification sent — check for it now.', variant: 'success' });
+  } catch (err: any) {
+    create?.({ body: `Couldn't send a test notification: ${err.message}`, variant: 'danger' });
+  } finally {
+    isSendingTestNotif.value = false;
+  }
+};
 
 const user = computed(() => store.state.user);
 const isAdmin = computed(() => store.getters.isAdmin);
@@ -202,6 +242,7 @@ const handleSend = async () => {
         });
         transaction.set(doc(messagesCol), {
           senderUid: user.value!.uid,
+          senderName: user.value!.displayName || 'User',
           text,
           createdAt: serverTimestamp(),
           read: false
@@ -249,6 +290,7 @@ const handleSend = async () => {
       const newMessageRef = doc(messagesCol);
       transaction.set(newMessageRef, {
         senderUid: user.value!.uid,
+        senderName: user.value!.displayName || 'User',
         text: text,
         createdAt: serverTimestamp(),
         read: false
@@ -345,6 +387,43 @@ onUnmounted(() => {
               <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </BButton>
           </div>
+        </div>
+
+        <!-- Push notification opt-in banner -->
+        <div
+          v-if="showNotifBanner"
+          class="d-flex align-items-center px-3 py-2 border-bottom bg-info bg-opacity-10 small"
+          data-testid="push-banner"
+        >
+          <i class="bi bi-bell-fill me-2 text-primary flex-shrink-0"></i>
+          <span class="flex-grow-1 text-muted">Get notified of new messages.</span>
+          <button
+            class="btn btn-link btn-sm p-0 me-3 fw-semibold text-decoration-none"
+            @click="handleEnableNotifications"
+          >Enable</button>
+          <button
+            type="button"
+            class="btn-close"
+            style="font-size: 0.65rem;"
+            aria-label="Dismiss"
+            @click="dismissNotifBanner"
+          ></button>
+        </div>
+
+        <!-- Lets anyone confirm their own push setup actually works -->
+        <div
+          v-if="showTestNotifButton"
+          class="d-flex align-items-center px-3 py-2 border-bottom bg-light small"
+          data-testid="test-push-banner"
+        >
+          <i class="bi bi-bell me-2 text-muted flex-shrink-0"></i>
+          <span class="flex-grow-1 text-muted">Notifications are on.</span>
+          <button
+            class="btn btn-link btn-sm p-0 fw-semibold text-decoration-none"
+            :disabled="isSendingTestNotif"
+            data-testid="send-test-notification-btn"
+            @click="handleSendTestNotification"
+          >{{ isSendingTestNotif ? 'Sending…' : 'Send test notification' }}</button>
         </div>
 
         <div class="flex-grow-1 overflow-auto">

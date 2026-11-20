@@ -2,6 +2,8 @@ import * as crypto from 'crypto';
 import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_EXPIRY_WARNING_DAYS, CLASSIFIED_CLEANUP_AFTER_DAYS } from './shared-config';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
+import { notifyMessageParticipants, sendPushAndPruneStaleTokens, checkTestPushRateLimit } from './pushHelpers';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -1218,6 +1220,7 @@ export const initiatePeerThread = onCall(
           tx.update(threadRef, threadUpdate);
           tx.set(threadRef.collection('messages').doc(), {
             senderUid: callerUid,
+            senderName: callerName,
             text: messageText,
             createdAt: FieldValue.serverTimestamp(),
             read: false,
@@ -1263,6 +1266,7 @@ export const initiatePeerThread = onCall(
       });
       tx.set(threadRef.collection('messages').doc(), {
         senderUid: callerUid,
+        senderName: callerName,
         text: firstMessageText,
         createdAt: FieldValue.serverTimestamp(),
         read: false,
@@ -1550,6 +1554,80 @@ export const sweepUnreadThreadNotifications = onSchedule(
     }
   }
 );
+
+// Fires when a new message document is created inside any inquiry thread.
+// Sends FCM push notifications to participants who have unread messages and registered
+// FCM tokens. Stale tokens are automatically removed from Firestore on send failure.
+//
+// Note: this supplements sweepUnreadThreadNotifications (email nudge) — it does not
+// replace it. Users without registered tokens continue to receive the email nudge.
+export const onInquiryMessageCreated = onDocumentCreated(
+  { document: 'inquiry_threads/{threadId}/messages/{messageId}' },
+  async (event) => {
+    const messageData = event.data?.data();
+    if (!messageData) return;
+
+    const threadId = event.params.threadId;
+
+    try {
+      await notifyMessageParticipants(
+        db,
+        threadId,
+        {
+          senderUid: messageData.senderUid as string,
+          text: messageData.text as string | undefined,
+          senderName: messageData.senderName as string | undefined,
+        },
+        (msg) => getMessaging().sendEachForMulticast(msg)
+      );
+    } catch (err) {
+      // Log but do not rethrow — a push failure must never cause the function to retry
+      // and re-process the message creation event.
+      console.error('[onInquiryMessageCreated] push notification error:', err);
+    }
+  }
+);
+
+// QA helper: sends a push notification to the caller's own registered FCM tokens,
+// so testing the opt-in flow doesn't require a second account to send a real message.
+// Goes through the exact same send-and-prune path as onInquiryMessageCreated.
+const TEST_PUSH_RATE_LIMIT_MS = 60 * 1000;
+
+export const sendTestPushNotification = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const uid = request.auth.uid;
+  const userRef = db.collection('users').doc(uid);
+
+  const userSnap = await userRef.get();
+  const lastSentAt = userSnap.data()?.lastTestNotificationAt as Timestamp | undefined;
+  const { limited, waitSeconds } = checkTestPushRateLimit(
+    lastSentAt?.toMillis(),
+    Date.now(),
+    TEST_PUSH_RATE_LIMIT_MS
+  );
+  if (limited) {
+    throw new HttpsError('resource-exhausted', `Please wait ${waitSeconds}s before sending another test notification.`);
+  }
+
+  const { tokenCount } = await sendPushAndPruneStaleTokens(
+    db,
+    uid,
+    { title: 'Test notification', body: 'If you can see this, push notifications are working!' },
+    'https://ctchickens.com/#/inbox',
+    (msg) => getMessaging().sendEachForMulticast(msg)
+  );
+
+  if (tokenCount === 0) {
+    throw new HttpsError('failed-precondition', 'No push tokens registered — enable notifications first.');
+  }
+
+  await userRef.update({ lastTestNotificationAt: FieldValue.serverTimestamp() });
+
+  return { ok: true, tokenCount };
+});
 
 // Verifies that every file uploaded to profiles/ or classifieds/ is actually an image
 // by checking magic bytes. Deletes any file that fails — guards against a client that
