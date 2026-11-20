@@ -17,6 +17,8 @@ import { useSupport } from '../composables/useSupport';
 import { useNotifications } from '../composables/useNotifications';
 import { renderMessage, stripMarkdown } from '../composables/useMessageRenderer';
 import type { InquiryThread, InquiryMessage } from '../types';
+import { functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const store = useStore();
 const route = useRoute();
@@ -24,7 +26,7 @@ const router = useRouter();
 const { create } = useToast();
 const { formatDisplayName } = useBreederUtils();
 const { contactSupport } = useSupport();
-const { requestPermission } = useNotifications();
+const { requestPermission, permissionState } = useNotifications();
 
 // Opt-in push notification banner — shown once until dismissed or permission granted.
 const notifBannerDismissed = ref(localStorage.getItem('push-banner-dismissed') === '1');
@@ -42,6 +44,24 @@ const dismissNotifBanner = () => {
 const handleEnableNotifications = async () => {
   await requestPermission();
   dismissNotifBanner();
+};
+
+// Lets anyone confirm their own push setup actually works, without needing a
+// second account to send themselves a message.
+const showTestNotifButton = computed(() => permissionState.value === 'granted');
+const isSendingTestNotif = ref(false);
+
+const handleSendTestNotification = async () => {
+  isSendingTestNotif.value = true;
+  try {
+    const sendTestPushNotification = httpsCallable(functions, 'sendTestPushNotification');
+    await sendTestPushNotification();
+    create?.({ body: 'Test notification sent — check for it now.', variant: 'success' });
+  } catch (err: any) {
+    create?.({ body: `Couldn't send a test notification: ${err.message}`, variant: 'danger' });
+  } finally {
+    isSendingTestNotif.value = false;
+  }
 };
 
 const user = computed(() => store.state.user);
@@ -388,6 +408,22 @@ onUnmounted(() => {
             aria-label="Dismiss"
             @click="dismissNotifBanner"
           ></button>
+        </div>
+
+        <!-- Lets anyone confirm their own push setup actually works -->
+        <div
+          v-if="showTestNotifButton"
+          class="d-flex align-items-center px-3 py-2 border-bottom bg-light small"
+          data-testid="test-push-banner"
+        >
+          <i class="bi bi-bell me-2 text-muted flex-shrink-0"></i>
+          <span class="flex-grow-1 text-muted">Notifications are on.</span>
+          <button
+            class="btn btn-link btn-sm p-0 fw-semibold text-decoration-none"
+            :disabled="isSendingTestNotif"
+            data-testid="send-test-notification-btn"
+            @click="handleSendTestNotification"
+          >{{ isSendingTestNotif ? 'Sending…' : 'Send test notification' }}</button>
         </div>
 
         <div class="flex-grow-1 overflow-auto">

@@ -32,7 +32,7 @@ vi.mock('firebase-admin/firestore', () => ({
   Timestamp: { fromDate: vi.fn() },
 }));
 
-import { notifyMessageParticipants } from '../../../functions/src/pushHelpers';
+import { notifyMessageParticipants, sendPushAndPruneStaleTokens, checkTestPushRateLimit } from '../../../functions/src/pushHelpers';
 
 // ---------------------------------------------------------------------------
 // Shared mock references
@@ -335,5 +335,134 @@ describe('notifyMessageParticipants', () => {
 
     // Second recipient was still attempted after the first failed.
     expect(mockSendMulticast).toHaveBeenCalledTimes(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // Support-thread recipient exclusion (mirrors sweepUnreadThreadNotifications)
+  // -------------------------------------------------------------------------
+
+  it('on support threads, only notifies the thread owner — not other admin-sentinel participants', async () => {
+    const ADMIN_UID = 'admin-uid-2';
+    const db = createMockDb(
+      {
+        type: 'support',
+        userUid: RECIPIENT_UID,
+        participants: [SENDER_UID, RECIPIENT_UID, ADMIN_UID],
+        unreadCount: { [RECIPIENT_UID]: 1, [ADMIN_UID]: 1 },
+      },
+      {
+        [RECIPIENT_UID]: { fcmTokens: ['owner-token'] },
+        [ADMIN_UID]: { fcmTokens: ['other-admin-token'] },
+      }
+    );
+
+    await notifyMessageParticipants(
+      db as any, THREAD_ID, { senderUid: SENDER_UID, text: 'Hello' }, mockSendMulticast
+    );
+
+    expect(mockSendMulticast).toHaveBeenCalledOnce();
+    expect(mockSendMulticast).toHaveBeenCalledWith(
+      expect.objectContaining({ tokens: ['owner-token'] })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendPushAndPruneStaleTokens — the shared helper also used directly by
+// sendTestPushNotification (functions/src/index.ts) for the self-test button.
+// ---------------------------------------------------------------------------
+
+describe('sendPushAndPruneStaleTokens', () => {
+  const UID = 'some-uid';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendMulticast.mockResolvedValue({ responses: [{ success: true, error: null }] });
+    mockDbUpdate.mockResolvedValue(undefined);
+  });
+
+  it('sends to every registered token and returns the token count', async () => {
+    const db = createMockDb(null, { [UID]: { fcmTokens: ['token-a', 'token-b'] } });
+
+    const result = await sendPushAndPruneStaleTokens(
+      db as any, UID, { title: 'Test', body: 'Body' }, 'https://ctchickens.com/#/inbox', mockSendMulticast
+    );
+
+    expect(result).toEqual({ tokenCount: 2 });
+    expect(mockSendMulticast).toHaveBeenCalledWith({
+      tokens: ['token-a', 'token-b'],
+      notification: { title: 'Test', body: 'Body' },
+      webpush: { fcmOptions: { link: 'https://ctchickens.com/#/inbox' } },
+    });
+  });
+
+  it('returns tokenCount 0 and does not call sendMulticast when the user has no tokens', async () => {
+    const db = createMockDb(null, { [UID]: { fcmTokens: [] } });
+
+    const result = await sendPushAndPruneStaleTokens(
+      db as any, UID, { title: 'Test', body: 'Body' }, 'https://ctchickens.com/#/inbox', mockSendMulticast
+    );
+
+    expect(result).toEqual({ tokenCount: 0 });
+    expect(mockSendMulticast).not.toHaveBeenCalled();
+  });
+
+  it('prunes a token FCM reports as permanently invalid', async () => {
+    mockSendMulticast.mockResolvedValue({
+      responses: [{ success: false, error: { code: 'messaging/invalid-registration-token' } }],
+    });
+    const db = createMockDb(null, { [UID]: { fcmTokens: ['dead-token'] } });
+
+    await sendPushAndPruneStaleTokens(
+      db as any, UID, { title: 'Test', body: 'Body' }, 'https://ctchickens.com/#/inbox', mockSendMulticast
+    );
+
+    expect(mockDbUpdate).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkTestPushRateLimit — pure boundary-math helper behind the 1/min limit
+// on sendTestPushNotification. Kept FCM-free so it's trivially unit-testable.
+// ---------------------------------------------------------------------------
+
+describe('checkTestPushRateLimit', () => {
+  const LIMIT_MS = 60_000;
+
+  it('is never limited on the very first send (no prior timestamp)', () => {
+    expect(checkTestPushRateLimit(undefined, Date.now(), LIMIT_MS)).toEqual({
+      limited: false,
+      waitSeconds: 0,
+    });
+  });
+
+  it('is limited immediately after a send', () => {
+    const now = 1_000_000;
+    const result = checkTestPushRateLimit(now, now, LIMIT_MS);
+    expect(result.limited).toBe(true);
+    expect(result.waitSeconds).toBe(60);
+  });
+
+  it('is limited partway through the window, rounding up the remaining wait', () => {
+    const now = 1_000_000;
+    const lastSentAt = now - 45_000; // 45s elapsed, 15s remain
+    const result = checkTestPushRateLimit(lastSentAt, now, LIMIT_MS);
+    expect(result.limited).toBe(true);
+    expect(result.waitSeconds).toBe(15);
+  });
+
+  it('is not limited once the full window has elapsed', () => {
+    const now = 1_000_000;
+    const lastSentAt = now - LIMIT_MS;
+    expect(checkTestPushRateLimit(lastSentAt, now, LIMIT_MS)).toEqual({
+      limited: false,
+      waitSeconds: 0,
+    });
+  });
+
+  it('is not limited well past the window', () => {
+    const now = 1_000_000;
+    const lastSentAt = now - LIMIT_MS * 10;
+    expect(checkTestPushRateLimit(lastSentAt, now, LIMIT_MS).limited).toBe(false);
   });
 });

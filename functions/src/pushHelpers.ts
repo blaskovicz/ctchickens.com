@@ -80,32 +80,80 @@ export async function notifyMessageParticipants(
   await Promise.all(
     recipients.map(async (uid) => {
       try {
-        const userSnap = await db.collection('users').doc(uid).get();
-        const tokens: string[] = userSnap.data()?.fcmTokens ?? [];
-        if (tokens.length === 0) return;
-
-        const response = await sendMulticast({
-          tokens,
-          notification: { title: senderName, body: preview },
-          webpush: { fcmOptions: { link } },
-        });
-
-        // Collect tokens that FCM has permanently invalidated and remove them from
-        // Firestore to prevent repeated failed send attempts on subsequent messages.
-        const staleTokens = response.responses
-          .map((r: any, i: number) =>
-            r.error?.code && UNREGISTERABLE_ERROR_CODES.has(r.error.code) ? tokens[i] : null
-          )
-          .filter(Boolean) as string[];
-
-        if (staleTokens.length > 0) {
-          await db.collection('users').doc(uid).update({
-            fcmTokens: FieldValue.arrayRemove(...staleTokens),
-          });
-        }
+        await sendPushAndPruneStaleTokens(
+          db,
+          uid,
+          { title: senderName, body: preview },
+          link,
+          sendMulticast
+        );
       } catch (err) {
         console.error(`[notifyMessageParticipants] failed for uid=${uid}`, err);
       }
     })
   );
+}
+
+/**
+ * Sends a single push notification to every token registered for `uid`, then
+ * prunes any token FCM reports as permanently dead. Shared by
+ * notifyMessageParticipants (one call per thread recipient) and
+ * sendTestPushNotification (one call to the caller's own tokens), so both
+ * paths exercise the exact same send-and-cleanup logic.
+ *
+ * @returns tokenCount — 0 means the user has no registered tokens, so nothing was sent.
+ */
+export async function sendPushAndPruneStaleTokens(
+  db: any,
+  uid: string,
+  notification: { title: string; body: string },
+  link: string,
+  sendMulticast: SendMulticastFn
+): Promise<{ tokenCount: number }> {
+  const userSnap = await db.collection('users').doc(uid).get();
+  const tokens: string[] = userSnap.data()?.fcmTokens ?? [];
+  if (tokens.length === 0) return { tokenCount: 0 };
+
+  const response = await sendMulticast({
+    tokens,
+    notification,
+    webpush: { fcmOptions: { link } },
+  });
+
+  // Collect tokens that FCM has permanently invalidated and remove them from
+  // Firestore to prevent repeated failed send attempts on subsequent messages.
+  const staleTokens = response.responses
+    .map((r: any, i: number) =>
+      r.error?.code && UNREGISTERABLE_ERROR_CODES.has(r.error.code) ? tokens[i] : null
+    )
+    .filter(Boolean) as string[];
+
+  if (staleTokens.length > 0) {
+    await db.collection('users').doc(uid).update({
+      fcmTokens: FieldValue.arrayRemove(...staleTokens),
+    });
+  }
+
+  return { tokenCount: tokens.length };
+}
+
+/**
+ * Pure rate-limit check for sendTestPushNotification — kept FCM-free so the
+ * boundary math is unit-testable without touching the Admin SDK or Firestore.
+ *
+ * @param lastSentAtMs - epoch ms of the last send, or undefined if never sent.
+ * @param nowMs - epoch ms "now" (passed explicitly for testability).
+ * @param limitMs - minimum gap required between sends.
+ */
+export function checkTestPushRateLimit(
+  lastSentAtMs: number | undefined,
+  nowMs: number,
+  limitMs: number
+): { limited: boolean; waitSeconds: number } {
+  if (lastSentAtMs === undefined) return { limited: false, waitSeconds: 0 };
+
+  const elapsed = nowMs - lastSentAtMs;
+  if (elapsed >= limitMs) return { limited: false, waitSeconds: 0 };
+
+  return { limited: true, waitSeconds: Math.ceil((limitMs - elapsed) / 1000) };
 }

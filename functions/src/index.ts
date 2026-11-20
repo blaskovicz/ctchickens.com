@@ -3,7 +3,7 @@ import { CLASSIFIED_DURATION_DAYS, CLASSIFIED_RENEWAL_WINDOW_DAYS, CLASSIFIED_EX
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-import { notifyMessageParticipants } from './pushHelpers';
+import { notifyMessageParticipants, sendPushAndPruneStaleTokens, checkTestPushRateLimit } from './pushHelpers';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -1587,6 +1587,47 @@ export const onInquiryMessageCreated = onDocumentCreated(
     }
   }
 );
+
+// QA helper: sends a push notification to the caller's own registered FCM tokens,
+// so testing the opt-in flow doesn't require a second account to send a real message.
+// Goes through the exact same send-and-prune path as onInquiryMessageCreated.
+const TEST_PUSH_RATE_LIMIT_MS = 60 * 1000;
+
+export const sendTestPushNotification = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+
+  const uid = request.auth.uid;
+  const userRef = db.collection('users').doc(uid);
+
+  const userSnap = await userRef.get();
+  const lastSentAt = userSnap.data()?.lastTestNotificationAt as Timestamp | undefined;
+  const { limited, waitSeconds } = checkTestPushRateLimit(
+    lastSentAt?.toMillis(),
+    Date.now(),
+    TEST_PUSH_RATE_LIMIT_MS
+  );
+  if (limited) {
+    throw new HttpsError('resource-exhausted', `Please wait ${waitSeconds}s before sending another test notification.`);
+  }
+
+  const { tokenCount } = await sendPushAndPruneStaleTokens(
+    db,
+    uid,
+    { title: 'Test notification', body: 'If you can see this, push notifications are working!' },
+    'https://ctchickens.com/#/inbox',
+    (msg) => getMessaging().sendEachForMulticast(msg)
+  );
+
+  if (tokenCount === 0) {
+    throw new HttpsError('failed-precondition', 'No push tokens registered — enable notifications first.');
+  }
+
+  await userRef.update({ lastTestNotificationAt: FieldValue.serverTimestamp() });
+
+  return { ok: true, tokenCount };
+});
 
 // Verifies that every file uploaded to profiles/ or classifieds/ is actually an image
 // by checking magic bytes. Deletes any file that fails — guards against a client that
