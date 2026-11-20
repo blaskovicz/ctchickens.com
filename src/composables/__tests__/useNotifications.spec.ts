@@ -16,6 +16,12 @@ const { mockGetToken, mockDeleteToken } = vi.hoisted(() => ({
   mockDeleteToken: vi.fn().mockResolvedValue(undefined),
 }));
 
+const { mockHttpsCallable, mockCallableFn } = vi.hoisted(() => ({
+  mockCallableFn: vi.fn().mockResolvedValue({ data: { ok: true, tokenCount: 1 } }),
+  mockHttpsCallable: vi.fn(),
+}));
+mockHttpsCallable.mockImplementation(() => mockCallableFn);
+
 // --- Module mocks ---
 
 vi.mock('../../firebase', () => ({
@@ -23,6 +29,7 @@ vi.mock('../../firebase', () => ({
   auth: { currentUser: { uid: 'test-uid-123' } },
   messaging: { _fake: true /* truthy — bypasses the !messaging guard */ },
   VAPID_KEY: 'test-vapid-key',
+  functions: { _fake: true },
 }));
 
 vi.mock('firebase/firestore', () => ({
@@ -37,6 +44,10 @@ vi.mock('firebase/messaging', () => ({
   deleteToken: mockDeleteToken,
 }));
 
+vi.mock('firebase/functions', () => ({
+  httpsCallable: mockHttpsCallable,
+}));
+
 import { useNotifications } from '../useNotifications';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +56,8 @@ describe('useNotifications', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetToken.mockResolvedValue('fcm-token-abc');
+    mockHttpsCallable.mockImplementation(() => mockCallableFn);
+    mockCallableFn.mockResolvedValue({ data: { ok: true, tokenCount: 1 } });
 
     // Default: permission is promptable and the user grants it.
     vi.stubGlobal('Notification', {
@@ -150,6 +163,52 @@ describe('useNotifications', () => {
       const { revokeToken } = useNotifications();
       await expect(revokeToken()).resolves.toBeUndefined();
       expect(mockDeleteToken).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // isPushSupported
+  // -------------------------------------------------------------------------
+
+  describe('isPushSupported', () => {
+    it('is true when Notification and PushManager both exist', () => {
+      const { isPushSupported } = useNotifications();
+      expect(isPushSupported).toBe(true);
+    });
+
+    it('is false when Notification is absent', () => {
+      vi.stubGlobal('Notification', undefined);
+      const { isPushSupported } = useNotifications();
+      expect(isPushSupported).toBe(false);
+    });
+
+    it('is false when PushManager is absent', () => {
+      vi.stubGlobal('PushManager', undefined);
+      const { isPushSupported } = useNotifications();
+      expect(isPushSupported).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // sendTestNotification
+  // -------------------------------------------------------------------------
+
+  describe('sendTestNotification', () => {
+    it('calls the sendTestPushNotification callable and returns its data', async () => {
+      mockCallableFn.mockResolvedValueOnce({ data: { ok: true, tokenCount: 2 } });
+
+      const { sendTestNotification } = useNotifications();
+      const result = await sendTestNotification();
+
+      expect(mockHttpsCallable).toHaveBeenCalledWith({ _fake: true }, 'sendTestPushNotification');
+      expect(result).toEqual({ ok: true, tokenCount: 2 });
+    });
+
+    it('propagates errors instead of failing silently (unlike requestPermission/revokeToken)', async () => {
+      mockCallableFn.mockRejectedValueOnce(new Error('Please wait 42s before sending another test notification.'));
+
+      const { sendTestNotification } = useNotifications();
+      await expect(sendTestNotification()).rejects.toThrow(/wait 42s/);
     });
   });
 });

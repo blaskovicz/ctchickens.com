@@ -17,8 +17,6 @@ import { useSupport } from '../composables/useSupport';
 import { useNotifications } from '../composables/useNotifications';
 import { renderMessage, stripMarkdown } from '../composables/useMessageRenderer';
 import type { InquiryThread, InquiryMessage } from '../types';
-import { functions } from '../firebase';
-import { httpsCallable } from 'firebase/functions';
 
 const store = useStore();
 const route = useRoute();
@@ -26,14 +24,20 @@ const router = useRouter();
 const { create } = useToast();
 const { formatDisplayName } = useBreederUtils();
 const { contactSupport } = useSupport();
-const { requestPermission, permissionState } = useNotifications();
+const { requestPermission, sendTestNotification, permissionState, isPushSupported } = useNotifications();
+
+// Shown by both banners' X buttons below — the controls still exist once
+// dismissed here, just moved to the profile page instead of gone for good.
+const notifyManageFromProfile = () => {
+  create?.({ body: 'You can manage this anytime from your profile page.', variant: 'info' });
+};
 
 // Opt-in push notification banner — shown once until dismissed or permission granted.
 const notifBannerDismissed = ref(localStorage.getItem('push-banner-dismissed') === '1');
 const showNotifBanner = computed(() => {
   if (notifBannerDismissed.value) return false;
-  if (typeof Notification === 'undefined' || !window.PushManager) return false;
-  return Notification.permission === 'default';
+  if (!isPushSupported) return false;
+  return permissionState.value === 'default';
 });
 
 const dismissNotifBanner = () => {
@@ -41,21 +45,34 @@ const dismissNotifBanner = () => {
   localStorage.setItem('push-banner-dismissed', '1');
 };
 
+const handleDismissNotifBanner = () => {
+  dismissNotifBanner();
+  notifyManageFromProfile();
+};
+
 const handleEnableNotifications = async () => {
   await requestPermission();
+  // Not a user dismissal — just hide the opt-in prompt now that it's moot.
   dismissNotifBanner();
 };
 
 // Lets anyone confirm their own push setup actually works, without needing a
-// second account to send themselves a message.
-const showTestNotifButton = computed(() => permissionState.value === 'granted');
+// second account to send themselves a message. The full status/enable/test
+// controls also live on the profile page's Notifications section.
+const testNotifBannerDismissed = ref(localStorage.getItem('push-test-banner-dismissed') === '1');
+const showTestNotifButton = computed(() => !testNotifBannerDismissed.value && permissionState.value === 'granted');
 const isSendingTestNotif = ref(false);
+
+const handleDismissTestNotifBanner = () => {
+  testNotifBannerDismissed.value = true;
+  localStorage.setItem('push-test-banner-dismissed', '1');
+  notifyManageFromProfile();
+};
 
 const handleSendTestNotification = async () => {
   isSendingTestNotif.value = true;
   try {
-    const sendTestPushNotification = httpsCallable(functions, 'sendTestPushNotification');
-    await sendTestPushNotification();
+    await sendTestNotification();
     create?.({ body: 'Test notification sent — check for it now.', variant: 'success' });
   } catch (err: any) {
     create?.({ body: `Couldn't send a test notification: ${err.message}`, variant: 'danger' });
@@ -406,7 +423,7 @@ onUnmounted(() => {
             class="btn-close"
             style="font-size: 0.65rem;"
             aria-label="Dismiss"
-            @click="dismissNotifBanner"
+            @click="handleDismissNotifBanner"
           ></button>
         </div>
 
@@ -419,11 +436,18 @@ onUnmounted(() => {
           <i class="bi bi-bell me-2 text-muted flex-shrink-0"></i>
           <span class="flex-grow-1 text-muted">Notifications are on.</span>
           <button
-            class="btn btn-link btn-sm p-0 fw-semibold text-decoration-none"
+            class="btn btn-link btn-sm p-0 me-3 fw-semibold text-decoration-none"
             :disabled="isSendingTestNotif"
             data-testid="send-test-notification-btn"
             @click="handleSendTestNotification"
           >{{ isSendingTestNotif ? 'Sending…' : 'Send test notification' }}</button>
+          <button
+            type="button"
+            class="btn-close"
+            style="font-size: 0.65rem;"
+            aria-label="Dismiss"
+            @click="handleDismissTestNotifBanner"
+          ></button>
         </div>
 
         <div class="flex-grow-1 overflow-auto">

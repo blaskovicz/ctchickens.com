@@ -7,10 +7,12 @@ import {
   BFormGroup, BFormInput, BButton, BSpinner, BBadge, BAlert,
   useToast
 } from 'bootstrap-vue-next';
+import { useNotifications } from '../composables/useNotifications';
 
 const store = useStore();
 const router = useRouter();
 const { create } = useToast();
+const { requestPermission, sendTestNotification, permissionState, isPushSupported } = useNotifications();
 
 const authReady = computed(() => store.getters.authReady);
 const isLoggedIn = computed(() => store.getters.isLoggedIn);
@@ -49,6 +51,35 @@ onMounted(() => {
 });
 
 const isSaving = ref(false);
+
+// Push status is per-browser/device, unlike the notification email above —
+// this reflects only the browser the profile page is currently open in.
+const pushStatus = computed<'unsupported' | NotificationPermission>(() =>
+  isPushSupported ? (permissionState.value as NotificationPermission) : 'unsupported'
+);
+
+const isEnablingPush = ref(false);
+const handleEnablePush = async () => {
+  isEnablingPush.value = true;
+  try {
+    await requestPermission();
+  } finally {
+    isEnablingPush.value = false;
+  }
+};
+
+const isSendingTestPush = ref(false);
+const handleSendTestPush = async () => {
+  isSendingTestPush.value = true;
+  try {
+    await sendTestNotification();
+    create?.({ body: 'Test notification sent — check for it now.', variant: 'success' });
+  } catch (err: any) {
+    create?.({ body: `Couldn't send a test notification: ${err.message}`, variant: 'danger' });
+  } finally {
+    isSendingTestPush.value = false;
+  }
+};
 
 const hasUnsavedEmailChanges = computed(
   () => localEmailInput.value.trim() !== (pendingLocalEmail.value ?? verifiedLocalEmail.value ?? '')
@@ -203,6 +234,49 @@ const handleSave = async () => {
               {{ !localEmailInput.trim() && (verifiedLocalEmail || pendingLocalEmail) ? 'Remove email' : 'Save' }}
             </BButton>
           </div>
+
+          <hr class="my-4">
+
+          <!-- Push notifications — per-browser/device, unlike the email setting above -->
+          <BFormGroup label="Push Notifications" label-class="small fw-semibold text-muted mb-1">
+            <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+              <BBadge v-if="pushStatus === 'granted'" variant="success">Enabled on this browser</BBadge>
+              <BBadge v-else-if="pushStatus === 'denied'" variant="danger">Blocked in browser settings</BBadge>
+              <BBadge v-else-if="pushStatus === 'unsupported'" variant="secondary">Not supported on this browser</BBadge>
+              <BBadge v-else variant="secondary">Not enabled on this browser</BBadge>
+
+              <BButton
+                v-if="pushStatus === 'default'"
+                variant="outline-primary"
+                size="sm"
+                :disabled="isEnablingPush"
+                @click="handleEnablePush"
+              >
+                <BSpinner v-if="isEnablingPush" small class="me-1" />
+                Enable
+              </BButton>
+
+              <BButton
+                v-if="pushStatus === 'granted'"
+                variant="outline-secondary"
+                size="sm"
+                :disabled="isSendingTestPush"
+                @click="handleSendTestPush"
+              >
+                <BSpinner v-if="isSendingTestPush" small class="me-1" />
+                {{ isSendingTestPush ? 'Sending…' : 'Send test notification' }}
+              </BButton>
+            </div>
+
+            <div class="form-text">
+              This is per-browser and per-device — enabling or testing it here only affects
+              notifications on this browser, not any other device you're signed in on.
+            </div>
+            <div v-if="pushStatus === 'denied'" class="form-text text-danger">
+              Notifications are blocked for this site in your browser settings. Allow them there,
+              then reload this page.
+            </div>
+          </BFormGroup>
         </BCardBody>
       </BCard>
     </template>

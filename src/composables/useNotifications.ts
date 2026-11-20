@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import { getToken, deleteToken } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db, messaging, VAPID_KEY, auth } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, messaging, VAPID_KEY, auth, functions } from '../firebase';
 
 // Module-level singleton — permissionState is shared across all callers so the UI
 // always reflects the current browser permission without redundant API polls.
@@ -10,6 +11,11 @@ const permissionState = ref<NotificationPermission | 'unsupported'>(
 );
 
 export function useNotifications() {
+  // Computed fresh on every call (not hoisted to module scope) so it reflects
+  // the browser's actual current support — tests stub Notification/PushManager
+  // per-case, and a frozen module-level value would miss that.
+  const isPushSupported = typeof Notification !== 'undefined' && typeof window !== 'undefined' && !!window.PushManager;
+
   /**
    * Requests browser notification permission, gets an FCM token, and persists it
    * to `users/{uid}.fcmTokens` via arrayUnion so the server can target this device.
@@ -17,12 +23,7 @@ export function useNotifications() {
    * Fails silently — a denial or unsupported browser must never break auth or routing.
    */
   const requestPermission = async (): Promise<void> => {
-    if (
-      !messaging ||
-      !VAPID_KEY ||
-      typeof Notification === 'undefined' ||
-      !window.PushManager
-    ) {
+    if (!messaging || !VAPID_KEY || !isPushSupported) {
       return;
     }
 
@@ -51,12 +52,7 @@ export function useNotifications() {
    * Fails silently — same contract as requestPermission.
    */
   const revokeToken = async (): Promise<void> => {
-    if (
-      !messaging ||
-      !VAPID_KEY ||
-      typeof Notification === 'undefined' ||
-      !window.PushManager
-    ) {
+    if (!messaging || !VAPID_KEY || !isPushSupported) {
       return;
     }
 
@@ -75,5 +71,23 @@ export function useNotifications() {
     }
   };
 
-  return { requestPermission, revokeToken, permissionState };
+  /**
+   * Sends a push notification to the caller's own registered tokens via the
+   * sendTestPushNotification callable, so anyone can confirm their own setup
+   * works without needing a second account to send a real message.
+   *
+   * Unlike requestPermission/revokeToken, this does NOT fail silently — the
+   * whole point is giving the caller feedback, so errors (rate-limited, no
+   * tokens registered, etc.) propagate for the caller to display.
+   */
+  const sendTestNotification = async (): Promise<{ tokenCount: number }> => {
+    const callable = httpsCallable<void, { ok: boolean; tokenCount: number }>(
+      functions,
+      'sendTestPushNotification'
+    );
+    const result = await callable();
+    return result.data;
+  };
+
+  return { requestPermission, revokeToken, sendTestNotification, permissionState, isPushSupported };
 }
